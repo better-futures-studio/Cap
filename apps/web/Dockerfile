@@ -6,7 +6,7 @@ WORKDIR /app
 COPY . .
 
 RUN corepack enable pnpm
-RUN pnpm i --frozen-lockfile
+RUN --mount=type=cache,id=s/4eb09acd-47d5-4f5b-9028-dfd7185f94ad-pnpm,target=/root/.local/share/pnpm/store pnpm i --frozen-lockfile
 
 ARG NEXT_PUBLIC_DOCKER_BUILD=true
 ENV NEXT_PUBLIC_WEB_URL=http://localhost:3000
