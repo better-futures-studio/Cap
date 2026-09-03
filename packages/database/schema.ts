@@ -1812,6 +1812,7 @@ export const meetingBots = mysqlTable(
 		statusUpdatedAt: timestamp("statusUpdatedAt"),
 		errorMessage: text("errorMessage"),
 		videoId: nanoIdNullable("videoId").$type<Video.VideoId>(),
+		chatSyncedAt: timestamp("chatSyncedAt"),
 		createdAt: timestamp("createdAt").notNull().defaultNow(),
 		updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 	},

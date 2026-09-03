@@ -36,6 +36,7 @@ vi.mock("@cap/database/schema", () => {
 			"status",
 			"errorMessage",
 			"videoId",
+			"chatSyncedAt",
 			"createdAt",
 		]),
 		videoUploads: table("video_uploads", ["videoId"]),

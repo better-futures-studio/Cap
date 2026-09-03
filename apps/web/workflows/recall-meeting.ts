@@ -9,6 +9,7 @@ import { Option } from "effect";
 import { FatalError } from "workflow";
 import { startAiGeneration } from "@/lib/generate-ai";
 import { queueVideoTranscription } from "@/lib/queue-video-transcription";
+import { importMeetingChatComments } from "@/lib/recall/chat-comments";
 import { RecallApiError } from "@/lib/recall/client";
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
 import {
@@ -380,6 +381,12 @@ async function createTranscript({
 	}
 }
 
+async function importChatComments(meetingBotId: string): Promise<void> {
+	"use step";
+
+	await importMeetingChatComments({ meetingBotId });
+}
+
 async function markImportFailed(
 	meetingBotId: string,
 	error: unknown,
@@ -452,6 +459,14 @@ export async function importRecallRecordingWorkflow({
 			recordingId,
 			videoId: video.videoId,
 		});
+		try {
+			await importChatComments(meetingBotId);
+		} catch (error) {
+			console.error("[recall] chat import failed", {
+				meetingBotId,
+				status: error instanceof RecallApiError ? error.status : undefined,
+			});
+		}
 	} catch (error) {
 		await markImportFailed(meetingBotId, error);
 		throw error instanceof FatalError

@@ -43,7 +43,31 @@ export type RecallRecording = {
 	media_shortcuts: {
 		video_mixed?: { data?: { download_url?: string } };
 		transcript?: { id: string; data?: { download_url?: string } };
+		participant_events?: {
+			data?: { participant_events_download_url?: string };
+		};
 	};
+};
+
+export type RecallParticipantEvent = {
+	id: string;
+	action:
+		| "join"
+		| "leave"
+		| "webcam_on"
+		| "webcam_off"
+		| "screenshare_on"
+		| "screenshare_off"
+		| "chat_message"
+		| string;
+	timestamp: { absolute: string; relative: number };
+	participant: {
+		id: number;
+		name: string | null;
+		is_host: boolean | null;
+		email: string | null;
+	};
+	data: { text: string; to: string } | null;
 };
 
 export type RecallTranscript = {
