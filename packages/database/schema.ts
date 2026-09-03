@@ -1767,3 +1767,88 @@ export const developerDailyStorageSnapshotsRelations = relations(
 		}),
 	}),
 );
+
+export type MeetingBotSource = "manual" | "calendar";
+
+export type MeetingBotStatus =
+	| "scheduling"
+	| "scheduled"
+	| "joining_call"
+	| "in_waiting_room"
+	| "in_call_not_recording"
+	| "in_call_recording"
+	| "call_ended"
+	| "done"
+	| "importing"
+	| "transcribing"
+	| "complete"
+	| "fatal"
+	| "failed"
+	| "cancelled"
+	| "opted_out";
+
+export const meetingBots = mysqlTable(
+	"meeting_bots",
+	{
+		id: nanoId("id").notNull().primaryKey(),
+		orgId: nanoId("orgId").notNull().$type<Organisation.OrganisationId>(),
+		ownerId: nanoId("ownerId").notNull().$type<User.UserId>(),
+		source: varchar("source", { length: 16 })
+			.notNull()
+			.$type<MeetingBotSource>(),
+		meetingUrl: varchar("meetingUrl", { length: 2048 }).notNull(),
+		title: varchar("title", { length: 255 }),
+		joinAt: timestamp("joinAt").notNull(),
+		endAt: timestamp("endAt"),
+		calendarId: nanoIdNullable("calendarId"),
+		calendarEventId: varchar("calendarEventId", { length: 64 }),
+		recallBotId: varchar("recallBotId", { length: 64 }),
+		recallRecordingId: varchar("recallRecordingId", { length: 64 }),
+		recallTranscriptId: varchar("recallTranscriptId", { length: 64 }),
+		status: varchar("status", { length: 32 })
+			.notNull()
+			.$type<MeetingBotStatus>(),
+		statusSubCode: varchar("statusSubCode", { length: 128 }),
+		errorMessage: text("errorMessage"),
+		videoId: nanoIdNullable("videoId").$type<Video.VideoId>(),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+		updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+	},
+	(table) => [
+		index("meeting_bots_org_created_at_idx").on(table.orgId, table.createdAt),
+		index("meeting_bots_recall_bot_id_idx").on(table.recallBotId),
+		uniqueIndex("meeting_bots_calendar_event_id_idx").on(table.calendarEventId),
+		index("meeting_bots_video_id_idx").on(table.videoId),
+	],
+);
+
+export const meetingCalendars = mysqlTable(
+	"meeting_calendars",
+	{
+		id: nanoId("id").notNull().primaryKey(),
+		orgId: nanoId("orgId").notNull().$type<Organisation.OrganisationId>(),
+		userId: nanoId("userId").notNull().$type<User.UserId>(),
+		recallCalendarId: varchar("recallCalendarId", { length: 64 }).notNull(),
+		platform: varchar("platform", { length: 32 }).notNull(),
+		platformEmail: varchar("platformEmail", { length: 255 }),
+		status: varchar("status", { length: 32 })
+			.notNull()
+			.$type<"connecting" | "connected" | "disconnected">(),
+		autoRecord: boolean("autoRecord").notNull().default(false),
+		lastSyncedAt: timestamp("lastSyncedAt"),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+		updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+	},
+	(table) => [
+		uniqueIndex("meeting_calendars_recall_calendar_id_idx").on(
+			table.recallCalendarId,
+		),
+		index("meeting_calendars_org_user_idx").on(table.orgId, table.userId),
+	],
+);
+
+export const recallWebhookEvents = mysqlTable("recall_webhook_events", {
+	id: varchar("id", { length: 64 }).notNull().primaryKey(),
+	event: varchar("event", { length: 64 }).notNull(),
+	receivedAt: timestamp("receivedAt").notNull().defaultNow(),
+});

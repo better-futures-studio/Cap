@@ -162,6 +162,36 @@ function createServerEnv() {
 			SLACK_CLIENT_SECRET: z.string().optional(),
 			SLACK_SIGNING_SECRET: z.string().optional(),
 
+			/// Recall.ai
+			RECALL_API_KEY: z.string().optional().describe("Recall.ai REST API key"),
+			RECALL_REGION: z
+				.string()
+				.optional()
+				.describe(
+					"Recall.ai region; the API base URL is https://<region>.recall.ai",
+				),
+			RECALL_WEBHOOK_VERIFICATION_SECRET: z
+				.string()
+				.optional()
+				.describe(
+					"Recall.ai workspace webhook verification secret (whsec_...)",
+				),
+			RECALL_BOT_NAME: z
+				.string()
+				.optional()
+				.describe("Display name the meeting bot joins calls as"),
+			RECALL_CALENDAR_GOOGLE_CLIENT_ID: z
+				.string()
+				.optional()
+				.describe("Google OAuth web client id for the Recall Calendar V2 flow"),
+			RECALL_CALENDAR_GOOGLE_CLIENT_SECRET: z.string().optional(),
+			RECALL_CALENDAR_SETUP_CALLBACK_URI: z
+				.string()
+				.optional()
+				.describe(
+					"Recall regional callback URL the hosted calendar setup forwarder redirects to",
+				),
+
 			/// Tinybird analytics
 			TINYBIRD_HOST: z.string().optional(),
 			TINYBIRD_TOKEN: z.string().optional(),
