@@ -7,7 +7,7 @@ import {
 	slackHuddleTeams,
 } from "@cap/database/schema";
 import type { Organisation, User } from "@cap/web-domain";
-import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, eq, isNull, lt, notInArray, or } from "drizzle-orm";
 import { buildJoinChatMessage } from "./bot-chat";
 import { loadBotVideoOutput } from "./bot-image";
 import { getUserCalendar } from "./calendars";
@@ -27,15 +27,6 @@ export const SUPPORTED_MEETING_HOSTS = [
 	/teams\.microsoft\.com$/,
 	/teams\.live\.com$/,
 	/webex\.com$/,
-];
-
-const ACTIVE_SCHEDULE_STATUSES: MeetingBotStatus[] = [
-	"scheduling",
-	"scheduled",
-	"joining_call",
-	"in_waiting_room",
-	"in_call_not_recording",
-	"in_call_recording",
 ];
 
 const TERMINAL_STATUSES: MeetingBotStatus[] = [
@@ -93,6 +84,24 @@ function platformForHost(hostname: string): MeetingPlatform | null {
 	}
 	if (SUPPORTED_MEETING_HOSTS[4]?.test(host)) return "webex";
 	return null;
+}
+
+function sharedSubCode(meetingBotId: string): string {
+	return `shared:${meetingBotId}`;
+}
+
+function isSharedSubCode(value: string | null | undefined): boolean {
+	return !!value?.startsWith("shared:");
+}
+
+function sharedPrimaryId(row: {
+	id: string;
+	statusSubCode: string | null;
+}): string {
+	if (row.statusSubCode?.startsWith("shared:")) {
+		return row.statusSubCode.slice("shared:".length);
+	}
+	return row.id;
 }
 
 export function normalizeMeetingUrl(url: string): string {
@@ -236,19 +245,42 @@ export async function scheduleManualMeetingBot(
 		.where(
 			and(
 				eq(meetingBots.orgId, orgId),
-				eq(meetingBots.meetingUrl, parsed.url),
-				inArray(meetingBots.status, ACTIVE_SCHEDULE_STATUSES),
+				notInArray(meetingBots.status, TERMINAL_STATUSES),
 			),
 		)
-		.limit(50);
+		.limit(200);
 
-	const duplicate = existing.find(
+	const normalizedUrl = normalizeMeetingUrl(parsed.url);
+	const matches = existing.filter(
 		(row) =>
+			normalizeMeetingUrl(row.meetingUrl) === normalizedUrl &&
 			Math.abs(row.joinAt.getTime() - scheduledJoinAt.getTime()) <
-			DUPLICATE_WINDOW_MS,
+				DUPLICATE_WINDOW_MS,
 	);
-	if (duplicate) {
-		return { id: duplicate.id, status: duplicate.status };
+	const ownRow = matches.find((row) => row.ownerId === userId);
+	if (ownRow) {
+		return { id: ownRow.id, status: ownRow.status };
+	}
+
+	const sharedWith = matches[0];
+	if (sharedWith) {
+		const id = nanoId();
+		await db()
+			.insert(meetingBots)
+			.values({
+				id,
+				orgId,
+				ownerId: userId,
+				source: "manual",
+				meetingUrl: parsed.url,
+				title: title?.trim() || sharedWith.title,
+				joinAt: scheduledJoinAt,
+				recallBotId: sharedWith.recallBotId,
+				videoId: sharedWith.videoId,
+				status: sharedWith.status,
+				statusSubCode: sharedSubCode(sharedPrimaryId(sharedWith)),
+			});
+		return { id, status: sharedWith.status };
 	}
 
 	const client = deps.client ?? getDefaultRecallClient();
@@ -364,6 +396,15 @@ export async function cancelMeetingBot(
 		throw new Error("Meeting bot cannot be cancelled");
 	}
 
+	if (isSharedSubCode(row.statusSubCode)) {
+		await db()
+			.update(meetingBots)
+			.set({ status: "cancelled", errorMessage: null })
+			.where(eq(meetingBots.id, id));
+		console.info("[recall] cancelled shared bot row", { meetingBotId: id });
+		return { id, status: "cancelled" };
+	}
+
 	const client = deps.client ?? getDefaultRecallClient();
 	if (row.source === "calendar") {
 		if (row.calendarEventId) {
@@ -373,6 +414,10 @@ export async function cancelMeetingBot(
 			.update(meetingBots)
 			.set({ status: "opted_out", errorMessage: null })
 			.where(eq(meetingBots.id, id));
+		await db()
+			.update(meetingBots)
+			.set({ status: "opted_out", errorMessage: null })
+			.where(eq(meetingBots.statusSubCode, sharedSubCode(id)));
 		console.info("[recall] opted out calendar bot", { meetingBotId: id });
 		return { id, status: "opted_out" };
 	}
@@ -384,6 +429,10 @@ export async function cancelMeetingBot(
 		.update(meetingBots)
 		.set({ status: "cancelled", errorMessage: null })
 		.where(eq(meetingBots.id, id));
+	await db()
+		.update(meetingBots)
+		.set({ status: "cancelled", errorMessage: null })
+		.where(eq(meetingBots.statusSubCode, sharedSubCode(id)));
 	console.info("[recall] cancelled bot", {
 		meetingBotId: id,
 		recallBotId: row.recallBotId,
@@ -444,7 +493,9 @@ export async function applyBotStatusEvent({
 			.update(meetingBots)
 			.set({
 				status,
-				statusSubCode: subCode ?? null,
+				statusSubCode: isSharedSubCode(row.statusSubCode)
+					? row.statusSubCode
+					: (subCode ?? null),
 				statusUpdatedAt: eventAt,
 				...(status === "fatal"
 					? { errorMessage: subCode || "Bot failed" }

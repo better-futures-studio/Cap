@@ -57,6 +57,7 @@ const UPCOMING_JOIN_AT_GRACE_MS = 2 * 60 * 60 * 1000;
 
 const MEETING_BOT_COLUMNS = {
 	id: meetingBots.id,
+	ownerId: meetingBots.ownerId,
 	title: meetingBots.title,
 	meetingUrl: meetingBots.meetingUrl,
 	joinAt: meetingBots.joinAt,

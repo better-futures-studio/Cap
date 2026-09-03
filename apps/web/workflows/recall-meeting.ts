@@ -19,6 +19,7 @@ import { importMeetingChatComments } from "@/lib/recall/chat-comments";
 import { RecallApiError } from "@/lib/recall/client";
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
 import { readLiveTranscript } from "@/lib/recall/live-transcript";
+import { sharePrimaryRecordingWithOrganization } from "@/lib/recall/shared-recording";
 import {
 	type RecallTranscriptPart,
 	recallTranscriptToVtt,
@@ -79,6 +80,10 @@ async function completeSharedRows(
 			...(message ? { errorMessage: message } : {}),
 		})
 		.where(eq(meetingBots.statusSubCode, sharedSubCode(meetingBotId)));
+
+	if (status === "complete" && videoId) {
+		await sharePrimaryRecordingWithOrganization({ meetingBotId, videoId });
+	}
 }
 
 async function claimImport({

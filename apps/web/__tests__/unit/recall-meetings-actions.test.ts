@@ -30,6 +30,7 @@ vi.mock("@cap/database/schema", () => {
 		meetingBots: table("meeting_bots", [
 			"id",
 			"orgId",
+			"ownerId",
 			"title",
 			"meetingUrl",
 			"joinAt",

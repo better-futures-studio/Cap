@@ -2,6 +2,7 @@ import type { Organisation, User } from "@cap/web-domain";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	applyBotStatusEvent,
+	cancelMeetingBot,
 	parseMeetingUrl,
 	scheduleManualMeetingBot,
 } from "@/lib/recall/bots";
@@ -62,6 +63,11 @@ vi.mock("drizzle-orm", () => ({
 	and: (...args: unknown[]) => ({ op: "and", args }),
 	eq: (column: string, value: unknown) => ({ op: "eq", column, value }),
 	inArray: (column: string, value: unknown[]) => ({ op: "in", column, value }),
+	notInArray: (column: string, value: unknown[]) => ({
+		op: "notIn",
+		column,
+		value,
+	}),
 	lt: (column: string, value: unknown) => ({ op: "lt", column, value }),
 	or: (...args: unknown[]) => ({ op: "or", args }),
 	isNull: (column: string) => ({ op: "isNull", column }),
@@ -114,6 +120,9 @@ function matches(row: Row, condition?: Condition): boolean {
 	if (condition.op === "eq") return value === condition.value;
 	if (condition.op === "in") {
 		return Array.isArray(condition.value) && condition.value.includes(value);
+	}
+	if (condition.op === "notIn") {
+		return Array.isArray(condition.value) && !condition.value.includes(value);
 	}
 	if (condition.op === "lt") {
 		const left = value instanceof Date ? value.getTime() : Number(value);
@@ -392,6 +401,75 @@ describe("scheduleManualMeetingBot", () => {
 		expect(client.createBot).not.toHaveBeenCalled();
 		expect(bots()).toHaveLength(1);
 	});
+
+	it("attaches to another owner's in-flight bot instead of creating a second Recall bot", async () => {
+		const otherUser = "user_2" as User.UserId;
+		rows.meeting_bots = [
+			{
+				id: "cal_row",
+				orgId,
+				ownerId: otherUser,
+				source: "calendar",
+				meetingUrl: "https://ZOOM.us/j/123/?pwd=abc",
+				status: "joining_call",
+				joinAt: new Date(now.getTime() + 30 * 60 * 1000),
+				recallBotId: "bot_existing",
+				statusSubCode: null,
+				videoId: null,
+				title: "Standup",
+			},
+		];
+		const client = mockClient();
+
+		const result = await scheduleManualMeetingBot(
+			{ orgId, userId, meetingUrl: "https://zoom.us/j/123" },
+			{ client, now: () => now },
+		);
+
+		expect(client.createBot).not.toHaveBeenCalled();
+		expect(bots()).toHaveLength(2);
+		expect(result.status).toBe("joining_call");
+		expect(bots()[1]).toMatchObject({
+			id: result.id,
+			ownerId: userId,
+			source: "manual",
+			recallBotId: "bot_existing",
+			status: "joining_call",
+			statusSubCode: "shared:cal_row",
+			title: "Standup",
+		});
+	});
+
+	it("points a new shared row at the primary when the match is already shared", async () => {
+		rows.meeting_bots = [
+			{
+				id: "shared_row",
+				orgId,
+				ownerId: "user_2",
+				source: "manual",
+				meetingUrl: "https://zoom.us/j/123",
+				status: "scheduled",
+				joinAt: now,
+				recallBotId: "bot_existing",
+				statusSubCode: "shared:primary_1",
+				videoId: null,
+				title: null,
+			},
+		];
+		const client = mockClient();
+
+		const result = await scheduleManualMeetingBot(
+			{ orgId, userId, meetingUrl: "https://zoom.us/j/123" },
+			{ client, now: () => now },
+		);
+
+		expect(client.createBot).not.toHaveBeenCalled();
+		expect(bots()[1]).toMatchObject({
+			id: result.id,
+			recallBotId: "bot_existing",
+			statusSubCode: "shared:primary_1",
+		});
+	});
 });
 
 describe("applyBotStatusEvent", () => {
@@ -508,5 +586,55 @@ describe("applyBotStatusEvent", () => {
 		});
 
 		expect(bots()[0]?.status).toBe("scheduled");
+	});
+
+	it("does not overwrite a shared statusSubCode", async () => {
+		rows.meeting_bots = [
+			{
+				id: "mb_1",
+				recallBotId: "bot_1",
+				status: "scheduled",
+				statusSubCode: "shared:primary",
+			},
+		];
+
+		await applyBotStatusEvent({
+			recallBotId: "bot_1",
+			code: "in_call_recording",
+			subCode: "recording_permission_allowed",
+		});
+
+		expect(bots()[0]).toMatchObject({
+			status: "in_call_recording",
+			statusSubCode: "shared:primary",
+		});
+	});
+});
+
+describe("cancelMeetingBot", () => {
+	it("cancels a shared row without deleting the Recall bot", async () => {
+		rows.meeting_bots = [
+			{
+				id: "shared_row",
+				orgId,
+				ownerId: userId,
+				source: "manual",
+				status: "scheduled",
+				statusSubCode: "shared:primary",
+				recallBotId: "bot_existing",
+			},
+		];
+		const client = mockClient({
+			deleteScheduledBot: vi.fn(async () => undefined),
+		});
+
+		const result = await cancelMeetingBot(
+			{ id: "shared_row", orgId, userId },
+			{ client },
+		);
+
+		expect(result).toEqual({ id: "shared_row", status: "cancelled" });
+		expect(client.deleteScheduledBot).not.toHaveBeenCalled();
+		expect(bots()[0]?.status).toBe("cancelled");
 	});
 });
