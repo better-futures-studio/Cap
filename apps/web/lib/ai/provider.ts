@@ -213,8 +213,9 @@ function createModel(
 		case "groq":
 			return createGroq({ apiKey: env.GROQ_API_KEY })(modelId);
 		case "openai":
-			// `.chat` — the provider defaults to the Responses API otherwise.
-			return createOpenAI({ apiKey: env.OPENAI_API_KEY }).chat(modelId);
+			// Responses API: newer models (e.g. chat-latest) reject the Chat
+			// Completions `max_tokens` parameter that `.chat` sends.
+			return createOpenAI({ apiKey: env.OPENAI_API_KEY })(modelId);
 		case "anthropic":
 			return createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })(modelId);
 		case "assemblyai":
