@@ -180,6 +180,13 @@ function createServerEnv() {
 				.string()
 				.optional()
 				.describe("Display name the meeting bot joins calls as"),
+			RECALL_LIVE_AGENT: boolString().describe(
+				"Enable live Recall transcripts and in-call chat agent",
+			),
+			RECALL_AGENT_TRIGGER: z
+				.string()
+				.optional()
+				.describe("Chat command that invokes the live meeting agent"),
 			RECALL_BOT_IMAGE_URL: z
 				.string()
 				.optional()

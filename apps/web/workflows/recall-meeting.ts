@@ -1,9 +1,15 @@
+import { createHash } from "node:crypto";
 import { db } from "@cap/database";
-import { nanoId } from "@cap/database/helpers";
-import { meetingBots, videos, videoUploads } from "@cap/database/schema";
+import { nanoId, nanoIdLength } from "@cap/database/helpers";
+import {
+	comments,
+	meetingBots,
+	videos,
+	videoUploads,
+} from "@cap/database/schema";
 import { serverEnv } from "@cap/env";
 import { Storage } from "@cap/web-backend/src/Storage/index";
-import { Video } from "@cap/web-domain";
+import { Comment, Video } from "@cap/web-domain";
 import { eq } from "drizzle-orm";
 import { Option } from "effect";
 import { FatalError } from "workflow";
@@ -12,6 +18,7 @@ import { queueVideoTranscription } from "@/lib/queue-video-transcription";
 import { importMeetingChatComments } from "@/lib/recall/chat-comments";
 import { RecallApiError } from "@/lib/recall/client";
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
+import { readLiveTranscript } from "@/lib/recall/live-transcript";
 import {
 	type RecallTranscriptPart,
 	recallTranscriptToVtt,
@@ -387,6 +394,45 @@ async function importChatComments(meetingBotId: string): Promise<void> {
 	await importMeetingChatComments({ meetingBotId });
 }
 
+async function importLiveCaptures(meetingBotId: string): Promise<void> {
+	"use step";
+
+	const [row] = await db()
+		.select({ videoId: meetingBots.videoId, ownerId: meetingBots.ownerId })
+		.from(meetingBots)
+		.where(eq(meetingBots.id, meetingBotId))
+		.limit(1);
+	if (!row?.videoId) return;
+	const videoId = row.videoId;
+	const transcript = await readLiveTranscript(meetingBotId);
+	if (!transcript?.captures.length) return;
+	await db()
+		.insert(comments)
+		.ignore()
+		.values(
+			transcript.captures.map((capture, index) => {
+				const labeled = /^(Note|Action item):\s*(.*)$/s.exec(capture.text);
+				const label = labeled?.[1] ?? "Note";
+				const text = labeled?.[2] ?? capture.text;
+				return {
+					id: Comment.CommentId.make(
+						createHash("sha256")
+							.update(
+								`${meetingBotId}:${index}:${capture.t}:${capture.speaker}:${capture.text}`,
+							)
+							.digest("base64url")
+							.slice(0, nanoIdLength),
+					),
+					type: "text" as const,
+					content: `${label}: ${capture.speaker}: ${text}`.slice(0, 2000),
+					timestamp: Math.round(capture.t * 1000) / 1000,
+					authorId: row.ownerId,
+					videoId,
+				};
+			}),
+		);
+}
+
 async function markImportFailed(
 	meetingBotId: string,
 	error: unknown,
@@ -466,6 +512,11 @@ export async function importRecallRecordingWorkflow({
 				meetingBotId,
 				status: error instanceof RecallApiError ? error.status : undefined,
 			});
+		}
+		try {
+			await importLiveCaptures(meetingBotId);
+		} catch {
+			console.error("[recall] live capture import failed", { meetingBotId });
 		}
 	} catch (error) {
 		await markImportFailed(meetingBotId, error);

@@ -13,6 +13,8 @@ export type RecallConfig = {
 	botName: string;
 	publicBaseUrl: string;
 	botImageUrl: string;
+	liveAgent: boolean;
+	agentTrigger: string;
 	calendarGoogle: { clientId: string; clientSecret: string } | null;
 };
 
@@ -33,6 +35,8 @@ export function getRecallConfig(
 		botImageUrl:
 			env.RECALL_BOT_IMAGE_URL ||
 			`${env.WEB_URL.replace(/\/$/, "")}/meeting-bot/recording.jpg`,
+		liveAgent: env.RECALL_LIVE_AGENT,
+		agentTrigger: env.RECALL_AGENT_TRIGGER || "@notetaker",
 		calendarGoogle:
 			env.RECALL_CALENDAR_GOOGLE_CLIENT_ID &&
 			env.RECALL_CALENDAR_GOOGLE_CLIENT_SECRET

@@ -73,7 +73,7 @@ Meeting recording is done by Recall.ai bots (workspace "Boca Pro",
 Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
 `/api/webhooks/recall`, `/api/integrations/recall-calendar/*`,
 `/api/cron/recall-reconcile`, and the `/dashboard/meetings` page. Tables:
-`meeting_bots`, `meeting_calendars`, `recall_webhook_events`.
+`meeting_bots`, `meeting_calendars`, `slack_huddle_teams`, `recall_webhook_events`.
 
 - Two ways in: paste a meeting URL on the Meetings page, or connect Google
   Calendar (Recall Calendar V2) and opt in per event or via the per-calendar
@@ -89,9 +89,24 @@ Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
   "Recall.ai Boca Pro Calendar App" in GCP project `cap-boca-pro`).
 - Dashboard webhook endpoint: `https://cap.boca.pro/api/webhooks/recall`
   subscribed to `bot.*`, `recording.done|failed`, `transcript.done|failed`,
-  `calendar.update`, `calendar.sync_events`. Verified with the workspace
+  `calendar.update`, `calendar.sync_events`,
+  `slack_team.invited|active|access_revoked`. Verified with the workspace
   verification secret; duplicate `webhook-id`s are ignored.
+- In-call agent (off by default): set `RECALL_LIVE_AGENT=true` to create bots
+  with real-time transcription streamed to `/api/webhooks/recall/realtime/`
+  (same verification secret). Chat messages starting with
+  `RECALL_AGENT_TRIGGER` (default `@notetaker`) or naming the bot are answered
+  in the meeting chat via Cap's AI provider; "note:" / "action item:" messages
+  become timeline comments after the call. Live view:
+  `/dashboard/meetings/<id>`. Zoom, Meet, Teams only (no chat on Webex/Slack).
 - Recall MCP server (`recall-ai`, https://us-west-2.recall.ai/mcp) is
   registered at user scope; use it for bot logs and webhook deliveries.
 - Add `recall-reconcile` to the `cron` service loop in Railway when changing
   its start command.
+- Slack Huddles:
+  - Add the bot subdomain in the Recall dashboard under the Slack bot setup.
+  - Add the generated MX/TXT records.
+  - Invite the bot email to the Slack workspace as a full member.
+  - Wait ~15 min for the bot to come online; it then auto-joins public huddles
+    (and can be invited to private ones). `slack_team.invited` activates the
+    team so the bot joins as `RECALL_BOT_NAME` instead of "None".

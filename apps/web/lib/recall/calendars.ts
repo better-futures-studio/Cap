@@ -16,6 +16,7 @@ import {
 } from "./client";
 import { getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
+import { buildLiveRecordingConfig } from "./realtime-config";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTO_RECORD_SYNC_WINDOW_MS = 28 * DAY_MS;
@@ -147,6 +148,7 @@ export async function scheduleCalendarEventBotForRow({
 
 	const automaticVideoOutput =
 		botImage !== undefined ? botImage : await loadBotVideoOutput(config);
+	const recordingConfig = buildLiveRecordingConfig(config);
 
 	try {
 		const updated = await client.scheduleCalendarEventBot(event.id, {
@@ -164,6 +166,7 @@ export async function scheduleCalendarEventBotForRow({
 				...(automaticVideoOutput
 					? { automatic_video_output: automaticVideoOutput }
 					: {}),
+				...(recordingConfig ? { recording_config: recordingConfig } : {}),
 			},
 		});
 		const recallBotId = updated.bots.at(-1)?.bot_id ?? null;
