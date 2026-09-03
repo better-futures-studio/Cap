@@ -1,17 +1,7 @@
 "use client";
 
 import type { MeetingBotStatus } from "@cap/database/schema";
-import {
-	Button,
-	Input,
-	Switch,
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@cap/ui";
+import { Button, Input, Switch } from "@cap/ui";
 import { classNames } from "@cap/utils";
 import type { Organisation } from "@cap/web-domain";
 import { useRouter } from "next/navigation";
@@ -26,9 +16,17 @@ import {
 	setCalendarAutoRecordAction,
 	toggleCalendarEventRecordingAction,
 } from "@/actions/meetings";
+import {
+	groupByDay,
+	meetingPlatformLabel,
+	meetingUrlLabel,
+} from "@/lib/recall/meetings-view";
 
-type MeetingBotRow = Awaited<ReturnType<typeof listMeetingBots>>[number];
+type MeetingBotRow = Awaited<
+	ReturnType<typeof listMeetingBots>
+>["upcoming"][number];
 type CalendarSettings = Awaited<ReturnType<typeof getMeetingCalendarSettings>>;
+type CalendarEvent = CalendarSettings["upcoming"][number];
 
 const TERMINAL_STATUSES = new Set<MeetingBotStatus>([
 	"complete",
@@ -63,48 +61,30 @@ const calendarResultMessages: Record<
 	},
 };
 
-function statusBadgeClass(status: MeetingBotStatus) {
-	if (status === "complete") return "bg-green-500/10 text-green-600";
-	if (status === "fatal" || status === "failed")
-		return "bg-red-500/10 text-red-600";
-	if (status === "cancelled" || status === "opted_out")
-		return "bg-gray-3 text-gray-9";
-	return "bg-blue-500/10 text-blue-600";
+function botStatusLabel(status: MeetingBotStatus): string {
+	if (status === "scheduling" || status === "scheduled") return "Bot scheduled";
+	if (status === "joining_call" || status === "in_waiting_room")
+		return "Joining…";
+	return "Recording now";
 }
 
-function formatEventTime(date: Date) {
-	const day = date.toLocaleDateString(undefined, {
-		weekday: "short",
-		month: "short",
-		day: "numeric",
-	});
-	const time = date.toLocaleTimeString(undefined, {
+function formatTime(date: Date): string {
+	return date.toLocaleTimeString(undefined, {
 		hour: "numeric",
 		minute: "2-digit",
 	});
-	return `${day} · ${time}`;
 }
 
-function RecordingCell({ bot }: { bot: MeetingBotRow }) {
-	if (bot.videoReady && bot.videoId) {
-		return (
-			<a
-				href={`/s/${bot.videoId}`}
-				target="_blank"
-				rel="noopener noreferrer"
-				className="text-xs font-medium text-blue-600 hover:underline"
-			>
-				View recording
-			</a>
-		);
-	}
-	if (bot.videoId) {
-		return <span className="text-xs text-gray-10">Processing…</span>;
-	}
-	return <span className="text-xs text-gray-10">—</span>;
+function formatPastDate(date: Date): string {
+	return date.toLocaleString(undefined, {
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
 }
 
-function SendBotForm({
+function SendBotBar({
 	orgId,
 	onScheduled,
 }: {
@@ -122,10 +102,7 @@ function SendBotForm({
 		}
 		startTransition(async () => {
 			try {
-				await scheduleMeetingBot({
-					orgId,
-					meetingUrl: meetingUrl.trim(),
-				});
+				await scheduleMeetingBot({ orgId, meetingUrl: meetingUrl.trim() });
 				toast.success("Bot is on its way");
 				setMeetingUrl("");
 				onScheduled();
@@ -138,32 +115,21 @@ function SendBotForm({
 	};
 
 	return (
-		<div className="rounded-xl border border-gray-3 overflow-hidden">
-			<div className="px-4 py-3">
-				<p className="text-sm font-semibold text-gray-12">
-					Send a bot to a meeting{" "}
-					<span className="text-xs font-normal text-gray-10">
-						— joins right away as a visible participant and announces the
-						recording in chat
-					</span>
-				</p>
-			</div>
-			<div className="border-t border-gray-3 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-end">
-				<div className="flex-1 flex flex-col gap-1.5">
-					<label htmlFor={meetingUrlId} className="text-xs text-gray-10">
-						Meeting URL
-					</label>
-					<Input
-						id={meetingUrlId}
-						placeholder="Zoom, Google Meet, Microsoft Teams, or Webex link"
-						value={meetingUrl}
-						onChange={(event) => setMeetingUrl(event.target.value)}
-						disabled={isPending}
-					/>
-				</div>
+		<div className="flex flex-col gap-1.5 rounded-lg border border-gray-3 p-3">
+			<div className="flex gap-2">
+				<Input
+					id={meetingUrlId}
+					placeholder="Paste a Zoom, Google Meet, Microsoft Teams, or Webex link to send the notetaker now"
+					value={meetingUrl}
+					onChange={(event) => setMeetingUrl(event.target.value)}
+					disabled={isPending}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") submit();
+					}}
+					className="flex-1"
+				/>
 				<Button
 					type="button"
-					size="sm"
 					disabled={isPending}
 					spinner={isPending}
 					onClick={submit}
@@ -171,118 +137,15 @@ function SendBotForm({
 					Send bot
 				</Button>
 			</div>
+			<p className="text-xs text-gray-10">
+				The bot joins as a visible participant named Boca Pro Notetaker and
+				announces the recording in chat.
+			</p>
 		</div>
 	);
 }
 
-function RecentMeetings({
-	orgId,
-	bots,
-}: {
-	orgId: Organisation.OrganisationId;
-	bots: MeetingBotRow[];
-}) {
-	const router = useRouter();
-	const [isPending, startTransition] = useTransition();
-
-	const cancel = (id: string) => {
-		startTransition(async () => {
-			try {
-				await cancelMeetingBotAction({ orgId, id });
-				toast.success("Meeting bot cancelled");
-				router.refresh();
-			} catch (error) {
-				toast.error(
-					error instanceof Error ? error.message : "Failed to cancel bot",
-				);
-			}
-		});
-	};
-
-	return (
-		<div className="rounded-xl border border-gray-3 overflow-hidden">
-			<div className="px-4 py-3">
-				<p className="text-sm font-semibold text-gray-12">Recent meetings</p>
-			</div>
-			<div className="border-t border-gray-3">
-				{bots.length === 0 ? (
-					<p className="px-4 py-3 text-xs text-gray-10">
-						No meetings recorded yet.
-					</p>
-				) : (
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead>Meeting</TableHead>
-								<TableHead>When</TableHead>
-								<TableHead>Source</TableHead>
-								<TableHead>Status</TableHead>
-								<TableHead>Recording</TableHead>
-								<TableHead className="w-20">Actions</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{bots.map((bot) => (
-								<TableRow key={bot.id}>
-									<TableCell className="max-w-[220px] py-2">
-										<p className="truncate text-sm text-gray-12">
-											{bot.title ?? bot.meetingUrl}
-										</p>
-										{bot.title && (
-											<p className="truncate text-xs text-gray-10">
-												{bot.meetingUrl}
-											</p>
-										)}
-									</TableCell>
-									<TableCell className="py-2 text-sm">
-										{new Date(bot.joinAt).toLocaleString()}
-									</TableCell>
-									<TableCell className="py-2 text-sm capitalize">
-										{bot.source}
-									</TableCell>
-									<TableCell className="py-2">
-										<span
-											className={classNames(
-												"inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-md",
-												statusBadgeClass(bot.status),
-											)}
-										>
-											{bot.status.replace(/_/g, " ")}
-										</span>
-										{(bot.status === "fatal" || bot.status === "failed") &&
-											bot.errorMessage && (
-												<p className="mt-1 text-xs text-red-600">
-													{bot.errorMessage}
-												</p>
-											)}
-									</TableCell>
-									<TableCell className="py-2">
-										<RecordingCell bot={bot} />
-									</TableCell>
-									<TableCell className="py-2">
-										{CANCELLABLE_STATUSES.has(bot.status) && (
-											<Button
-												type="button"
-												size="xs"
-												variant="destructive"
-												disabled={isPending}
-												onClick={() => cancel(bot.id)}
-											>
-												Cancel
-											</Button>
-										)}
-									</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				)}
-			</div>
-		</div>
-	);
-}
-
-function CalendarSection({
+function CalendarStrip({
 	orgId,
 	settings,
 }: {
@@ -291,32 +154,19 @@ function CalendarSection({
 }) {
 	const router = useRouter();
 	const [isPending, startTransition] = useTransition();
+	const autoRecordId = useId();
 
-	if (!settings.calendarConfigured) {
-		return (
-			<div className="rounded-xl border border-gray-3 px-4 py-3">
-				<p className="text-xs text-gray-10">
-					Calendar recording isn't configured on this deployment.
-				</p>
-			</div>
-		);
-	}
+	if (!settings.calendarConfigured) return null;
 
 	if (!settings.calendar) {
 		return (
-			<div className="rounded-xl border border-gray-3 overflow-hidden">
-				<div className="px-4 py-3">
-					<p className="text-sm font-semibold text-gray-12">Calendar</p>
-				</div>
-				<div className="border-t border-gray-3 px-4 py-3 flex items-center justify-between gap-3">
-					<p className="text-xs text-gray-10">
-						Connect Google Calendar to opt in to recording meetings, either per
-						event or automatically.
-					</p>
-					<Button href="/api/integrations/recall-calendar/connect" size="xs">
-						Connect Google Calendar
-					</Button>
-				</div>
+			<div className="flex items-center justify-between gap-3 text-sm">
+				<p className="text-gray-10">
+					Connect Google Calendar to record meetings automatically
+				</p>
+				<Button href="/api/integrations/recall-calendar/connect" size="sm">
+					Connect
+				</Button>
 			</div>
 		);
 	}
@@ -342,13 +192,83 @@ function CalendarSection({
 		});
 	};
 
-	const toggleEvent = (eventId: string, record: boolean) => {
+	const disconnect = () => {
+		if (
+			!window.confirm(
+				"Disconnect this Google Calendar? Scheduled recordings for its events will be cancelled.",
+			)
+		) {
+			return;
+		}
+		startTransition(async () => {
+			try {
+				await disconnectCalendarAction({ orgId, calendarRowId: calendar.id });
+				toast.success("Calendar disconnected");
+				router.refresh();
+			} catch (error) {
+				toast.error(
+					error instanceof Error ? error.message : "Failed to disconnect",
+				);
+			}
+		});
+	};
+
+	return (
+		<div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+			<span className="inline-flex items-center gap-1.5 text-gray-12">
+				<span
+					className={classNames(
+						"h-1.5 w-1.5 rounded-full",
+						calendar.status === "connected" ? "bg-green-500" : "bg-gray-8",
+					)}
+				/>
+				Google Calendar · {calendar.platformEmail ?? "connected"}
+			</span>
+			<label
+				htmlFor={autoRecordId}
+				className="flex items-center gap-2 text-xs text-gray-10"
+			>
+				<Switch
+					id={autoRecordId}
+					checked={calendar.autoRecord}
+					disabled={isPending}
+					onCheckedChange={setAutoRecord}
+				/>
+				Auto-record every meeting with a video link
+			</label>
+			<button
+				type="button"
+				className="ml-auto text-xs text-gray-10 hover:underline disabled:opacity-50"
+				disabled={isPending}
+				onClick={disconnect}
+			>
+				Disconnect
+			</button>
+		</div>
+	);
+}
+
+function UpcomingCalendarRow({
+	orgId,
+	calendarRowId,
+	event,
+}: {
+	orgId: Organisation.OrganisationId;
+	calendarRowId: string;
+	event: CalendarEvent;
+}) {
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+	const url = event.meetingUrl ?? "";
+	const recordId = useId();
+
+	const toggle = (record: boolean) => {
 		startTransition(async () => {
 			try {
 				await toggleCalendarEventRecordingAction({
 					orgId,
-					calendarRowId: calendar.id,
-					eventId,
+					calendarRowId,
+					eventId: event.id,
 					record,
 				});
 				router.refresh();
@@ -360,129 +280,259 @@ function CalendarSection({
 		});
 	};
 
-	const disconnect = () => {
-		if (
-			!window.confirm(
-				"Disconnect this Google Calendar? Scheduled recordings for its events will be cancelled.",
-			)
-		) {
-			return;
-		}
+	return (
+		<div className="flex items-center gap-3 py-2">
+			<span className="w-20 shrink-0 text-xs text-gray-10">
+				{formatTime(new Date(event.startTime))}
+			</span>
+			<div className="min-w-0 flex-1">
+				<p className="truncate text-sm text-gray-12">
+					{event.title ?? (url ? meetingUrlLabel(url) : "Untitled meeting")}
+				</p>
+				<p className="text-xs text-gray-10">{meetingPlatformLabel(url)}</p>
+			</div>
+			<label
+				htmlFor={recordId}
+				className="flex shrink-0 items-center gap-2 text-xs text-gray-10"
+			>
+				<Switch
+					id={recordId}
+					checked={event.recording}
+					disabled={isPending}
+					onCheckedChange={toggle}
+				/>
+				Record
+			</label>
+		</div>
+	);
+}
+
+function UpcomingBotRow({
+	orgId,
+	bot,
+}: {
+	orgId: Organisation.OrganisationId;
+	bot: MeetingBotRow;
+}) {
+	const router = useRouter();
+	const [isPending, startTransition] = useTransition();
+
+	const cancel = () => {
 		startTransition(async () => {
 			try {
-				await disconnectCalendarAction({
-					orgId,
-					calendarRowId: calendar.id,
-				});
-				toast.success("Calendar disconnected");
+				await cancelMeetingBotAction({ orgId, id: bot.id });
+				toast.success("Meeting bot cancelled");
 				router.refresh();
 			} catch (error) {
 				toast.error(
-					error instanceof Error ? error.message : "Failed to disconnect",
+					error instanceof Error ? error.message : "Failed to cancel bot",
 				);
 			}
 		});
 	};
 
-	const isConnected = calendar.status === "connected";
+	return (
+		<div className="flex items-center gap-3 py-2">
+			<span className="w-20 shrink-0 text-xs text-gray-10">
+				{formatTime(new Date(bot.joinAt))}
+			</span>
+			<div className="min-w-0 flex-1">
+				<p className="truncate text-sm text-gray-12">
+					{bot.title ?? meetingUrlLabel(bot.meetingUrl)}
+				</p>
+				<p className="text-xs text-gray-10">
+					{meetingPlatformLabel(bot.meetingUrl)}
+				</p>
+			</div>
+			<div className="flex shrink-0 items-center gap-2">
+				<span className="text-xs text-gray-10">
+					{botStatusLabel(bot.status)}
+				</span>
+				{CANCELLABLE_STATUSES.has(bot.status) && (
+					<button
+						type="button"
+						className="text-xs text-gray-10 hover:underline disabled:opacity-50"
+						disabled={isPending}
+						onClick={cancel}
+					>
+						Cancel
+					</button>
+				)}
+			</div>
+		</div>
+	);
+}
+
+type UpcomingItem =
+	| { kind: "calendar"; key: string; time: Date; event: CalendarEvent }
+	| { kind: "bot"; key: string; time: Date; bot: MeetingBotRow };
+
+function UpcomingSection({
+	orgId,
+	bots,
+	settings,
+}: {
+	orgId: Organisation.OrganisationId;
+	bots: MeetingBotRow[];
+	settings: CalendarSettings;
+}) {
+	// Calendar-sourced bots are already represented by settings.upcoming
+	// (their "recording" switch is on when a bot row exists for the event).
+	const upcomingBots = bots.filter((bot) => bot.source !== "calendar");
+
+	const items: UpcomingItem[] = [
+		...settings.upcoming.map((event) => ({
+			kind: "calendar" as const,
+			key: `c-${event.id}`,
+			time: new Date(event.startTime),
+			event,
+		})),
+		...upcomingBots.map((bot) => ({
+			kind: "bot" as const,
+			key: `b-${bot.id}`,
+			time: new Date(bot.joinAt),
+			bot,
+		})),
+	];
+
+	const groups = groupByDay(items, new Date(), (item) => item.time);
 
 	return (
-		<div className="rounded-xl border border-gray-3 overflow-hidden">
-			<div className="flex items-center gap-3 px-4 py-3">
-				<div className="flex-1 min-w-0 flex items-center gap-2">
-					<p className="text-sm font-semibold text-gray-12">Calendar</p>
-					<span className="truncate text-xs text-gray-10">
-						{calendar.platformEmail ?? "Google Calendar"}
-					</span>
-					<span
-						className={classNames(
-							"inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-md shrink-0",
-							isConnected
-								? "bg-green-500/10 text-green-600"
-								: "bg-gray-3 text-gray-10",
-						)}
-					>
-						{calendar.status}
-					</span>
-				</div>
-				<Button
-					type="button"
-					size="xs"
-					variant="destructive"
-					disabled={isPending}
-					onClick={disconnect}
-				>
-					Disconnect
-				</Button>
-			</div>
-			<div className="border-t border-gray-3 px-4 py-3 flex flex-col gap-3">
-				<div className="flex items-center justify-between gap-3">
-					<p className="text-xs text-gray-10">
-						Automatically record every meeting with a video link (off by
-						default)
-					</p>
-					<Switch
-						checked={calendar.autoRecord}
-						disabled={isPending}
-						onCheckedChange={setAutoRecord}
-					/>
-				</div>
-
-				<div className="flex flex-col gap-1.5">
-					<p className="text-xs text-gray-10">
-						Upcoming meetings (next 14 days)
-					</p>
-					{settings.upcoming.length === 0 ? (
-						<p className="text-xs text-gray-10">
-							No upcoming meetings with a video link.
-						</p>
-					) : (
-						<div className="rounded-lg bg-gray-2 divide-y divide-gray-3 max-h-80 overflow-y-auto">
-							{settings.upcoming.map((event) => (
-								<div
-									key={event.id}
-									className="flex items-center gap-3 py-1.5 px-3"
-								>
-									<p className="flex-1 min-w-0 truncate text-sm text-gray-12">
-										{event.title ?? "Untitled meeting"}
-									</p>
-									<p className="shrink-0 text-xs text-gray-10">
-										{formatEventTime(new Date(event.startTime))}
-									</p>
-									<Switch
-										checked={event.recording}
-										disabled={isPending}
-										onCheckedChange={(checked) =>
-											toggleEvent(event.id, checked)
-										}
-									/>
-								</div>
-							))}
+		<div className="flex flex-col gap-2">
+			<p className="text-sm font-semibold text-gray-12">Upcoming</p>
+			{items.length === 0 ? (
+				<p className="text-xs text-gray-10">
+					No upcoming meetings with a video link in the next 14 days.
+				</p>
+			) : (
+				<div className="flex flex-col gap-3">
+					{groups.map((group) => (
+						<div key={group.label}>
+							<p className="text-xs font-medium text-gray-10">{group.label}</p>
+							<div className="divide-y divide-gray-3">
+								{group.items.map((item) =>
+									item.kind === "calendar" ? (
+										<UpcomingCalendarRow
+											key={item.key}
+											orgId={orgId}
+											calendarRowId={settings.calendar?.id ?? ""}
+											event={item.event}
+										/>
+									) : (
+										<UpcomingBotRow
+											key={item.key}
+											orgId={orgId}
+											bot={item.bot}
+										/>
+									),
+								)}
+							</div>
 						</div>
-					)}
+					))}
 				</div>
+			)}
+		</div>
+	);
+}
+
+function PastRow({ bot }: { bot: MeetingBotRow }) {
+	const platform = meetingPlatformLabel(bot.meetingUrl);
+	const title = bot.title ?? meetingUrlLabel(bot.meetingUrl);
+
+	let result: React.ReactNode;
+	if (bot.status === "complete" && bot.videoId) {
+		result = (
+			<a
+				href={`/s/${bot.videoId}`}
+				className="text-xs font-medium text-blue-600 hover:underline"
+			>
+				View recording
+			</a>
+		);
+	} else if (
+		bot.status === "importing" ||
+		bot.status === "transcribing" ||
+		bot.status === "done" ||
+		bot.status === "call_ended"
+	) {
+		result = (
+			<span className="text-xs text-gray-10">Processing recording…</span>
+		);
+	} else if (bot.status === "fatal" || bot.status === "failed") {
+		result = (
+			<span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-md bg-red-500/10 text-red-600">
+				Failed
+			</span>
+		);
+	} else {
+		result = (
+			<span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-md bg-gray-3 text-gray-9">
+				Cancelled
+			</span>
+		);
+	}
+
+	return (
+		<div className="flex items-center gap-3 py-2">
+			<span className="w-32 shrink-0 text-xs text-gray-10">
+				{formatPastDate(new Date(bot.joinAt))}
+			</span>
+			<div className="min-w-0 flex-1">
+				<p className="truncate text-sm text-gray-12">{title}</p>
+				<p className="text-xs text-gray-10">{platform}</p>
+				{(bot.status === "fatal" || bot.status === "failed") &&
+					bot.errorMessage && (
+						<p className="text-xs text-red-600">{bot.errorMessage}</p>
+					)}
 			</div>
+			<div className="shrink-0">{result}</div>
+		</div>
+	);
+}
+
+function PastSection({ bots }: { bots: MeetingBotRow[] }) {
+	const pastBots = bots;
+
+	return (
+		<div className="flex flex-col gap-2">
+			<p className="text-sm font-semibold text-gray-12">Past</p>
+			{pastBots.length === 0 ? (
+				<p className="text-xs text-gray-10">No recordings yet.</p>
+			) : (
+				<div className="divide-y divide-gray-3">
+					{pastBots.map((bot) => (
+						<PastRow key={bot.id} bot={bot} />
+					))}
+				</div>
+			)}
 		</div>
 	);
 }
 
 export function MeetingsPage({
 	orgId,
-	initialBots,
+	initialUpcomingBots,
+	initialPastBots,
 	calendarSettings,
 	result,
 }: {
 	orgId: Organisation.OrganisationId;
-	initialBots: MeetingBotRow[];
+	initialUpcomingBots: MeetingBotRow[];
+	initialPastBots: MeetingBotRow[];
 	calendarSettings: CalendarSettings;
 	result?: string;
 }) {
 	const router = useRouter();
-	const [bots, setBots] = useState(initialBots);
+	const [upcomingBots, setUpcomingBots] = useState(initialUpcomingBots);
+	const [pastBots, setPastBots] = useState(initialPastBots);
 
 	useEffect(() => {
-		setBots(initialBots);
-	}, [initialBots]);
+		setUpcomingBots(initialUpcomingBots);
+	}, [initialUpcomingBots]);
+
+	useEffect(() => {
+		setPastBots(initialPastBots);
+	}, [initialPastBots]);
 
 	useEffect(() => {
 		if (!result) return;
@@ -496,25 +546,30 @@ export function MeetingsPage({
 	}, [result, router]);
 
 	useEffect(() => {
-		const hasPending = bots.some((bot) => !TERMINAL_STATUSES.has(bot.status));
+		const hasPending = upcomingBots.some(
+			(bot) => !TERMINAL_STATUSES.has(bot.status),
+		);
 		if (!hasPending) return;
 		const interval = setInterval(() => router.refresh(), 15000);
 		return () => clearInterval(interval);
-	}, [bots, router]);
+	}, [upcomingBots, router]);
 
 	return (
-		<div className="flex flex-col gap-3">
+		<div className="mx-auto flex max-w-4xl flex-col gap-4">
 			{calendarSettings.configured ? (
-				<SendBotForm orgId={orgId} onScheduled={() => router.refresh()} />
+				<SendBotBar orgId={orgId} onScheduled={() => router.refresh()} />
 			) : (
-				<div className="rounded-xl border border-gray-3 px-4 py-3">
-					<p className="text-xs text-gray-10">
-						Meeting bots aren't configured on this deployment.
-					</p>
-				</div>
+				<p className="text-xs text-gray-10">
+					Meeting bots aren't configured on this deployment.
+				</p>
 			)}
-			<RecentMeetings orgId={orgId} bots={bots} />
-			<CalendarSection orgId={orgId} settings={calendarSettings} />
+			<CalendarStrip orgId={orgId} settings={calendarSettings} />
+			<UpcomingSection
+				orgId={orgId}
+				bots={upcomingBots}
+				settings={calendarSettings}
+			/>
+			<PastSection bots={pastBots} />
 		</div>
 	);
 }

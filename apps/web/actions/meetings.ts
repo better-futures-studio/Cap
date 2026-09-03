@@ -2,9 +2,13 @@
 
 import { db } from "@cap/database";
 import { getCurrentUser } from "@cap/database/auth/session";
-import { meetingBots, videoUploads } from "@cap/database/schema";
+import {
+	type MeetingBotStatus,
+	meetingBots,
+	videoUploads,
+} from "@cap/database/schema";
 import type { Organisation } from "@cap/web-domain";
-import { desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireOrganizationAccess } from "@/actions/organization/authorization";
 import {
@@ -25,6 +29,48 @@ import {
 } from "@/lib/recall/config";
 
 const MEETINGS_PATH = "/dashboard/meetings";
+
+const NON_TERMINAL_STATUSES: MeetingBotStatus[] = [
+	"scheduling",
+	"scheduled",
+	"joining_call",
+	"in_waiting_room",
+	"in_call_not_recording",
+	"in_call_recording",
+];
+
+const TERMINAL_STATUSES: MeetingBotStatus[] = [
+	"complete",
+	"fatal",
+	"failed",
+	"cancelled",
+	"opted_out",
+];
+
+const UPCOMING_JOIN_AT_GRACE_MS = 2 * 60 * 60 * 1000;
+
+const MEETING_BOT_COLUMNS = {
+	id: meetingBots.id,
+	title: meetingBots.title,
+	meetingUrl: meetingBots.meetingUrl,
+	joinAt: meetingBots.joinAt,
+	source: meetingBots.source,
+	status: meetingBots.status,
+	errorMessage: meetingBots.errorMessage,
+	videoId: meetingBots.videoId,
+	createdAt: meetingBots.createdAt,
+	pendingUploadVideoId: videoUploads.videoId,
+};
+
+const withVideoReady = <
+	T extends { videoId: string | null; pendingUploadVideoId: string | null },
+>(
+	rows: T[],
+) =>
+	rows.map(({ pendingUploadVideoId, ...row }) => ({
+		...row,
+		videoReady: row.videoId !== null && pendingUploadVideoId === null,
+	}));
 
 const requireUser = async (orgId: Organisation.OrganisationId) => {
 	const user = await getCurrentUser();
@@ -78,29 +124,42 @@ export async function listMeetingBots({
 }) {
 	await requireUser(orgId);
 
-	const rows = await db()
-		.select({
-			id: meetingBots.id,
-			title: meetingBots.title,
-			meetingUrl: meetingBots.meetingUrl,
-			joinAt: meetingBots.joinAt,
-			source: meetingBots.source,
-			status: meetingBots.status,
-			errorMessage: meetingBots.errorMessage,
-			videoId: meetingBots.videoId,
-			createdAt: meetingBots.createdAt,
-			pendingUploadVideoId: videoUploads.videoId,
-		})
+	const cutoff = new Date(Date.now() - UPCOMING_JOIN_AT_GRACE_MS);
+
+	const upcomingRows = await db()
+		.select(MEETING_BOT_COLUMNS)
 		.from(meetingBots)
 		.leftJoin(videoUploads, eq(videoUploads.videoId, meetingBots.videoId))
-		.where(eq(meetingBots.orgId, orgId))
-		.orderBy(desc(meetingBots.createdAt))
+		.where(
+			and(
+				eq(meetingBots.orgId, orgId),
+				inArray(meetingBots.status, NON_TERMINAL_STATUSES),
+				gte(meetingBots.joinAt, cutoff),
+			),
+		)
+		.orderBy(asc(meetingBots.joinAt))
+		.limit(100);
+
+	const pastRows = await db()
+		.select(MEETING_BOT_COLUMNS)
+		.from(meetingBots)
+		.leftJoin(videoUploads, eq(videoUploads.videoId, meetingBots.videoId))
+		.where(
+			and(
+				eq(meetingBots.orgId, orgId),
+				or(
+					inArray(meetingBots.status, TERMINAL_STATUSES),
+					lt(meetingBots.joinAt, cutoff),
+				),
+			),
+		)
+		.orderBy(desc(meetingBots.joinAt))
 		.limit(50);
 
-	return rows.map(({ pendingUploadVideoId, ...row }) => ({
-		...row,
-		videoReady: row.videoId !== null && pendingUploadVideoId === null,
-	}));
+	return {
+		upcoming: withVideoReady(upcomingRows),
+		past: withVideoReady(pastRows),
+	};
 }
 
 export async function getMeetingCalendarSettings({

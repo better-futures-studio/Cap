@@ -44,6 +44,16 @@ vi.mock("@cap/database/schema", () => {
 });
 vi.mock("drizzle-orm", () => ({
 	eq: (column: string, value: unknown) => ({ op: "eq", column, value }),
+	and: (...conditions: unknown[]) => ({ op: "and", conditions }),
+	or: (...conditions: unknown[]) => ({ op: "or", conditions }),
+	inArray: (column: string, values: unknown[]) => ({
+		op: "inArray",
+		column,
+		values,
+	}),
+	gte: (column: string, value: unknown) => ({ op: "gte", column, value }),
+	lt: (column: string, value: unknown) => ({ op: "lt", column, value }),
+	asc: (column: string) => column,
 	desc: (column: string) => column,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -130,54 +140,61 @@ describe("listMeetingBots", () => {
 		}),
 	});
 
-	it("marks videoReady when a video exists with no pending upload", async () => {
-		mocks.db.mockReturnValue({
-			select: () =>
-				buildQuery([
-					{
-						id: "bot_1",
-						title: "Standup",
-						meetingUrl: "https://zoom.us/j/123",
-						joinAt: new Date("2026-09-03T10:00:00.000Z"),
-						source: "manual",
-						status: "complete",
-						errorMessage: null,
-						videoId: "video_1",
-						createdAt: new Date("2026-09-03T09:00:00.000Z"),
-						pendingUploadVideoId: null,
-					},
-					{
-						id: "bot_2",
-						title: "Retro",
-						meetingUrl: "https://zoom.us/j/456",
-						joinAt: new Date("2026-09-03T11:00:00.000Z"),
-						source: "manual",
-						status: "importing",
-						errorMessage: null,
-						videoId: "video_2",
-						createdAt: new Date("2026-09-03T09:30:00.000Z"),
-						pendingUploadVideoId: "video_2",
-					},
-					{
-						id: "bot_3",
-						title: "No video yet",
-						meetingUrl: "https://zoom.us/j/789",
-						joinAt: new Date("2026-09-03T12:00:00.000Z"),
-						source: "manual",
-						status: "scheduled",
-						errorMessage: null,
-						videoId: null,
-						createdAt: new Date("2026-09-03T09:45:00.000Z"),
-						pendingUploadVideoId: null,
-					},
-				]),
-		});
+	it("splits rows into an upcoming query and a past query, both marking videoReady", async () => {
+		const upcomingRow = {
+			id: "bot_3",
+			title: "No video yet",
+			meetingUrl: "https://zoom.us/j/789",
+			joinAt: new Date("2026-09-03T12:00:00.000Z"),
+			source: "manual",
+			status: "scheduled",
+			errorMessage: null,
+			videoId: null,
+			createdAt: new Date("2026-09-03T09:45:00.000Z"),
+			pendingUploadVideoId: null,
+		};
+		const pastRows = [
+			{
+				id: "bot_1",
+				title: "Standup",
+				meetingUrl: "https://zoom.us/j/123",
+				joinAt: new Date("2026-09-03T10:00:00.000Z"),
+				source: "manual",
+				status: "complete",
+				errorMessage: null,
+				videoId: "video_1",
+				createdAt: new Date("2026-09-03T09:00:00.000Z"),
+				pendingUploadVideoId: null,
+			},
+			{
+				id: "bot_2",
+				title: "Retro",
+				meetingUrl: "https://zoom.us/j/456",
+				joinAt: new Date("2026-09-03T11:00:00.000Z"),
+				source: "manual",
+				status: "importing",
+				errorMessage: null,
+				videoId: "video_2",
+				createdAt: new Date("2026-09-03T09:30:00.000Z"),
+				pendingUploadVideoId: "video_2",
+			},
+		];
 
-		const rows = await listMeetingBots({ orgId });
+		const select = vi
+			.fn()
+			.mockReturnValueOnce(buildQuery([upcomingRow]))
+			.mockReturnValueOnce(buildQuery(pastRows));
+		mocks.db.mockReturnValue({ select });
 
-		expect(rows.find((row) => row.id === "bot_1")?.videoReady).toBe(true);
-		expect(rows.find((row) => row.id === "bot_2")?.videoReady).toBe(false);
-		expect(rows.find((row) => row.id === "bot_3")?.videoReady).toBe(false);
-		expect(rows[0]).not.toHaveProperty("pendingUploadVideoId");
+		const { upcoming, past } = await listMeetingBots({ orgId });
+
+		expect(select).toHaveBeenCalledTimes(2);
+		expect(upcoming).toHaveLength(1);
+		expect(upcoming[0]?.videoReady).toBe(false);
+		expect(upcoming[0]).not.toHaveProperty("pendingUploadVideoId");
+
+		expect(past.find((row) => row.id === "bot_1")?.videoReady).toBe(true);
+		expect(past.find((row) => row.id === "bot_2")?.videoReady).toBe(false);
+		expect(past[0]).not.toHaveProperty("pendingUploadVideoId");
 	});
 });

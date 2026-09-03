@@ -35,7 +35,8 @@ export default async function Page({
 	return (
 		<MeetingsPage
 			orgId={user.activeOrganizationId}
-			initialBots={bots}
+			initialUpcomingBots={bots.upcoming}
+			initialPastBots={bots.past}
 			calendarSettings={calendarSettings}
 			result={calendar}
 		/>
