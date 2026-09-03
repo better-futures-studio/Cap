@@ -6,6 +6,7 @@ import {
 	getMeetingPreferences,
 	getSlackHuddleStatus,
 	listMeetingBots,
+	listMeetingVocabulary,
 } from "@/actions/meetings";
 import { MeetingsPage } from "./MeetingsPage";
 
@@ -28,13 +29,19 @@ export default async function Page({
 		redirect("/dashboard/caps");
 	}
 
-	const [bots, calendarSettings, slackHuddleStatus, meetingPreferences] =
-		await Promise.all([
-			listMeetingBots({ orgId: user.activeOrganizationId }),
-			getMeetingCalendarSettings({ orgId: user.activeOrganizationId }),
-			getSlackHuddleStatus({ orgId: user.activeOrganizationId }),
-			getMeetingPreferences({ orgId: user.activeOrganizationId }),
-		]);
+	const [
+		bots,
+		calendarSettings,
+		slackHuddleStatus,
+		meetingPreferences,
+		vocabulary,
+	] = await Promise.all([
+		listMeetingBots({ orgId: user.activeOrganizationId }),
+		getMeetingCalendarSettings({ orgId: user.activeOrganizationId }),
+		getSlackHuddleStatus({ orgId: user.activeOrganizationId }),
+		getMeetingPreferences({ orgId: user.activeOrganizationId }),
+		listMeetingVocabulary({ orgId: user.activeOrganizationId }),
+	]);
 	const { calendar } = await searchParams;
 
 	return (
@@ -45,6 +52,7 @@ export default async function Page({
 			calendarSettings={calendarSettings}
 			slackHuddleStatus={slackHuddleStatus}
 			initialRecapMode={meetingPreferences.recapMode}
+			initialVocabulary={vocabulary}
 			result={calendar}
 		/>
 	);

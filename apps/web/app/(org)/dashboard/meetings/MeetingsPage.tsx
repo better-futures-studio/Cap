@@ -8,11 +8,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
+	addMeetingVocabulary,
 	cancelMeetingBotAction,
 	disconnectCalendarAction,
 	type getMeetingCalendarSettings,
 	type getSlackHuddleStatus,
 	type listMeetingBots,
+	type listMeetingVocabulary,
+	removeMeetingVocabulary,
 	scheduleMeetingBot,
 	setCalendarAutoRecordAction,
 	setCalendarSeriesRuleAction,
@@ -31,6 +34,7 @@ type MeetingBotRow = Awaited<
 type CalendarSettings = Awaited<ReturnType<typeof getMeetingCalendarSettings>>;
 type CalendarEvent = CalendarSettings["upcoming"][number];
 type SlackHuddleStatus = Awaited<ReturnType<typeof getSlackHuddleStatus>>;
+type VocabularyTerm = Awaited<ReturnType<typeof listMeetingVocabulary>>[number];
 
 const TERMINAL_STATUSES = new Set<MeetingBotStatus>([
 	"complete",
@@ -643,6 +647,126 @@ function PastSection({ bots }: { bots: MeetingBotRow[] }) {
 	);
 }
 
+function VocabularyEditor({
+	orgId,
+	initialTerms,
+}: {
+	orgId: Organisation.OrganisationId;
+	initialTerms: VocabularyTerm[];
+}) {
+	const router = useRouter();
+	const termId = useId();
+	const spellingId = useId();
+	const [terms, setTerms] = useState(initialTerms);
+	const [term, setTerm] = useState("");
+	const [spelling, setSpelling] = useState("");
+	const [isPending, startTransition] = useTransition();
+
+	useEffect(() => {
+		setTerms(initialTerms);
+	}, [initialTerms]);
+
+	const handleAdd = () => {
+		if (!term.trim()) {
+			toast.error("Enter a term");
+			return;
+		}
+		startTransition(async () => {
+			try {
+				const row = await addMeetingVocabulary({
+					orgId,
+					term: term.trim(),
+					spelling: spelling.trim() || undefined,
+				});
+				setTerms((prev) => [
+					...prev.filter((existing) => existing.id !== row.id),
+					row,
+				]);
+				setTerm("");
+				setSpelling("");
+				toast.success("Term added");
+				router.refresh();
+			} catch (error) {
+				toast.error(
+					error instanceof Error ? error.message : "Failed to add term",
+				);
+			}
+		});
+	};
+
+	const handleRemove = (id: string) => {
+		startTransition(async () => {
+			try {
+				await removeMeetingVocabulary({ orgId, id });
+				setTerms((prev) => prev.filter((existing) => existing.id !== id));
+				toast.success("Term removed");
+				router.refresh();
+			} catch (error) {
+				toast.error(
+					error instanceof Error ? error.message : "Failed to remove term",
+				);
+			}
+		});
+	};
+
+	return (
+		<details className="rounded-xl border border-gray-3 p-4">
+			<summary className="cursor-pointer text-sm font-medium text-gray-12">
+				Transcription vocabulary
+			</summary>
+			<div className="mt-3 flex flex-col gap-3">
+				<p className="text-xs text-gray-10">
+					Names, products, and terms the transcript should get right. Optional
+					preferred spelling.
+				</p>
+				<div className="flex flex-wrap items-center gap-2">
+					<Input
+						id={termId}
+						placeholder="Term"
+						value={term}
+						onChange={(event) => setTerm(event.target.value)}
+						className="w-40"
+					/>
+					<Input
+						id={spellingId}
+						placeholder="Preferred spelling (optional)"
+						value={spelling}
+						onChange={(event) => setSpelling(event.target.value)}
+						className="w-48"
+					/>
+					<Button size="sm" onClick={handleAdd} disabled={isPending}>
+						Add
+					</Button>
+				</div>
+				{terms.length > 0 && (
+					<div className="flex flex-wrap gap-2">
+						{terms.map((row) => (
+							<span
+								key={row.id}
+								className="inline-flex items-center gap-1.5 rounded-full border border-gray-3 px-2.5 py-1 text-xs text-gray-12"
+							>
+								{row.term}
+								{row.spelling && (
+									<span className="text-gray-10">→ {row.spelling}</span>
+								)}
+								<button
+									type="button"
+									onClick={() => handleRemove(row.id)}
+									disabled={isPending}
+									className="text-gray-10 hover:text-gray-12"
+									aria-label={`Remove ${row.term}`}
+								>
+									×
+								</button>
+							</span>
+						))}
+					</div>
+				)}
+			</div>
+		</details>
+	);
+}
+
 export function MeetingsPage({
 	orgId,
 	initialUpcomingBots,
@@ -650,6 +774,7 @@ export function MeetingsPage({
 	calendarSettings,
 	slackHuddleStatus,
 	initialRecapMode,
+	initialVocabulary,
 	result,
 }: {
 	orgId: Organisation.OrganisationId;
@@ -658,6 +783,7 @@ export function MeetingsPage({
 	calendarSettings: CalendarSettings;
 	slackHuddleStatus: SlackHuddleStatus;
 	initialRecapMode: MeetingRecapMode;
+	initialVocabulary: VocabularyTerm[];
 	result?: string;
 }) {
 	const router = useRouter();
@@ -710,6 +836,7 @@ export function MeetingsPage({
 				settings={calendarSettings}
 			/>
 			<PastSection bots={pastBots} />
+			<VocabularyEditor orgId={orgId} initialTerms={initialVocabulary} />
 		</div>
 	);
 }

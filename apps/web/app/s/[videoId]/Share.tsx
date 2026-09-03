@@ -1114,7 +1114,9 @@ export const Share = ({
 														(!areChaptersDisabled &&
 															(aiData.chapters?.length ?? 0) > 0) ||
 														(data.metadata?.meetingActionItems?.length ?? 0) >
-															0) && (
+															0 ||
+														(data.metadata?.meetingSpeakerStats?.speakers
+															.length ?? 0) > 0) && (
 														<SummaryChapters
 															isSummaryDisabled={isSummaryDisabled}
 															areChaptersDisabled={areChaptersDisabled}
@@ -1122,6 +1124,7 @@ export const Share = ({
 															aiData={aiData}
 															aiLoading={aiLoading}
 															actionItems={data.metadata?.meetingActionItems}
+															speakerStats={data.metadata?.meetingSpeakerStats}
 														/>
 													)}
 											</motion.div>

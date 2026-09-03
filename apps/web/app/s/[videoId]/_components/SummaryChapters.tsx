@@ -1,6 +1,10 @@
-import type { MeetingActionItem } from "@cap/database/types";
+import type {
+	MeetingActionItem,
+	MeetingSpeakerStats,
+} from "@cap/database/types";
 import ReactMarkdown from "react-markdown";
 import ActionItems from "./ActionItems";
+import SpeakerStats from "./SpeakerStats";
 import { formatTimeMinutes } from "./utils/transcript-utils";
 
 type AiGenerationStatus =
@@ -27,6 +31,7 @@ interface SummaryChaptersProps {
 	};
 	aiLoading: boolean;
 	actionItems?: MeetingActionItem[];
+	speakerStats?: MeetingSpeakerStats | null;
 }
 
 const SummaryChapters = ({
@@ -36,6 +41,7 @@ const SummaryChapters = ({
 	aiData,
 	aiLoading,
 	actionItems = [],
+	speakerStats,
 }: SummaryChaptersProps) => {
 	const hasSummary = !isSummaryDisabled && !!aiData?.summary;
 	const hasChapters =
@@ -43,8 +49,12 @@ const SummaryChapters = ({
 		Array.isArray(aiData?.chapters) &&
 		aiData.chapters.length > 0;
 	const hasActionItems = actionItems.length > 0;
+	const hasSpeakerStats = (speakerStats?.speakers.length ?? 0) > 0;
 
-	if (aiLoading || (!hasSummary && !hasChapters && !hasActionItems))
+	if (
+		aiLoading ||
+		(!hasSummary && !hasChapters && !hasActionItems && !hasSpeakerStats)
+	)
 		return null;
 
 	return (
@@ -87,6 +97,13 @@ const SummaryChapters = ({
 				<ActionItems
 					items={actionItems}
 					className={hasSummary || hasChapters ? "mt-6" : ""}
+				/>
+			)}
+
+			{hasSpeakerStats && speakerStats && (
+				<SpeakerStats
+					stats={speakerStats}
+					className={hasSummary || hasChapters || hasActionItems ? "mt-6" : ""}
 				/>
 			)}
 		</div>

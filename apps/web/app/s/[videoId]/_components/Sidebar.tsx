@@ -221,6 +221,7 @@ export const Sidebar = forwardRef<{ scrollToBottom: () => void }, SidebarProps>(
 							initialAiData={aiData || undefined}
 							aiGenerationEnabled={aiGenerationEnabled}
 							actionItems={data.metadata?.meetingActionItems}
+							speakerStats={data.metadata?.meetingSpeakerStats}
 						/>
 					);
 				case "transcript":
