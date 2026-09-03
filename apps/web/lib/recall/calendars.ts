@@ -434,19 +434,21 @@ export async function listUpcomingCalendarEvents({
 			.map((row) => [row.calendarEventId as string, row.status]),
 	);
 
-	return events.map((event) => {
-		const status = statusByEventId.get(event.id) ?? null;
-		return {
-			id: event.id,
-			title: extractEventTitle(event),
-			startTime: event.start_time,
-			endTime: event.end_time,
-			meetingUrl: event.meeting_url,
-			platform: event.meeting_platform,
-			recording: status !== null && status !== "opted_out",
-			status,
-		};
-	});
+	return events
+		.filter((event) => event.meeting_url)
+		.map((event) => {
+			const status = statusByEventId.get(event.id) ?? null;
+			return {
+				id: event.id,
+				title: extractEventTitle(event),
+				startTime: event.start_time,
+				endTime: event.end_time,
+				meetingUrl: event.meeting_url,
+				platform: event.meeting_platform,
+				recording: status !== null && status !== "opted_out",
+				status,
+			};
+		});
 }
 
 export async function getUserCalendar({
