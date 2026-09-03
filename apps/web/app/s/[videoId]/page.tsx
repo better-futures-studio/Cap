@@ -685,6 +685,8 @@ async function AuthorizedContent({
 
 	const canManageSharePageBrandingPromise = (async () => {
 		if (!userId) return false;
+		// Single-org installs have nothing to pick between.
+		if (serverEnv().CAP_DISABLE_ORG_CREATION === "true") return false;
 
 		const [organizationAccess] = await db()
 			.select({
