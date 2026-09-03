@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { reconcileRecallMeetingBots } from "@/lib/recall/reconcile";
 import { recoverStalledVideoPipeline } from "@/lib/video-pipeline-recovery";
 import { recoverFailedVideoProcessing } from "@/lib/video-processing-recovery";
 
@@ -24,14 +25,21 @@ export async function GET(request: Request) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
-	const [summary, stalledPipeline] = await Promise.all([
+	const [summary, stalledPipeline, recallMeetingBots] = await Promise.all([
 		recoverFailedVideoProcessing(),
 		recoverStalledVideoPipeline(),
+		reconcileRecallMeetingBots().catch((error: unknown) => {
+			console.error("[recall] reconcile failed", {
+				message: error instanceof Error ? error.message : "unknown",
+			});
+			return null;
+		}),
 	]);
 
 	return NextResponse.json({
 		success: true,
 		...summary,
 		stalledPipeline,
+		recallMeetingBots,
 	});
 }
