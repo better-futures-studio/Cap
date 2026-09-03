@@ -684,16 +684,41 @@ export const ShareHeader = ({
 					</div>
 				)}
 				{branding.type === "custom" ? (
-					<div className="inline-flex h-11 max-w-56 items-center justify-center">
-						<Image
-							src={branding.imageUrl}
-							alt={`${branding.name} logo`}
-							width={176}
-							height={32}
-							unoptimized
-							className="max-h-8 w-auto max-w-44 object-contain"
-						/>
-					</div>
+					user ? (
+						<a
+							href="/dashboard/caps"
+							aria-label="Go to dashboard"
+							className="inline-flex h-11 max-w-56 cursor-pointer items-center justify-center"
+						>
+							<Image
+								src={branding.imageUrl}
+								alt={`${branding.name} logo`}
+								width={176}
+								height={32}
+								unoptimized
+								className="max-h-8 w-auto max-w-44 object-contain"
+							/>
+						</a>
+					) : (
+						<div className="inline-flex h-11 max-w-56 items-center justify-center">
+							<Image
+								src={branding.imageUrl}
+								alt={`${branding.name} logo`}
+								width={176}
+								height={32}
+								unoptimized
+								className="max-h-8 w-auto max-w-44 object-contain"
+							/>
+						</div>
+					)
+				) : user ? (
+					<a
+						href="/dashboard/caps"
+						aria-label="Go to dashboard"
+						className="inline-flex h-11 cursor-pointer items-center"
+					>
+						<Logo className="h-7 w-auto" />
+					</a>
 				) : (
 					<a
 						target="_blank"
