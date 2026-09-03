@@ -8,11 +8,18 @@ import { runWorkflowPromise } from "@/lib/workflow-runtime";
 
 export type LiveUtterance = { t: number; speaker: string; text: string };
 export type LiveCapture = { t: number; speaker: string; text: string };
+export type LiveChatEntry = {
+	t: number;
+	speaker: string;
+	text: string;
+	fromBot: boolean;
+};
 export type LiveTranscript = {
 	version: 1;
 	updatedAt: string;
 	utterances: LiveUtterance[];
 	captures: LiveCapture[];
+	chat?: LiveChatEntry[];
 };
 
 type LiveTranscriptDeps = {
@@ -28,6 +35,7 @@ function emptyTranscript(): LiveTranscript {
 		updatedAt: new Date().toISOString(),
 		utterances: [],
 		captures: [],
+		chat: [],
 	};
 }
 
@@ -73,6 +81,9 @@ async function readStored(
 			captures: Array.isArray(document.captures)
 				? document.captures.filter(isUtterance)
 				: [],
+			chat: Array.isArray(document.chat)
+				? document.chat.filter(isChatEntry)
+				: [],
 		};
 	} catch {
 		return null;
@@ -87,6 +98,11 @@ function isUtterance(value: unknown): value is LiveUtterance {
 		typeof entry.speaker === "string" &&
 		typeof entry.text === "string"
 	);
+}
+
+function isChatEntry(value: unknown): value is LiveChatEntry {
+	if (!isUtterance(value)) return false;
+	return typeof (value as { fromBot?: unknown }).fromBot === "boolean";
 }
 
 async function writeStored(meetingBotId: string, document: LiveTranscript) {
@@ -147,6 +163,21 @@ export async function appendCapture(
 	);
 }
 
+export async function appendChat(
+	meetingBotId: string,
+	entry: LiveChatEntry,
+	deps: LiveTranscriptDeps = {},
+) {
+	await update(
+		meetingBotId,
+		(document) => {
+			document.chat = document.chat ?? [];
+			document.chat.push(entry);
+		},
+		deps,
+	);
+}
+
 export async function readLiveTranscript(
 	meetingBotId: string,
 	deps: LiveTranscriptDeps = {},
@@ -161,5 +192,29 @@ export function liveTranscriptAsText(
 	const text = (document?.utterances ?? [])
 		.map((utterance) => `${utterance.speaker}: ${utterance.text}`)
 		.join("\n");
+	return text.length > maxChars ? text.slice(-maxChars) : text;
+}
+
+function chatLine(entry: LiveChatEntry) {
+	return entry.fromBot
+		? `[chat] Notetaker: ${entry.text}`
+		: `[chat] ${entry.speaker}: ${entry.text}`;
+}
+
+export function liveContextAsText(
+	document: LiveTranscript | null,
+	maxChars: number,
+) {
+	const lines = [
+		...(document?.utterances ?? []).map((utterance) => ({
+			t: utterance.t,
+			text: `${utterance.speaker}: ${utterance.text}`,
+		})),
+		...(document?.chat ?? []).map((entry) => ({
+			t: entry.t,
+			text: chatLine(entry),
+		})),
+	].sort((left, right) => left.t - right.t);
+	const text = lines.map((line) => line.text).join("\n");
 	return text.length > maxChars ? text.slice(-maxChars) : text;
 }

@@ -2,7 +2,8 @@ import { db } from "@cap/database";
 import { meetingBots } from "@cap/database/schema";
 import { eq } from "drizzle-orm";
 import { type ChatAgentDeps, handleLiveChatMessage } from "./chat-agent";
-import { appendUtterance } from "./live-transcript";
+import { getRecallConfig } from "./config";
+import { appendChat, appendUtterance } from "./live-transcript";
 
 type RecordValue = Record<string, unknown>;
 
@@ -24,6 +25,7 @@ export type RealtimePayload = { event: string; data: unknown };
 
 type RealtimeDeps = {
 	appendUtterance?: typeof appendUtterance;
+	appendChat?: typeof appendChat;
 	handleChatMessage?: typeof handleLiveChatMessage;
 	chatAgent?: ChatAgentDeps;
 	deferChat?: (work: () => Promise<unknown>) => void;
@@ -68,17 +70,30 @@ export async function handleRealtimeEvent(
 		const timestamp = number(record(data.timestamp)?.relative);
 		const text = string(message?.text);
 		if (!text || timestamp === null) return;
-		const work = () =>
-			(deps.handleChatMessage ?? handleLiveChatMessage)(
+		const speaker = string(participant?.name) ?? "Participant";
+		const botName =
+			deps.chatAgent?.botName ??
+			getRecallConfig()?.botName ??
+			"Boca Pro Notetaker";
+		if (speaker.trim().toLowerCase() === botName.trim().toLowerCase()) return;
+		const work = async () => {
+			await (deps.appendChat ?? appendChat)(meeting.id, {
+				t: timestamp,
+				speaker,
+				text,
+				fromBot: false,
+			});
+			await (deps.handleChatMessage ?? handleLiveChatMessage)(
 				{
 					meetingBotId: meeting.id,
 					recallBotId,
 					text,
-					speaker: string(participant?.name) ?? "Participant",
+					speaker,
 					timestamp,
 				},
 				deps.chatAgent,
 			);
+		};
 		if (deps.deferChat) deps.deferChat(work);
 		else await work();
 	}

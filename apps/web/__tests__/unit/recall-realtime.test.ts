@@ -172,10 +172,12 @@ describe("handleRealtimeEvent", () => {
 	});
 
 	it("answers a triggered chat message and sends one Recall reply", async () => {
+		const appendChat = vi.fn().mockResolvedValue(undefined);
 		const answer = vi.fn().mockResolvedValue("Friday.");
 		const send = vi.fn().mockResolvedValue(undefined);
 
 		await handleRealtimeEvent(chatPayload("/Nt when is launch?"), {
+			appendChat,
 			chatAgent: {
 				botName: "Boca Pro Notetaker",
 				trigger: "/nt",
@@ -184,22 +186,38 @@ describe("handleRealtimeEvent", () => {
 					updatedAt: "2026-09-03T00:00:00.000Z",
 					utterances: [{ t: 42.5, speaker: "Ada", text: "Launch Friday" }],
 					captures: [],
+					chat: [],
 				}),
+				appendChat,
 				answer,
 				send,
 			},
 		});
 
+		expect(appendChat).toHaveBeenCalledWith("meeting_1", {
+			t: 51.25,
+			speaker: "Ada",
+			text: "/Nt when is launch?",
+			fromBot: false,
+		});
 		expect(answer).toHaveBeenCalledOnce();
 		expect(send).toHaveBeenCalledOnce();
 		expect(send).toHaveBeenCalledWith("recall_bot_1", { message: "Friday." });
+		expect(appendChat).toHaveBeenLastCalledWith("meeting_1", {
+			t: 51.25,
+			speaker: "Boca Pro Notetaker",
+			text: "Friday.",
+			fromBot: true,
+		});
 	});
 
-	it("ignores chat messages without a trigger or bot-name mention", async () => {
+	it("appends non-trigger chat messages without answering", async () => {
+		const appendChat = vi.fn().mockResolvedValue(undefined);
 		const answer = vi.fn();
 		const send = vi.fn();
 
 		await handleRealtimeEvent(chatPayload("when is launch?"), {
+			appendChat,
 			chatAgent: {
 				botName: "Boca Pro Notetaker",
 				trigger: "/nt",
@@ -208,17 +226,26 @@ describe("handleRealtimeEvent", () => {
 			},
 		});
 
+		expect(appendChat).toHaveBeenCalledOnce();
+		expect(appendChat).toHaveBeenCalledWith("meeting_1", {
+			t: 51.25,
+			speaker: "Ada",
+			text: "when is launch?",
+			fromBot: false,
+		});
 		expect(answer).not.toHaveBeenCalled();
 		expect(send).not.toHaveBeenCalled();
 	});
 
-	it("ignores messages sent by the bot name", async () => {
+	it("does not append the bot's own chat messages", async () => {
+		const appendChat = vi.fn();
 		const answer = vi.fn();
 		const send = vi.fn();
 
 		await handleRealtimeEvent(
 			chatPayload("/nt summarize", "Boca Pro Notetaker"),
 			{
+				appendChat,
 				chatAgent: {
 					botName: "Boca Pro Notetaker",
 					trigger: "/nt",
@@ -228,8 +255,67 @@ describe("handleRealtimeEvent", () => {
 			},
 		);
 
+		expect(appendChat).not.toHaveBeenCalled();
 		expect(answer).not.toHaveBeenCalled();
 		expect(send).not.toHaveBeenCalled();
+	});
+
+	it("passes prior chat exchanges when answering a follow-up", async () => {
+		const document = {
+			version: 1 as const,
+			updatedAt: "2026-09-03T00:00:00.000Z",
+			utterances: [] as { t: number; speaker: string; text: string }[],
+			captures: [] as { t: number; speaker: string; text: string }[],
+			chat: [] as {
+				t: number;
+				speaker: string;
+				text: string;
+				fromBot: boolean;
+			}[],
+		};
+		const appendChat = vi.fn(
+			async (
+				_id: string,
+				entry: {
+					t: number;
+					speaker: string;
+					text: string;
+					fromBot: boolean;
+				},
+			) => {
+				document.chat.push(entry);
+			},
+		);
+		const answer = vi
+			.fn()
+			.mockResolvedValueOnce("Sunny and 82F in Tampa.")
+			.mockResolvedValueOnce("No, it is not raining in Tampa.");
+		const send = vi.fn().mockResolvedValue(undefined);
+		const deps = {
+			appendChat,
+			chatAgent: {
+				botName: "Boca Pro Notetaker",
+				trigger: "/nt",
+				readTranscript: async () => document,
+				appendChat,
+				answer,
+				send,
+			},
+		};
+
+		await handleRealtimeEvent(
+			chatPayload("/nt what's the weather in tampa"),
+			deps,
+		);
+		await handleRealtimeEvent(chatPayload("/nt is it raining now?"), deps);
+
+		expect(answer).toHaveBeenCalledTimes(2);
+		const secondMessages = answer.mock.calls[1]?.[1] ?? [];
+		expect(JSON.stringify(secondMessages)).toMatch(/weather in tampa/i);
+		expect(secondMessages.at(-1)).toEqual({
+			role: "user",
+			content: "is it raining now?",
+		});
 	});
 
 	it("can defer chat work for a fast webhook response", async () => {
