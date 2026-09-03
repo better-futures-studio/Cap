@@ -649,14 +649,16 @@ export const ShareHeader = ({
 					>
 						Log in
 					</a>
-					<Button
-						variant="dark"
-						size="xs"
-						href={`/signup?ref=video_${data.id}`}
-						className="h-8 rounded-full px-3 text-xs"
-					>
-						Get Cap free
-					</Button>
+					{buildEnv.NEXT_PUBLIC_IS_CAP && (
+						<Button
+							variant="dark"
+							size="xs"
+							href={`/signup?ref=video_${data.id}`}
+							className="h-8 rounded-full px-3 text-xs"
+						>
+							Get Cap free
+						</Button>
+					)}
 				</div>
 			</nav>
 		);

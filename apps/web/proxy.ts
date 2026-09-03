@@ -53,6 +53,13 @@ export async function proxy(request: NextRequest) {
 
 	const hostname = url.hostname;
 
+	// With email login off there is nothing to register; sign-in is sign-up.
+	if (
+		path.startsWith("/signup") &&
+		serverEnv().CAP_DISABLE_EMAIL_LOGIN === "true"
+	)
+		return NextResponse.redirect(new URL("/login", url.origin));
+
 	if (buildEnv.NEXT_PUBLIC_IS_CAP !== "true") {
 		if (
 			!(

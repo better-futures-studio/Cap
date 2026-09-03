@@ -196,41 +196,47 @@ const StepOne = ({
 			}}
 			className="flex flex-col gap-3"
 		>
-			<div>
-				<Input
-					id={emailId}
-					name="email"
-					autoFocus
-					type="email"
-					placeholder={emailSent ? "" : "tim@apple.com"}
-					autoComplete="email"
-					required
-					value={email}
-					disabled={emailSent || loading}
-					onChange={(e) => {
-						setEmail(e.target.value.toLowerCase());
-					}}
-				/>
-			</div>
-			<Button
-				variant="dark"
-				type="submit"
-				icon={<FontAwesomeIcon className="mr-1 size-4" icon={faEnvelope} />}
-				disabled={loading || emailSent}
-			>
-				{emailSent
-					? NODE_ENV === "development"
-						? "Email sent to your terminal"
-						: "Email sent to your inbox"
-					: "Continue with Email"}
-			</Button>
+			{publicEnv.emailAuthAvailable && (
+				<>
+					<div>
+						<Input
+							id={emailId}
+							name="email"
+							autoFocus
+							type="email"
+							placeholder={emailSent ? "" : "tim@apple.com"}
+							autoComplete="email"
+							required
+							value={email}
+							disabled={emailSent || loading}
+							onChange={(e) => {
+								setEmail(e.target.value.toLowerCase());
+							}}
+						/>
+					</div>
+					<Button
+						variant="dark"
+						type="submit"
+						icon={<FontAwesomeIcon className="mr-1 size-4" icon={faEnvelope} />}
+						disabled={loading || emailSent}
+					>
+						{emailSent
+							? NODE_ENV === "development"
+								? "Email sent to your terminal"
+								: "Email sent to your inbox"
+							: "Continue with Email"}
+					</Button>
+				</>
+			)}
 			{publicEnv.googleAuthAvailable && (
 				<>
-					<div className="flex gap-4 items-center">
-						<span className="flex-1 h-px bg-gray-5" />
-						<p className="text-sm text-center text-gray-10">OR</p>
-						<span className="flex-1 h-px bg-gray-5" />
-					</div>
+					{publicEnv.emailAuthAvailable && (
+						<div className="flex gap-4 items-center">
+							<span className="flex-1 h-px bg-gray-5" />
+							<p className="text-sm text-center text-gray-10">OR</p>
+							<span className="flex-1 h-px bg-gray-5" />
+						</div>
+					)}
 					<Button
 						variant="gray"
 						type="button"
