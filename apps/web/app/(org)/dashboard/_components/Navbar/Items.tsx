@@ -49,6 +49,7 @@ import {
 import { usePublicEnv } from "@/utils/public-env";
 import { useDashboardContext } from "../../Contexts";
 import {
+	CalendarIcon,
 	CapIcon,
 	ChartLineIcon,
 	CodeIcon,
@@ -109,7 +110,7 @@ const AdminNavItems = ({ toggleMobileNav }: Props) => {
 			name: "Meetings",
 			href: `/dashboard/meetings`,
 			matchChildren: true,
-			icon: <RecordIcon />,
+			icon: <CalendarIcon />,
 			subNav: [],
 		},
 		{

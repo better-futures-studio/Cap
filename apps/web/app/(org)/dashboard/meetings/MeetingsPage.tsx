@@ -112,10 +112,8 @@ function SendBotForm({
 	onScheduled: () => void;
 }) {
 	const [meetingUrl, setMeetingUrl] = useState("");
-	const [joinAt, setJoinAt] = useState("");
 	const [isPending, startTransition] = useTransition();
 	const meetingUrlId = useId();
-	const joinAtId = useId();
 
 	const submit = () => {
 		if (!meetingUrl.trim()) {
@@ -127,11 +125,9 @@ function SendBotForm({
 				await scheduleMeetingBot({
 					orgId,
 					meetingUrl: meetingUrl.trim(),
-					joinAt: joinAt ? new Date(joinAt).toISOString() : undefined,
 				});
-				toast.success("Bot scheduled");
+				toast.success("Bot is on its way");
 				setMeetingUrl("");
-				setJoinAt("");
 				onScheduled();
 			} catch (error) {
 				toast.error(
@@ -147,7 +143,8 @@ function SendBotForm({
 				<p className="text-sm font-semibold text-gray-12">
 					Send a bot to a meeting{" "}
 					<span className="text-xs font-normal text-gray-10">
-						— joins as a visible participant and announces the recording in chat
+						— joins right away as a visible participant and announces the
+						recording in chat
 					</span>
 				</p>
 			</div>
@@ -158,22 +155,9 @@ function SendBotForm({
 					</label>
 					<Input
 						id={meetingUrlId}
-						placeholder="https://zoom.us/j/..."
+						placeholder="Zoom, Google Meet, Microsoft Teams, or Webex link"
 						value={meetingUrl}
 						onChange={(event) => setMeetingUrl(event.target.value)}
-						disabled={isPending}
-					/>
-				</div>
-				<div className="flex flex-col gap-1.5">
-					<label htmlFor={joinAtId} className="text-xs text-gray-10">
-						Join at
-					</label>
-					<Input
-						id={joinAtId}
-						type="datetime-local"
-						className="w-56"
-						value={joinAt}
-						onChange={(event) => setJoinAt(event.target.value)}
 						disabled={isPending}
 					/>
 				</div>

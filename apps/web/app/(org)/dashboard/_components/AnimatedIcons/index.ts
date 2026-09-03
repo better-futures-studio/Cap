@@ -1,4 +1,5 @@
 import ArrowUpIcon from "./ArrowUp";
+import CalendarIcon from "./Calendar";
 import CapIcon from "./Cap";
 import ChartLineIcon from "./ChartLine";
 import MessageCircleMoreIcon from "./Chat";
@@ -17,6 +18,7 @@ import ReferIcon from "./Refer";
 import SettingsGearIcon from "./Settings";
 export {
 	ArrowUpIcon,
+	CalendarIcon,
 	CapIcon,
 	MessageCircleMoreIcon,
 	CodeIcon,
