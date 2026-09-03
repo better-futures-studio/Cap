@@ -65,3 +65,33 @@ Browser checks as the logged-in owner: `agent-browser` with the real Chrome
   `.recording/outputs/`, not at `screenshot/screen-capture.jpg`.
 - Serverless sleeping is on for Cap Web and the media server. First request
   after idle can be slow or 502 once.
+
+### Recall.ai meeting bots
+
+Meeting recording is done by Recall.ai bots (workspace "Boca Pro",
+`a000034f-036a-4251-bc0c-4d502d358851`, region us-west-2, API v1.11).
+Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
+`/api/webhooks/recall`, `/api/integrations/recall-calendar/*`,
+`/api/cron/recall-reconcile`, and the `/dashboard/meetings` page. Tables:
+`meeting_bots`, `meeting_calendars`, `recall_webhook_events`.
+
+- Two ways in: paste a meeting URL on the Meetings page, or connect Google
+  Calendar (Recall Calendar V2) and opt in per event or via the per-calendar
+  auto-record switch. Nothing records until the user opts in.
+- Flow: `recording.done` webhook → copy `video_mixed` MP4 into R2 as
+  `raw-upload.mp4` → normal media-server processing → Recall async
+  transcription (`recallai_async`) written to `transcription.vtt` with speaker
+  names → AI summary. If Recall transcription fails, the video falls back to
+  Cap's AssemblyAI pipeline (`videos.transcriptionStatus` is reset to NULL).
+- Env on Cap Web: `RECALL_API_KEY`, `RECALL_REGION`,
+  `RECALL_WEBHOOK_VERIFICATION_SECRET`, `RECALL_BOT_NAME`,
+  `RECALL_CALENDAR_GOOGLE_CLIENT_ID/SECRET` (dedicated Google OAuth web client
+  "Recall.ai Boca Pro Calendar App" in GCP project `cap-boca-pro`).
+- Dashboard webhook endpoint: `https://cap.boca.pro/api/webhooks/recall`
+  subscribed to `bot.*`, `recording.done|failed`, `transcript.done|failed`,
+  `calendar.update`, `calendar.sync_events`. Verified with the workspace
+  verification secret; duplicate `webhook-id`s are ignored.
+- Recall MCP server (`recall-ai`, https://us-west-2.recall.ai/mcp) is
+  registered at user scope; use it for bot logs and webhook deliveries.
+- Add `recall-reconcile` to the `cron` service loop in Railway when changing
+  its start command.
