@@ -195,7 +195,6 @@ export const ShareHeader = ({
 	// keeps its exit animation instead of being torn out of the tree on close.
 	const [shareLinkDialogMounted, setShareLinkDialogMounted] = useState(false);
 	const [upgradeModalMounted, setUpgradeModalMounted] = useState(false);
-	const [sharingDialogMounted, setSharingDialogMounted] = useState(false);
 	const [settingsDialogMounted, setSettingsDialogMounted] = useState(false);
 	const [passwordDialogMounted, setPasswordDialogMounted] = useState(false);
 	const [deleteDialogMounted, setDeleteDialogMounted] = useState(false);
@@ -206,10 +205,7 @@ export const ShareHeader = ({
 		if (open) setUpgradeModalMounted(true);
 		setUpgradeModalOpenRaw(open);
 	};
-	const setIsSharingDialogOpen = (open: boolean) => {
-		if (open) setSharingDialogMounted(true);
-		setIsSharingDialogOpenRaw(open);
-	};
+	const setIsSharingDialogOpen = setIsSharingDialogOpenRaw;
 	const setIsSettingsDialogOpen = (open: boolean) => {
 		if (open) setSettingsDialogMounted(true);
 		setIsSettingsDialogOpenRaw(open);
