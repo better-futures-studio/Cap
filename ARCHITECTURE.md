@@ -1,15 +1,15 @@
 # Architecture
 
-This describes the Boca Pro fork's meeting recording layer on top of
-upstream Cap, and how the pieces run in production at cap.boca.pro. For
-general Cap concepts (Instant/Studio recording, the editor, sharing), see
-upstream's docs at [cap.so/docs](https://cap.so/docs).
+This describes the meeting recording layer this fork adds on top of
+upstream Cap, and how the pieces fit together in a production deployment.
+For general Cap concepts (Instant/Studio recording, the editor, sharing),
+see upstream's docs at [cap.so/docs](https://cap.so/docs).
 
 ## Services
 
-- **Cap Web** — the Next.js app (`apps/web`), on Railway, port 3000 (pinned;
-  see `CLAUDE.md`). Serves the dashboard, API routes, webhooks, and the
-  effect-based HTTP API.
+- **Cap Web** — the Next.js app (`apps/web`), port 3000 (pinned; see
+  `CLAUDE.md` for a worked example's deployment specifics). Serves the
+  dashboard, API routes, webhooks, and the effect-based HTTP API.
 - **Media server** — `capsoftware/cap-media-server`, port 3456. Muxes and
   processes uploaded video, including recordings copied in from Recall.
 - **MySQL** — primary database, schema managed by Drizzle
@@ -18,15 +18,18 @@ upstream's docs at [cap.so/docs](https://cap.so/docs).
   (`/api/cron/recover-failed-video-processing`,
   `/api/cron/finalize-stale-desktop-segments`,
   `/api/cron/recall-reconcile`) every few minutes.
-- **db-backup** — nightly mysqldump to R2.
-- **Cloudflare R2** — video storage, private bucket, signed URLs.
-- **Postmark** — transactional email (recap emails, invites), HTTP API only.
-- **OpenAI** — AI summaries, action items, and in-call assistant answers
-  (Responses API).
+- **db-backup** — a scheduled database backup job.
+- **Object storage** — video storage, private bucket, signed URLs
+  (S3-compatible; e.g. Cloudflare R2).
+- **Email provider** — transactional email (recap emails, invites), e.g.
+  Resend or Postmark's HTTP API.
+- **LLM provider** — AI summaries, action items, and in-call assistant
+  answers (OpenAI, Anthropic, Groq, or an OpenAI-compatible endpoint).
 - **AssemblyAI** — Cap's own transcription fallback, and (optionally)
   Recall's transcription provider when `RECALL_TRANSCRIPTION_PROVIDER=assemblyai`.
-- **Recall.ai** (`us-west-2`) — runs the meeting bots: joins calls, records,
-  transcribes, streams live chat/transcript, and syncs calendars.
+- **Recall.ai** — runs the meeting bots: joins calls, records, transcribes,
+  streams live chat/transcript, and syncs calendars. All in one region,
+  set via `RECALL_REGION`.
 
 ## Meeting data flow
 
@@ -111,9 +114,9 @@ packages/env/server.ts                       RECALL_* environment schema
 
 ## Deployment specifics
 
-See the "Boca Pro self-hosted deployment" and "Recall.ai meeting bots"
-sections of `CLAUDE.md` for the current production configuration: Railway
-service ids, R2 bucket, the exact webhook event subscription, and the
-Slack Huddles one-time setup steps. That file is the source of truth for
-anything environment-specific; this document only covers what the code
-does.
+See [`README.md`](README.md#deploy-your-own) for a general deployment
+guide any organization can follow. `CLAUDE.md` documents one concrete
+example deployment (Railway service ids, storage bucket, the exact webhook
+event subscription, Slack Huddles one-time setup) as a worked reference,
+not as the defaults this app assumes; this document only covers what the
+code does.

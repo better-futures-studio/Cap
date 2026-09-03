@@ -1,8 +1,8 @@
-<h1 align="center">Cap (Boca Pro fork)</h1>
+<h1 align="center">Cap (meeting recorder fork)</h1>
 
 <p align="center">
-	Self-hosted screen recording and meeting notes for one company, running at
-	<a href="https://cap.boca.pro">cap.boca.pro</a>.
+	Self-hosted screen recording and meeting notes, with Recall.ai meeting
+	bots and team features added on top of upstream Cap.
 </p>
 
 This is `better-futures-studio/Cap`, a hard fork of
@@ -12,13 +12,13 @@ desktop apps for macOS and Windows that record screen, camera, and
 microphone, a web dashboard for sharing and commenting on recordings,
 transcription, and AI summaries. This fork keeps that base and adds meeting
 recording: Recall.ai bots that join video calls, an in-call assistant,
-Google Calendar scheduling, recap emails, and a few opinionated defaults for
-running the whole thing as a single-tenant deployment — Google-only login,
-one organization, no self-serve signup outside the company domain.
+Google Calendar scheduling, recap emails, and team-oriented defaults for
+running the app for one organization — Google-only login, no self-serve
+signup outside an allowed domain.
 
-There is one deployment of this fork: https://cap.boca.pro, for Boca Pro.
-It is not built for other companies to fork and reuse without changes; the
-defaults below assume a single organization.
+Any organization can deploy this fork. https://cap.boca.pro is an example
+deployment by Boca Pro; its specifics live in `CLAUDE.md` as a worked
+example, not as defaults baked into the app.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how a meeting goes
 from a pasted link to a recap email.
@@ -37,8 +37,9 @@ from a pasted link to a recap email.
 
 ### After the call
 
-- **Recording lands in Cap.** The bot's recording is copied into R2 and
-  runs through the same processing pipeline as a normal Cap upload.
+- **Recording lands in Cap.** The bot's recording is copied into object
+  storage and runs through the same processing pipeline as a normal Cap
+  upload.
 - **Transcription with speaker names.** Recall's own transcription (default
   provider) produces a VTT transcript with speaker labels. If Recall
   transcription fails, the video falls back to Cap's own AssemblyAI
@@ -71,7 +72,7 @@ Teams — Recall does not expose an in-call chat channel on Webex or Slack.
 
 ### Slack Huddles
 
-Built and working, pending the one-time Recall dashboard setup (bot
+Built and working, pending a one-time Recall dashboard setup (bot
 subdomain, DNS records, workspace invite) described in
 [`ARCHITECTURE.md`](ARCHITECTURE.md). Once a Slack workspace
 invites the bot, `slack_team.invited` activates it and it auto-joins public
@@ -93,41 +94,96 @@ services, the meeting data flow from bot creation through webhooks and
 workflows to the recap email, the database tables this fork adds, and where
 the code lives in the tree.
 
-## Setup for a new deployment
+## Deploy your own
 
-This section is for standing up another instance of this fork (a staging
-environment, a fresh Railway project). It assumes familiarity with the
-upstream [self-hosting guide](https://cap.so/docs/self-hosting) for the
-parts unrelated to meetings (storage, general AI provider, database).
+This walks a new organization through standing up this fork from scratch.
+It assumes familiarity with the upstream
+[self-hosting guide](https://cap.so/docs/self-hosting) for parts that don't
+touch meetings (general Cap AI provider, desktop app builds).
 
-### Environment variables
+### Prerequisites
 
-**Recall.ai** (all read by `apps/web/lib/recall/config.ts`; see
-`packages/env/server.ts` for the exact schema):
+- A Recall.ai account with a workspace in one region.
+- A Google Workspace, for Google login and for Recall Calendar V2.
+- Object storage (S3-compatible — AWS S3, Cloudflare R2, MinIO, etc.).
+- A MySQL database.
+- An email provider (Resend, or SMTP such as Postmark's).
+- An API key for at least one LLM provider (OpenAI, Anthropic, Groq, or an
+  OpenAI-compatible endpoint) for AI summaries and the in-call assistant.
+- Optionally, an AssemblyAI key — Cap's own transcription fallback, and (if
+  you want it) an alternative live/post-meeting transcription provider.
 
-| Variable | Purpose |
-| --- | --- |
-| `RECALL_API_KEY` | Recall.ai REST API key. |
-| `RECALL_REGION` | Recall region; the API base URL is `https://<region>.recall.ai`. This deployment uses `us-west-2`. |
-| `RECALL_WEBHOOK_VERIFICATION_SECRET` | Workspace webhook verification secret (`whsec_...`). |
-| `RECALL_BOT_NAME` | Display name the meeting bot joins calls as. |
-| `RECALL_LIVE_AGENT` | Enable live transcripts and the in-call chat agent. Off by default. |
-| `RECALL_AGENT_TRIGGER` | Chat command that invokes the live meeting agent. Defaults to `/nt`. |
-| `RECALL_BOT_IMAGE_URL` | JPEG shown as the bot's camera while recording. Defaults to `<WEB_URL>/meeting-bot/recording.jpg`. |
-| `RECALL_CALENDAR_GOOGLE_CLIENT_ID` | Google OAuth web client id for the Recall Calendar V2 flow. |
-| `RECALL_CALENDAR_GOOGLE_CLIENT_SECRET` | Matching client secret. |
-| `RECALL_CALENDAR_SETUP_CALLBACK_URI` | Recall regional callback URL the hosted calendar setup forwarder redirects to. Optional; derived from `RECALL_REGION` when unset. |
-| `RECALL_TRANSCRIPTION_PROVIDER` | `recallai` (default) or `assemblyai`. See above. |
+### Hosting
 
-Everything else the app needs — storage, database, email, general AI
-provider, AssemblyAI key for Cap's own transcription fallback, login
-restrictions — is documented in `CLAUDE.md` and the upstream self-hosting
-guide; this list only covers the Recall-specific variables.
+Railway is the tested path — the current `Dockerfile`s and cron setup
+assume it — but any Docker host works, since nothing here is Railway-specific
+at the application level.
+
+- **Services**: the web app (Next.js, listens on `PORT`, default 3000) and
+  a media server (`capsoftware/cap-media-server`, mux/processing, port
+  3456) as separate services, plus MySQL and object storage.
+- **PORT pinning**: pin the web app's `PORT` to a fixed value so the media
+  server's webhook callback URL to the web app matches. On Railway this
+  matters because `PORT` is otherwise injected per-deploy.
+- **IPv6 bind**: if your platform's private networking is IPv6-only (as
+  Railway's is), bind the web server to `::` rather than `0.0.0.0` so
+  internal service-to-service calls can reach it.
+- **Migrations at boot**: database migrations run automatically at app
+  startup (`apps/web/instrumentation.node.ts`), retrying with backoff —
+  there's no separate migration step to run in the deploy.
+- **Cron service loop**: run something that hits these endpoints on a
+  schedule (every few minutes), authenticated with a bearer `CRON_SECRET`:
+  - `/api/cron/recover-failed-video-processing`
+  - `/api/cron/finalize-stale-desktop-segments`
+  - `/api/cron/recall-reconcile`
+
+### Configuration
+
+All variables are read through `packages/env/server.ts`; this table covers
+what a self-hoster running meeting features needs to look at, grouped by
+concern. See that file (and the upstream self-hosting guide) for storage,
+database, and general Cap AI provider variables not listed here.
+
+**Login and organization**
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `CAP_DISABLE_EMAIL_LOGIN` | optional | Set `true` to remove email/OTP login and force OAuth (e.g. Google). |
+| `CAP_ALLOWED_SIGNUP_DOMAINS` | optional | Comma-separated list of email domains allowed to sign up. |
+| `CAP_DEFAULT_ORG_ID` | optional | Single-tenant mode: new users join this organization instead of getting their own. |
+| `CAP_DISABLE_ORG_CREATION` | optional | Set `true` to stop users creating additional organizations. |
+
+**Recall.ai — bots, webhooks, live agent**
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `RECALL_API_KEY` | required for meeting features | Recall.ai REST API key. |
+| `RECALL_REGION` | required for meeting features | Recall region; the API base URL is `https://<region>.recall.ai`. |
+| `RECALL_WEBHOOK_VERIFICATION_SECRET` | required for meeting features | Workspace webhook verification secret (`whsec_...`), used to verify inbound Recall webhooks. |
+| `RECALL_BOT_NAME` | optional | Display name the meeting bot joins calls as. |
+| `RECALL_BOT_IMAGE_URL` | optional | JPEG shown as the bot's camera while recording. Defaults to a card rendered from the organization's name and icon. |
+| `RECALL_LIVE_AGENT` | optional | Enable live transcripts and the in-call chat agent. Off by default. |
+| `RECALL_AGENT_TRIGGER` | optional | Chat command that invokes the live meeting agent. Defaults to `/nt`. |
+| `RECALL_TRANSCRIPTION_PROVIDER` | optional | `recallai` (default) or `assemblyai`; see Features above. |
+
+**Recall Calendar V2 (Google Calendar scheduling)**
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `RECALL_CALENDAR_GOOGLE_CLIENT_ID` | required for calendar sync | Google OAuth web client id, dedicated to the Recall Calendar V2 flow. |
+| `RECALL_CALENDAR_GOOGLE_CLIENT_SECRET` | required for calendar sync | Matching client secret. |
+| `RECALL_CALENDAR_SETUP_CALLBACK_URI` | optional | Recall regional callback URL the hosted calendar setup forwarder redirects to. Derived from `RECALL_REGION` when unset. |
+
+Everything else meeting-related — Cap's own transcription fallback
+(`ASSEMBLY_API_KEY`), general AI provider selection (`AI_PROVIDER`,
+`AI_MODEL`, and related keys) — is documented in `packages/env/server.ts`
+and the upstream self-hosting guide.
 
 ### Recall workspace setup
 
 1. Create a Recall.ai account and workspace, then generate an API key —
-   this becomes `RECALL_API_KEY`. Note the workspace's region.
+   this becomes `RECALL_API_KEY`. Note the workspace's region — this
+   becomes `RECALL_REGION`.
 2. Get the workspace webhook verification secret from the Recall dashboard
    — this becomes `RECALL_WEBHOOK_VERIFICATION_SECRET`.
 3. Add a dashboard webhook endpoint pointing at
@@ -146,33 +202,37 @@ guide; this list only covers the Recall-specific variables.
    Both full URLs (`https://<your-domain>/api/integrations/recall-calendar/callback`
    and `https://<your-domain>/api/integrations/recall-calendar/setup-callback`)
    must be registered as authorized redirect URIs on the Google OAuth client.
-5. To enable the in-call assistant, set `RECALL_LIVE_AGENT=true` and confirm
-   `RECALL_AGENT_TRIGGER` if you want something other than `/nt`.
-6. To use AssemblyAI instead of Recall's own transcription, configure the
+5. If using AssemblyAI as the transcription provider, configure the
    AssemblyAI key on the Recall dashboard's Transcription page first, then
    set `RECALL_TRANSCRIPTION_PROVIDER=assemblyai`.
+6. If Recall has enabled Slack Huddles for your account, register the bot's
+   subdomain with Recall so it can join Huddles under your workspace.
 
-### Google OAuth client
+### Google Cloud setup
 
 Use a dedicated Google OAuth **web** client for the Recall Calendar V2 flow
 (separate from any OAuth client used for Cap login). Set its consent screen
 audience to **Internal** if the Google Workspace is restricted to one
 organization — this avoids Google's verification process, since only users
-on that Workspace will ever authorize it.
+on that Workspace can ever authorize it. Request the Calendar scopes Recall's
+hosted setup flow asks for during the OAuth consent screen.
 
-### Railway notes
+### First run
 
-- Railway injects `PORT` at runtime; pin `PORT=3000` on Cap Web so the media
-  server's internal webhook URL (`http://cap-web.railway.internal:3000`)
-  keeps matching.
-- Railway private networking is IPv6 — the web Dockerfile binds
-  `HOSTNAME="::"`.
-- Database migrations run automatically at boot
-  (`apps/web/instrumentation.node.ts`), retrying with backoff; there is no
-  separate migration step in the deploy.
-- Add a `cron` service hitting `/api/cron/recover-failed-video-processing`,
-  `/api/cron/finalize-stale-desktop-segments`, and `/api/cron/recall-reconcile`
-  on a schedule (bearer `CRON_SECRET`).
+1. Sign in as the first user (Google, or email if enabled).
+2. Connect Google Calendar from the Meetings page and confirm events show
+   up.
+3. Send a test bot to a call by pasting a meeting URL, and confirm it joins
+   and the recording lands in Cap afterward.
+4. Send a test webhook event from the Recall dashboard and confirm your
+   `/api/webhooks/recall` endpoint returns success.
+
+### Branding
+
+The bot's display name comes from `RECALL_BOT_NAME`. Its camera card — the
+image shown in the call while it records — is rendered by default from the
+organization's name and icon; override it with `RECALL_BOT_IMAGE_URL`, a
+1280x720 JPEG under 1.3 MB.
 
 ### Running locally
 
@@ -212,7 +272,8 @@ them, Recall integration is simply disabled (`getRecallConfig()` returns
 This fork tracks [`CapSoftware/Cap`](https://github.com/CapSoftware/Cap).
 Screen recording, the desktop apps, the editor, sharing, comments,
 transcription, and Cap AI are upstream's work; this fork adds the Recall.ai
-meeting integration and the Boca Pro deployment configuration on top.
+meeting integration and the deployment configuration for running it as a
+single-tenant app.
 
 License terms are as upstream states them:
 
