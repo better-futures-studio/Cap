@@ -40,6 +40,16 @@ vi.mock("workflow", () => ({
 
 vi.mock("server-only", () => ({}));
 
+vi.mock("@/lib/recall/action-items", () => ({
+	loadCapturedActionItemComments: vi.fn(async () => []),
+	mergeMeetingActionItems: vi.fn((items: unknown) => items),
+	parseMeetingActionItems: vi.fn(() => []),
+}));
+
+vi.mock("@/lib/recall/recap", () => ({
+	sendMeetingRecap: vi.fn(),
+}));
+
 import { AiUnavailableError } from "@/lib/ai/run";
 import {
 	callAiApi,

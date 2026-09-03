@@ -78,7 +78,14 @@ export interface VideoMetadata {
 		state: "pending" | "accepted" | "rejected";
 		rawFileKey?: string;
 	};
+	meetingActionItems?: MeetingActionItem[];
 }
+
+export type MeetingActionItem = {
+	text: string;
+	owner: string | null;
+	due: string | null;
+};
 
 export type VideoEditRange = {
 	start: number;

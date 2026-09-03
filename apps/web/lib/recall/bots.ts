@@ -10,9 +10,11 @@ import type { Organisation, User } from "@cap/web-domain";
 import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { buildJoinChatMessage } from "./bot-chat";
 import { loadBotVideoOutput } from "./bot-image";
+import { getUserCalendar } from "./calendars";
 import {
 	RecallApiError,
 	type RecallAutomaticVideoOutput,
+	type RecallCalendarEvent,
 	type RecallClient,
 } from "./client";
 import { getRecallConfig } from "./config";
@@ -91,6 +93,77 @@ function platformForHost(hostname: string): MeetingPlatform | null {
 	}
 	if (SUPPORTED_MEETING_HOSTS[4]?.test(host)) return "webex";
 	return null;
+}
+
+export function normalizeMeetingUrl(url: string): string {
+	try {
+		const parsed = new URL(url);
+		parsed.hash = "";
+		parsed.search = "";
+		parsed.hostname = parsed.hostname.toLowerCase();
+		parsed.pathname = parsed.pathname.replace(/\/+$/, "") || "/";
+		return parsed.toString().replace(/\/$/, "");
+	} catch {
+		return url.trim().toLowerCase().replace(/\/+$/, "");
+	}
+}
+
+function eventSummary(event: RecallCalendarEvent): string | null {
+	const raw = event.raw;
+	if (raw && typeof raw === "object" && "summary" in raw) {
+		const summary = (raw as { summary?: unknown }).summary;
+		return typeof summary === "string" && summary.trim()
+			? summary.trim()
+			: null;
+	}
+	return null;
+}
+
+async function lookupCalendarMatchForManualBot({
+	orgId,
+	userId,
+	meetingUrl,
+	now,
+	client,
+}: {
+	orgId: Organisation.OrganisationId;
+	userId: User.UserId;
+	meetingUrl: string;
+	now: Date;
+	client: RecallClient;
+}): Promise<{ title: string | null; calendarEventId: string | null }> {
+	try {
+		const calendar = await getUserCalendar({ orgId, userId });
+		if (!calendar || calendar.status !== "connected") {
+			return { title: null, calendarEventId: null };
+		}
+		const windowMs = 2 * 60 * 60 * 1000;
+		const events = await client.listCalendarEvents({
+			calendarId: calendar.recallCalendarId,
+			startTimeGte: new Date(now.getTime() - windowMs).toISOString(),
+			startTimeLte: new Date(now.getTime() + windowMs).toISOString(),
+			isDeleted: false,
+		});
+		const normalized = normalizeMeetingUrl(meetingUrl);
+		const match = events.find(
+			(event) =>
+				event.meeting_url &&
+				normalizeMeetingUrl(event.meeting_url) === normalized,
+		);
+		if (!match) return { title: null, calendarEventId: null };
+
+		const [existing] = await db()
+			.select({ id: meetingBots.id })
+			.from(meetingBots)
+			.where(eq(meetingBots.calendarEventId, match.id))
+			.limit(1);
+		return {
+			title: eventSummary(match),
+			calendarEventId: existing ? null : match.id,
+		};
+	} catch {
+		return { title: null, calendarEventId: null };
+	}
 }
 
 export function parseMeetingUrl(
@@ -178,21 +251,33 @@ export async function scheduleManualMeetingBot(
 		return { id: duplicate.id, status: duplicate.status };
 	}
 
-	const id = nanoId();
-	await db()
-		.insert(meetingBots)
-		.values({
-			id,
-			orgId,
-			ownerId: userId,
-			source: "manual",
-			meetingUrl: parsed.url,
-			title: title ?? null,
-			joinAt: scheduledJoinAt,
-			status: "scheduling",
-		});
-
 	const client = deps.client ?? getDefaultRecallClient();
+	let resolvedTitle = title?.trim() || null;
+	let calendarEventId: string | null = null;
+	if (!resolvedTitle) {
+		const match = await lookupCalendarMatchForManualBot({
+			orgId,
+			userId,
+			meetingUrl: parsed.url,
+			now,
+			client,
+		});
+		resolvedTitle = match.title;
+		calendarEventId = match.calendarEventId;
+	}
+
+	const id = nanoId();
+	await db().insert(meetingBots).values({
+		id,
+		orgId,
+		ownerId: userId,
+		source: "manual",
+		meetingUrl: parsed.url,
+		title: resolvedTitle,
+		joinAt: scheduledJoinAt,
+		calendarEventId,
+		status: "scheduling",
+	});
 	const config = getRecallConfig();
 	const botName = deps.botName ?? config?.botName ?? "Boca Pro Notetaker";
 	const automaticVideoOutput =

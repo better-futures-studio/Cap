@@ -7,8 +7,14 @@ import {
 } from "@/lib/recall/bots";
 import { RecallApiError, type RecallClient } from "@/lib/recall/client";
 
-const mocks = vi.hoisted(() => ({ db: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+	db: vi.fn(),
+	getUserCalendar: vi.fn(),
+}));
 vi.mock("@cap/database", () => ({ db: mocks.db }));
+vi.mock("@/lib/recall/calendars", () => ({
+	getUserCalendar: mocks.getUserCalendar,
+}));
 vi.mock("@cap/database/schema", () => {
 	const table = (name: string, fields: string[]) =>
 		Object.fromEntries([
@@ -188,6 +194,7 @@ function mockClient(overrides: Partial<RecallClient> = {}): RecallClient {
 beforeEach(() => {
 	rows = { meeting_bots: [] };
 	mocks.db.mockReturnValue(createClient());
+	mocks.getUserCalendar.mockReset().mockResolvedValue(null);
 });
 
 describe("parseMeetingUrl", () => {
@@ -286,6 +293,78 @@ describe("scheduleManualMeetingBot", () => {
 		expect(bots()[0]).toMatchObject({
 			status: "failed",
 			errorMessage: "Recall rejected the request (HTTP 400)",
+		});
+	});
+
+	it("uses a matching calendar event title when none is given", async () => {
+		mocks.getUserCalendar.mockResolvedValue({
+			id: "cal_1",
+			recallCalendarId: "recall_cal",
+			status: "connected",
+		});
+		const client = mockClient({
+			listCalendarEvents: vi.fn(async () => [
+				{
+					id: "evt_1",
+					meeting_url: "https://Meet.Google.com/abc-defg-hij/?authuser=1",
+					raw: { summary: "Weekly standup" },
+				},
+			]) as unknown as RecallClient["listCalendarEvents"],
+		});
+
+		const result = await scheduleManualMeetingBot(
+			{
+				orgId,
+				userId,
+				meetingUrl: "https://meet.google.com/abc-defg-hij",
+			},
+			{ client, now: () => now },
+		);
+
+		expect(result.status).toBe("scheduled");
+		expect(bots()[0]).toMatchObject({
+			title: "Weekly standup",
+			calendarEventId: "evt_1",
+		});
+	});
+
+	it("leaves calendarEventId null when that event already has a row", async () => {
+		rows.meeting_bots = [
+			{
+				id: "existing_cal",
+				calendarEventId: "evt_1",
+				status: "complete",
+				joinAt: now,
+			},
+		];
+		mocks.getUserCalendar.mockResolvedValue({
+			id: "cal_1",
+			recallCalendarId: "recall_cal",
+			status: "connected",
+		});
+		const client = mockClient({
+			listCalendarEvents: vi.fn(async () => [
+				{
+					id: "evt_1",
+					meeting_url: "https://meet.google.com/abc-defg-hij",
+					raw: { summary: "Weekly standup" },
+				},
+			]) as unknown as RecallClient["listCalendarEvents"],
+		});
+
+		const result = await scheduleManualMeetingBot(
+			{
+				orgId,
+				userId,
+				meetingUrl: "https://meet.google.com/abc-defg-hij",
+			},
+			{ client, now: () => now },
+		);
+
+		expect(result.status).toBe("scheduled");
+		expect(bots()[1]).toMatchObject({
+			title: "Weekly standup",
+			calendarEventId: null,
 		});
 	});
 

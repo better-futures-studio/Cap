@@ -4,7 +4,9 @@ import { db } from "@cap/database";
 import { getCurrentUser } from "@cap/database/auth/session";
 import {
 	type MeetingBotStatus,
+	type MeetingRecapMode,
 	meetingBots,
+	meetingPreferences,
 	slackHuddleTeams,
 	videoUploads,
 } from "@cap/database/schema";
@@ -12,6 +14,7 @@ import type { Organisation } from "@cap/web-domain";
 import { and, asc, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireOrganizationAccess } from "@/actions/organization/authorization";
+import { getMeetingActionItems } from "@/lib/recall/action-items";
 import {
 	cancelMeetingBot,
 	parseMeetingUrl,
@@ -22,12 +25,14 @@ import {
 	getUserCalendar,
 	listUpcomingCalendarEvents,
 	setCalendarAutoRecord,
+	setCalendarSeriesRule,
 	toggleCalendarEventRecording,
 } from "@/lib/recall/calendars";
 import {
 	isRecallCalendarConfigured,
 	isRecallConfigured,
 } from "@/lib/recall/config";
+import { parseRecapMode } from "@/lib/recall/recap";
 
 const MEETINGS_PATH = "/dashboard/meetings";
 
@@ -236,6 +241,76 @@ export async function disconnectCalendarAction({
 	const user = await requireUser(orgId);
 	await disconnectCalendar({ calendarRowId, userId: user.id });
 	revalidatePath(MEETINGS_PATH);
+}
+
+export async function setCalendarSeriesRuleAction({
+	orgId,
+	calendarRowId,
+	eventId,
+	record,
+}: {
+	orgId: Organisation.OrganisationId;
+	calendarRowId: string;
+	eventId: string;
+	record: boolean;
+}) {
+	const user = await requireUser(orgId);
+	await setCalendarSeriesRule({
+		calendarRowId,
+		userId: user.id,
+		eventId,
+		record,
+	});
+	revalidatePath(MEETINGS_PATH);
+}
+
+export async function getMeetingPreferences({
+	orgId,
+}: {
+	orgId: Organisation.OrganisationId;
+}): Promise<{ recapMode: MeetingRecapMode }> {
+	const user = await requireUser(orgId);
+	const [row] = await db()
+		.select({ recapMode: meetingPreferences.recapMode })
+		.from(meetingPreferences)
+		.where(eq(meetingPreferences.userId, user.id))
+		.limit(1);
+	return { recapMode: parseRecapMode(row?.recapMode) };
+}
+
+export async function setMeetingPreferences({
+	orgId,
+	recapMode,
+}: {
+	orgId: Organisation.OrganisationId;
+	recapMode: MeetingRecapMode;
+}) {
+	const user = await requireUser(orgId);
+	const mode = parseRecapMode(recapMode);
+	if (mode !== recapMode) throw new Error("Invalid recap mode");
+	await db()
+		.insert(meetingPreferences)
+		.values({
+			userId: user.id,
+			orgId,
+			recapMode: mode,
+		})
+		.onDuplicateKeyUpdate({
+			set: { recapMode: mode, orgId },
+		});
+	revalidatePath(MEETINGS_PATH);
+	return { recapMode: mode };
+}
+
+export async function getMeetingActionItemsAction({
+	orgId,
+	videoId,
+}: {
+	orgId: Organisation.OrganisationId;
+	videoId: string;
+}) {
+	await requireUser(orgId);
+	return getMeetingActionItems(videoId);
 }
 
 export async function getSlackHuddleStatus({

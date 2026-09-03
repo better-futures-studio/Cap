@@ -1770,6 +1770,8 @@ export const developerDailyStorageSnapshotsRelations = relations(
 
 export type MeetingBotSource = "manual" | "calendar" | "slack";
 
+export type MeetingRecapMode = "off" | "self" | "attendees";
+
 export type SlackHuddleTeamStatus = "invited" | "active" | "revoked";
 
 export type MeetingBotStatus =
@@ -1817,6 +1819,7 @@ export const meetingBots = mysqlTable(
 		errorMessage: text("errorMessage"),
 		videoId: nanoIdNullable("videoId").$type<Video.VideoId>(),
 		chatSyncedAt: timestamp("chatSyncedAt"),
+		recapSentAt: timestamp("recapSentAt"),
 		createdAt: timestamp("createdAt").notNull().defaultNow(),
 		updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 	},
@@ -1850,6 +1853,36 @@ export const meetingCalendars = mysqlTable(
 			table.recallCalendarId,
 		),
 		index("meeting_calendars_org_user_idx").on(table.orgId, table.userId),
+	],
+);
+
+export const meetingPreferences = mysqlTable("meeting_preferences", {
+	userId: nanoId("userId").notNull().primaryKey().$type<User.UserId>(),
+	orgId: nanoId("orgId").notNull().$type<Organisation.OrganisationId>(),
+	recapMode: varchar("recapMode", { length: 16 })
+		.notNull()
+		.default("self")
+		.$type<MeetingRecapMode>(),
+	createdAt: timestamp("createdAt").notNull().defaultNow(),
+	updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+});
+
+export const meetingCalendarSeriesRules = mysqlTable(
+	"meeting_calendar_series_rules",
+	{
+		id: nanoId("id").notNull().primaryKey(),
+		calendarId: nanoId("calendarId").notNull(),
+		seriesKey: varchar("seriesKey", { length: 255 }).notNull(),
+		record: boolean("record").notNull(),
+		title: varchar("title", { length: 255 }),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+		updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+	},
+	(table) => [
+		uniqueIndex("meeting_calendar_series_rules_calendar_series_idx").on(
+			table.calendarId,
+			table.seriesKey,
+		),
 	],
 );
 

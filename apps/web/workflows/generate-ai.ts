@@ -1,6 +1,6 @@
 import { db } from "@cap/database";
-import { organizations, videos } from "@cap/database/schema";
-import type { VideoMetadata } from "@cap/database/types";
+import { meetingBots, organizations, videos } from "@cap/database/schema";
+import type { MeetingActionItem, VideoMetadata } from "@cap/database/types";
 import { Storage } from "@cap/web-backend/src/Storage/index";
 import {
 	AI_GENERATION_LANGUAGE_AUTO,
@@ -15,6 +15,12 @@ import { Effect, Option } from "effect";
 import { FatalError } from "workflow";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { AiUnavailableError, runWithAiProviders } from "@/lib/ai/run";
+import {
+	loadCapturedActionItemComments,
+	mergeMeetingActionItems,
+	parseMeetingActionItems,
+} from "@/lib/recall/action-items";
+import { sendMeetingRecap } from "@/lib/recall/recap";
 import { enqueueVideoStorageNameSync } from "@/lib/sync-video-storage-names";
 import { decodeStorageVideo } from "@/lib/video-storage";
 import { runWorkflowPromise } from "@/lib/workflow-runtime";
@@ -28,6 +34,7 @@ interface VideoData {
 	video: typeof videos.$inferSelect;
 	metadata: VideoMetadata;
 	aiGenerationLanguage: AiGenerationLanguage;
+	meetingBotId: string | null;
 }
 
 interface VttSegment {
@@ -44,6 +51,7 @@ interface AiResult {
 	title?: string;
 	summary?: string;
 	chapters?: { title: string; start: number }[];
+	actionItems?: MeetingActionItem[];
 }
 
 const getAffectedRows = (result: unknown) => {
@@ -115,6 +123,7 @@ export async function generateAiWorkflow(payload: GenerateAiWorkflowPayload) {
 		const result = await generateWithAi(
 			transcript,
 			videoData.aiGenerationLanguage,
+			videoData.meetingBotId !== null,
 		);
 
 		await saveResults(videoId, videoData, result);
@@ -122,6 +131,8 @@ export async function generateAiWorkflow(payload: GenerateAiWorkflowPayload) {
 		await markError(videoId);
 		throw error;
 	}
+
+	await sendMeetingRecapAfterGeneration(videoData.meetingBotId);
 
 	return { success: true, message: "AI generation completed successfully" };
 }
@@ -173,12 +184,19 @@ async function validateAndSetProcessing(videoId: string): Promise<VideoData> {
 		})
 		.where(eq(videos.id, videoId as Video.VideoId));
 
+	const [meetingBot] = await db()
+		.select({ id: meetingBots.id })
+		.from(meetingBots)
+		.where(eq(meetingBots.videoId, videoId as Video.VideoId))
+		.limit(1);
+
 	return {
 		video,
 		metadata,
 		aiGenerationLanguage: parseAiGenerationLanguage(
 			query[0]?.orgSettings?.aiGenerationLanguage,
 		),
+		meetingBotId: meetingBot?.id ?? null,
 	};
 }
 
@@ -244,16 +262,35 @@ async function markSkipped(videoId: string): Promise<void> {
 		.where(eq(videos.id, videoId as Video.VideoId));
 }
 
+async function sendMeetingRecapAfterGeneration(
+	meetingBotId: string | null,
+): Promise<void> {
+	"use step";
+
+	if (!meetingBotId) return;
+	try {
+		await sendMeetingRecap(meetingBotId);
+	} catch (error) {
+		console.error("[recall] recap after AI generation failed", {
+			meetingBotId,
+			error: error instanceof Error ? error.message : "unknown",
+		});
+	}
+}
+
 async function generateWithAi(
 	transcript: TranscriptData,
 	language: AiGenerationLanguage,
+	includeActionItems = false,
 ): Promise<AiResult> {
 	"use step";
 
 	const chunks = chunkTranscriptWithTimestamps(transcript.segments);
 
 	const videoDuration = getVideoDuration(transcript.segments);
-	const languageInstruction = getAiLanguageInstruction(language);
+	const languageInstruction = includeActionItems
+		? `${getAiLanguageInstruction(language)} Also write action item text in that language.`
+		: getAiLanguageInstruction(language);
 
 	let result: AiResult;
 	if (chunks.length === 1) {
@@ -261,12 +298,14 @@ async function generateWithAi(
 			transcript.segments,
 			videoDuration,
 			languageInstruction,
+			includeActionItems,
 		);
 	} else {
 		result = await generateMultipleChunks(
 			chunks,
 			videoDuration,
 			languageInstruction,
+			includeActionItems,
 		);
 	}
 
@@ -380,6 +419,14 @@ async function saveResults(
 	}
 	if (result.chapters) {
 		metadataUpdate = sql`JSON_SET(${metadataUpdate}, '$.chapters', CAST(${JSON.stringify(result.chapters)} AS JSON))`;
+	}
+	if (videoData.meetingBotId) {
+		const captured = await loadCapturedActionItemComments(videoId);
+		const actionItems = mergeMeetingActionItems(
+			result.actionItems ?? [],
+			captured,
+		);
+		metadataUpdate = sql`JSON_SET(${metadataUpdate}, '$.meetingActionItems', CAST(${JSON.stringify(actionItems)} AS JSON))`;
 	}
 	metadataUpdate = sql`JSON_SET(${metadataUpdate}, '$.aiGenerationStatus', 'COMPLETE')`;
 
@@ -577,10 +624,17 @@ function extractJsonObject(content: string): string {
 	throw new Error("AI response contained an incomplete JSON object");
 }
 
+const ACTION_ITEMS_JSON_FIELD = `  "actionItems": [{"text": "string (the action)", "owner": "string or null (participant name when stated)", "due": "string or null (free text like Friday)"}]`;
+
+const ACTION_ITEMS_REQUIREMENTS = `- Extract at most 15 concrete action items. Omit vague or implied follow-ups.
+- Set owner to a participant name only when the transcript states it; otherwise null.
+- Set due to free text such as "Friday" or a date when stated; otherwise null.`;
+
 async function generateSingleChunk(
 	segments: VttSegment[],
 	videoDuration: number,
 	languageInstruction: string,
+	includeActionItems = false,
 ): Promise<AiResult> {
 	const transcriptWithTimestamps = segments
 		.map(
@@ -589,6 +643,9 @@ async function generateSingleChunk(
 		)
 		.join("\n");
 	const contentGuidelines = getAiContentGuidelines(videoDuration);
+	const actionItemsField = includeActionItems
+		? `,\n${ACTION_ITEMS_JSON_FIELD}`
+		: "";
 
 	const prompt = `You are Cap AI, an expert at turning video transcripts into useful, concise summaries.
 
@@ -596,7 +653,7 @@ The video is ${videoDuration} seconds long (${Math.floor(videoDuration / 60)}:${
 {
   "title": "string (concise but descriptive title that captures the main topic)",
   "summary": "string (standalone summary of the subject, intention, essential information, outcome, and next steps)",
-  "chapters": [{"title": "string (descriptive chapter title)", "start": number (seconds from start)}]
+  "chapters": [{"title": "string (descriptive chapter title)", "start": number (seconds from start)}]${actionItemsField}
 }
 
 Summary requirements:
@@ -609,24 +666,28 @@ Additional requirements:
 - ${languageInstruction}
 - Keep JSON property names exactly as shown.
 - Include specific names, numbers, decisions, and conclusions only when they help someone understand or act on the video.
-- IMPORTANT: All chapter "start" values MUST be between 0 and ${videoDuration} seconds. Use the timestamps from the transcript to determine accurate chapter start times.
+- IMPORTANT: All chapter "start" values MUST be between 0 and ${videoDuration} seconds. Use the timestamps from the transcript to determine accurate chapter start times.${includeActionItems ? `\n${ACTION_ITEMS_REQUIREMENTS}` : ""}
 
 Return ONLY valid JSON without any markdown formatting or code blocks.
 Transcript:
 ${transcriptWithTimestamps}`;
 
-	return callAiApi(prompt, parseAiResponse);
+	return callAiApi(prompt, (content) =>
+		parseAiResponse(content, includeActionItems),
+	);
 }
 
 async function generateMultipleChunks(
 	chunks: { text: string; startTime: number; endTime: number }[],
 	videoDuration: number,
 	languageInstruction: string,
+	includeActionItems = false,
 ): Promise<AiResult> {
 	const chunkSummaries: {
 		summary: string;
 		keyPoints: string[];
 		chapters: { title: string; start: number }[];
+		actionItems?: MeetingActionItem[];
 		startTime: number;
 		endTime: number;
 	}[] = [];
@@ -642,7 +703,7 @@ Extract only the information needed to understand this section's contribution to
 {
   "summary": "string (concise factual notes about the subject, intention, essential explanation, outcomes, decisions, or next steps in this section)",
   "keyPoints": ["string (essential key point or takeaway, or an empty array when there is none)", ...],
-  "chapters": [{"title": "string (descriptive title for this topic/section)", "start": number (seconds from video start)}]
+  "chapters": [{"title": "string (descriptive title for this topic/section)", "start": number (seconds from video start)}]${includeActionItems ? `,\n${ACTION_ITEMS_JSON_FIELD}` : ""}
 }
 
 - Preserve specific names, numbers, decisions, responsibilities, and conclusions that matter to the final summary.
@@ -650,14 +711,16 @@ Extract only the information needed to understand this section's contribution to
 - Do not narrate the transcript chronologically or pad the section analysis.
 - ${contentGuidelines.chapters}
 - ${languageInstruction}
-- Keep JSON property names exactly as shown.
+- Keep JSON property names exactly as shown.${includeActionItems ? `\n${ACTION_ITEMS_REQUIREMENTS}` : ""}
 IMPORTANT: All chapter "start" values MUST be between ${chunk.startTime} and ${chunk.endTime} seconds. The total video is only ${videoDuration} seconds long.
 Return ONLY valid JSON without any markdown formatting or code blocks.
 Transcript section:
 ${chunk.text}`;
 
 		try {
-			const parsed = await callAiApi(chunkPrompt, parseChunkAnalysis);
+			const parsed = await callAiApi(chunkPrompt, (content) =>
+				parseChunkAnalysis(content, includeActionItems),
+			);
 			chunkSummaries.push({
 				...parsed,
 				startTime: chunk.startTime,
@@ -683,6 +746,7 @@ ${chunk.text}`;
 	}
 
 	const allKeyPoints = chunkSummaries.flatMap((c) => c.keyPoints);
+	const chunkActionItems = chunkSummaries.flatMap((c) => c.actionItems ?? []);
 
 	const sectionDetails = chunkSummaries
 		.map((c, i) => {
@@ -705,7 +769,7 @@ ${allKeyPoints.length > 0 ? `All key points identified:\n${allKeyPoints.map((p, 
 Provide JSON in the following format:
 {
   "title": "string (concise but descriptive title that captures the main topic/purpose)",
-  "summary": "string (standalone summary of the subject, intention, essential information, outcome, and next steps)"
+  "summary": "string (standalone summary of the subject, intention, essential information, outcome, and next steps)"${includeActionItems ? `,\n${ACTION_ITEMS_JSON_FIELD}` : ""}
 }
 
 Summary requirements:
@@ -713,15 +777,18 @@ ${contentGuidelines.summary}
 
 Additional requirements:
 - ${languageInstruction}
-- Keep JSON property names exactly as shown.
+- Keep JSON property names exactly as shown.${includeActionItems ? `\n${ACTION_ITEMS_REQUIREMENTS}` : ""}
 Return ONLY valid JSON without any markdown formatting or code blocks.`;
 
 	try {
-		const parsed = await callAiApi(finalPrompt, parseFinalSummary);
+		const parsed = await callAiApi(finalPrompt, (content) =>
+			parseFinalSummary(content, includeActionItems),
+		);
 		return {
 			title: parsed.title,
 			summary: parsed.summary,
 			chapters: allChapters,
+			actionItems: parsed.actionItems ?? chunkActionItems,
 		};
 	} catch (error) {
 		if (!failedOnInvalidOutput(error)) throw error;
@@ -736,6 +803,7 @@ Return ONLY valid JSON without any markdown formatting or code blocks.`;
 			title: "Video Summary",
 			summary: fallbackSummary + keyPointsSummary,
 			chapters: allChapters,
+			actionItems: includeActionItems ? chunkActionItems : undefined,
 		};
 	}
 }
@@ -743,15 +811,20 @@ Return ONLY valid JSON without any markdown formatting or code blocks.`;
 // Like parseAiResponse, these throw on missing or empty required fields —
 // inside the provider loop that sends the attempt to the next provider
 // instead of completing the workflow with an empty analysis.
-export function parseChunkAnalysis(content: string): {
+export function parseChunkAnalysis(
+	content: string,
+	includeActionItems = false,
+): {
 	summary: string;
 	keyPoints: string[];
 	chapters: { title: string; start: number }[];
+	actionItems?: MeetingActionItem[];
 } {
 	const parsed = JSON.parse(extractJsonObject(content)) as {
 		summary?: unknown;
 		keyPoints?: unknown;
 		chapters?: unknown;
+		actionItems?: unknown;
 	};
 	if (typeof parsed.summary !== "string" || !parsed.summary.trim()) {
 		throw new Error("AI response did not contain a valid section summary");
@@ -774,16 +847,24 @@ export function parseChunkAnalysis(content: string): {
 						chapter.title.trim().length > 0,
 				)
 			: [],
+		...(includeActionItems
+			? { actionItems: parseMeetingActionItems(parsed.actionItems) }
+			: {}),
 	};
 }
 
-export function parseFinalSummary(content: string): {
+export function parseFinalSummary(
+	content: string,
+	includeActionItems = false,
+): {
 	title: string;
 	summary: string;
+	actionItems?: MeetingActionItem[];
 } {
 	const parsed = JSON.parse(extractJsonObject(content)) as {
 		title?: unknown;
 		summary?: unknown;
+		actionItems?: unknown;
 	};
 	if (typeof parsed.title !== "string" || !parsed.title.trim()) {
 		throw new Error("AI response did not contain a valid title");
@@ -791,14 +872,24 @@ export function parseFinalSummary(content: string): {
 	if (typeof parsed.summary !== "string" || !parsed.summary.trim()) {
 		throw new Error("AI response did not contain a valid summary");
 	}
-	return { title: parsed.title, summary: parsed.summary };
+	return {
+		title: parsed.title,
+		summary: parsed.summary,
+		...(includeActionItems
+			? { actionItems: parseMeetingActionItems(parsed.actionItems) }
+			: {}),
+	};
 }
 
-export function parseAiResponse(content: string): AiResult {
+export function parseAiResponse(
+	content: string,
+	includeActionItems = false,
+): AiResult {
 	const data = JSON.parse(extractJsonObject(content)) as {
 		title?: unknown;
 		summary?: unknown;
 		chapters?: unknown;
+		actionItems?: unknown;
 	};
 	if (typeof data.title !== "string" || !data.title.trim()) {
 		throw new Error("AI response did not contain a valid title");
@@ -825,5 +916,8 @@ export function parseAiResponse(content: string): AiResult {
 		title: data.title.trim(),
 		summary: data.summary.trim(),
 		chapters,
+		...(includeActionItems
+			? { actionItems: parseMeetingActionItems(data.actionItems) }
+			: {}),
 	};
 }

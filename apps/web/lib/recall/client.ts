@@ -104,10 +104,13 @@ export type RecallCalendarEvent = {
 	raw:
 		| {
 				summary?: string;
+				recurringEventId?: string;
 				attendees?: {
 					email?: string;
 					self?: boolean;
 					responseStatus?: string;
+					resource?: boolean;
+					displayName?: string;
 				}[];
 				organizer?: { email?: string; self?: boolean };
 		  }

@@ -4,7 +4,10 @@ vi.mock("@/lib/recall/bot-image", () => ({
 	loadBotVideoOutput: vi.fn(async () => null),
 }));
 
-import { decideCalendarEventAction } from "@/lib/recall/calendars";
+import {
+	calendarEventSeriesKey,
+	decideCalendarEventAction,
+} from "@/lib/recall/calendars";
 
 const now = new Date("2024-01-01T12:00:00.000Z");
 
@@ -104,5 +107,80 @@ describe("decideCalendarEventAction", () => {
 		expect(
 			decideCalendarEventAction(futureEvent, { autoRecord: false }, null, now),
 		).toBe("none");
+	});
+
+	it("schedules from an explicit series rule when auto-record is off", () => {
+		expect(
+			decideCalendarEventAction(futureEvent, { autoRecord: false }, null, now, {
+				record: true,
+			}),
+		).toBe("schedule");
+	});
+
+	it("does not schedule when a series rule says not to record, even if auto-record is on", () => {
+		expect(
+			decideCalendarEventAction(futureEvent, { autoRecord: true }, null, now, {
+				record: false,
+			}),
+		).toBe("none");
+	});
+
+	it("keeps an opted-out event skipped even when the series rule says record", () => {
+		expect(
+			decideCalendarEventAction(
+				futureEvent,
+				{ autoRecord: false },
+				{ status: "opted_out" },
+				now,
+				{ record: true },
+			),
+		).toBe("none");
+	});
+
+	it("keeps an existing non-terminal row scheduled when the series rule says not to record", () => {
+		expect(
+			decideCalendarEventAction(
+				futureEvent,
+				{ autoRecord: false },
+				{ status: "scheduled" },
+				now,
+				{ record: false },
+			),
+		).toBe("schedule");
+	});
+});
+
+describe("calendarEventSeriesKey", () => {
+	it("uses Google recurringEventId when present", () => {
+		expect(
+			calendarEventSeriesKey({
+				ical_uid: "abc123@google.com",
+				raw: { recurringEventId: "series_1" },
+			}),
+		).toBe("series_1");
+	});
+
+	it("uses the ical_uid prefix before _R or @", () => {
+		expect(
+			calendarEventSeriesKey({
+				ical_uid: "abc123_R20240101T120000@google.com",
+				raw: {},
+			}),
+		).toBe("abc123");
+		expect(
+			calendarEventSeriesKey({
+				ical_uid: "abc123@google.com",
+				raw: {},
+			}),
+		).toBe("abc123");
+	});
+
+	it("returns null when there is no recurring marker", () => {
+		expect(
+			calendarEventSeriesKey({
+				ical_uid: "plain-uid",
+				raw: {},
+			}),
+		).toBeNull();
 	});
 });

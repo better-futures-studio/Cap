@@ -3,6 +3,7 @@ import { nanoId } from "@cap/database/helpers";
 import {
 	type MeetingBotStatus,
 	meetingBots,
+	meetingCalendarSeriesRules,
 	meetingCalendars,
 } from "@cap/database/schema";
 import type { Organisation, User } from "@cap/web-domain";
@@ -38,11 +39,29 @@ export type MeetingCalendarRow = typeof meetingCalendars.$inferSelect;
 
 export type CalendarEventAction = "schedule" | "cancel" | "none";
 
+export function calendarEventSeriesKey(
+	event: Pick<RecallCalendarEvent, "ical_uid" | "raw">,
+): string | null {
+	const raw = event.raw;
+	if (raw && typeof raw === "object" && "recurringEventId" in raw) {
+		const recurringEventId = (raw as { recurringEventId?: unknown })
+			.recurringEventId;
+		if (typeof recurringEventId === "string" && recurringEventId.trim()) {
+			return recurringEventId.trim();
+		}
+	}
+	const uid = event.ical_uid?.trim();
+	if (!uid) return null;
+	const match = uid.match(/^(.+?)(?:_R|@)/);
+	return match?.[1] ?? null;
+}
+
 export function decideCalendarEventAction(
 	event: Pick<RecallCalendarEvent, "is_deleted" | "meeting_url" | "end_time">,
 	calendar: { autoRecord: boolean },
 	existingRow: { status: MeetingBotStatus } | null,
 	now: Date,
+	seriesRule: { record: boolean } | null = null,
 ): CalendarEventAction {
 	if (event.is_deleted) {
 		return existingRow && isNonTerminalStatus(existingRow.status)
@@ -53,6 +72,7 @@ export function decideCalendarEventAction(
 	if (new Date(event.end_time) < now) return "none";
 	if (existingRow?.status === "opted_out") return "none";
 	if (existingRow && isNonTerminalStatus(existingRow.status)) return "schedule";
+	if (seriesRule) return seriesRule.record ? "schedule" : "none";
 	if (calendar.autoRecord) return "schedule";
 	return "none";
 }
@@ -190,6 +210,21 @@ export async function scheduleCalendarEventBotForRow({
 	}
 }
 
+async function loadSeriesRules(
+	calendarId: string,
+): Promise<Map<string, { record: boolean }>> {
+	const rules = await db()
+		.select({
+			seriesKey: meetingCalendarSeriesRules.seriesKey,
+			record: meetingCalendarSeriesRules.record,
+		})
+		.from(meetingCalendarSeriesRules)
+		.where(eq(meetingCalendarSeriesRules.calendarId, calendarId));
+	return new Map(
+		rules.map((rule) => [rule.seriesKey, { record: rule.record }]),
+	);
+}
+
 export async function applyCalendarEventDecisions({
 	calendar,
 	events,
@@ -199,13 +234,22 @@ export async function applyCalendarEventDecisions({
 	events: RecallCalendarEvent[];
 	now: Date;
 }): Promise<void> {
+	const seriesRules = await loadSeriesRules(calendar.id);
 	const sorted = [...events].sort((a, b) =>
 		a.start_time.localeCompare(b.start_time),
 	);
 
 	for (const event of sorted) {
 		const existingRow = await findMeetingBotRowByEventId(event.id);
-		const action = decideCalendarEventAction(event, calendar, existingRow, now);
+		const seriesKey = calendarEventSeriesKey(event);
+		const seriesRule = seriesKey ? (seriesRules.get(seriesKey) ?? null) : null;
+		const action = decideCalendarEventAction(
+			event,
+			calendar,
+			existingRow,
+			now,
+			seriesRule,
+		);
 		try {
 			if (action === "schedule") {
 				await scheduleCalendarEventBotForRow({ calendar, event });
@@ -407,6 +451,8 @@ export type UpcomingCalendarEvent = {
 	platform: string | null;
 	recording: boolean;
 	status: MeetingBotStatus | null;
+	seriesKey: string | null;
+	seriesRule: boolean | null;
 };
 
 export async function listUpcomingCalendarEvents({
@@ -447,11 +493,13 @@ export async function listUpcomingCalendarEvents({
 			.filter((row) => row.calendarEventId !== null)
 			.map((row) => [row.calendarEventId as string, row.status]),
 	);
+	const seriesRules = await loadSeriesRules(calendarRowId);
 
 	return events
 		.filter((event) => event.meeting_url)
 		.map((event) => {
 			const status = statusByEventId.get(event.id) ?? null;
+			const seriesKey = calendarEventSeriesKey(event);
 			return {
 				id: event.id,
 				title: extractEventTitle(event),
@@ -461,8 +509,82 @@ export async function listUpcomingCalendarEvents({
 				platform: event.meeting_platform,
 				recording: status !== null && status !== "opted_out",
 				status,
+				seriesKey,
+				seriesRule: seriesKey
+					? (seriesRules.get(seriesKey)?.record ?? null)
+					: null,
 			};
 		});
+}
+
+export async function setCalendarSeriesRule({
+	calendarRowId,
+	userId,
+	eventId,
+	record,
+	client = getDefaultRecallClient(),
+	now = () => new Date(),
+}: {
+	calendarRowId: string;
+	userId: User.UserId;
+	eventId: string;
+	record: boolean;
+	client?: RecallClient;
+	now?: () => Date;
+}): Promise<void> {
+	const calendar = await requireOwnedCalendar(calendarRowId, userId);
+	const event = await client.getCalendarEvent(eventId);
+	const seriesKey = calendarEventSeriesKey(event);
+	if (!seriesKey) throw new Error("Event is not part of a recurring series");
+
+	const title = extractEventTitle(event);
+	const [existing] = await db()
+		.select({ id: meetingCalendarSeriesRules.id })
+		.from(meetingCalendarSeriesRules)
+		.where(
+			and(
+				eq(meetingCalendarSeriesRules.calendarId, calendar.id),
+				eq(meetingCalendarSeriesRules.seriesKey, seriesKey),
+			),
+		)
+		.limit(1);
+
+	if (existing) {
+		await db()
+			.update(meetingCalendarSeriesRules)
+			.set({ record, title })
+			.where(eq(meetingCalendarSeriesRules.id, existing.id));
+	} else {
+		await db().insert(meetingCalendarSeriesRules).values({
+			id: nanoId(),
+			calendarId: calendar.id,
+			seriesKey,
+			record,
+			title,
+		});
+	}
+
+	const nowDate = now();
+	const upcoming = await client.listCalendarEvents({
+		calendarId: calendar.recallCalendarId,
+		startTimeGte: nowDate.toISOString(),
+		startTimeLte: new Date(
+			nowDate.getTime() + AUTO_RECORD_SYNC_WINDOW_MS,
+		).toISOString(),
+		isDeleted: false,
+	});
+	await applyCalendarEventDecisions({
+		calendar: {
+			id: calendar.id,
+			orgId: calendar.orgId,
+			userId: calendar.userId,
+			autoRecord: calendar.autoRecord,
+		},
+		events: upcoming.filter(
+			(upcomingEvent) => calendarEventSeriesKey(upcomingEvent) === seriesKey,
+		),
+		now: nowDate,
+	});
 }
 
 export async function getUserCalendar({

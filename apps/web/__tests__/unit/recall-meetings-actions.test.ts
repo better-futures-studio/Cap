@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 	setCalendarAutoRecord: vi.fn(),
 	toggleCalendarEventRecording: vi.fn(),
 	disconnectCalendar: vi.fn(),
+	setCalendarSeriesRule: vi.fn(),
 }));
 
 vi.mock("@cap/database", () => ({ db: mocks.db }));
@@ -45,6 +46,11 @@ vi.mock("@cap/database/schema", () => {
 			"orgId",
 			"status",
 			"createdAt",
+		]),
+		meetingPreferences: table("meeting_preferences", [
+			"userId",
+			"orgId",
+			"recapMode",
 		]),
 	};
 });
@@ -81,6 +87,16 @@ vi.mock("@/lib/recall/calendars", () => ({
 	setCalendarAutoRecord: mocks.setCalendarAutoRecord,
 	toggleCalendarEventRecording: mocks.toggleCalendarEventRecording,
 	disconnectCalendar: mocks.disconnectCalendar,
+	setCalendarSeriesRule: mocks.setCalendarSeriesRule,
+}));
+vi.mock("@/lib/recall/action-items", () => ({
+	getMeetingActionItems: vi.fn(),
+}));
+vi.mock("@/lib/recall/recap", () => ({
+	parseRecapMode: (value: unknown) =>
+		value === "off" || value === "self" || value === "attendees"
+			? value
+			: "self",
 }));
 
 const { listMeetingBots, scheduleMeetingBot } = await import(

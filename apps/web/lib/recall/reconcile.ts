@@ -1,6 +1,6 @@
 import { db } from "@cap/database";
 import { meetingBots } from "@cap/database/schema";
-import { and, asc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { start } from "workflow/api";
 import { importRecallRecordingWorkflow } from "@/workflows/recall-meeting";
 import { reconcileStaleSchedulingRows } from "./bots";
@@ -8,6 +8,7 @@ import { importMeetingChatComments } from "./chat-comments";
 import { RecallApiError } from "./client";
 import { isRecallConfigured } from "./config";
 import { getDefaultRecallClient } from "./default-client";
+import { sendMeetingRecap } from "./recap";
 
 const MISSED_RECORDING_MS = 15 * 60 * 1000;
 
@@ -82,16 +83,50 @@ async function backfillChatComments(): Promise<number> {
 	return chatBackfill;
 }
 
+async function sendPendingRecapEmails(): Promise<number> {
+	const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+	const rows = await db()
+		.select({ id: meetingBots.id })
+		.from(meetingBots)
+		.where(
+			and(
+				eq(meetingBots.status, "complete"),
+				isNull(meetingBots.recapSentAt),
+				isNotNull(meetingBots.videoId),
+				gte(meetingBots.createdAt, cutoff),
+			),
+		)
+		.orderBy(asc(meetingBots.createdAt))
+		.limit(20);
+
+	let recapEmails = 0;
+	for (const row of rows) {
+		try {
+			await sendMeetingRecap(row.id);
+			recapEmails += 1;
+		} catch (error) {
+			console.error("[recall] recap email failed", {
+				meetingBotId: row.id,
+				error: error instanceof Error ? error.message : "unknown",
+			});
+		}
+	}
+	return recapEmails;
+}
+
 export async function reconcileRecallMeetingBots(): Promise<{
 	staleScheduling: number;
 	missedRecordings: number;
 	chatBackfill: number;
+	recapEmails: number;
 } | null> {
 	if (!isRecallConfigured()) return null;
-	const [staleScheduling, missedRecordings, chatBackfill] = await Promise.all([
-		reconcileStaleSchedulingRows(getDefaultRecallClient()),
-		reconcileMissedDoneRows(),
-		backfillChatComments(),
-	]);
-	return { staleScheduling, missedRecordings, chatBackfill };
+	const [staleScheduling, missedRecordings, chatBackfill, recapEmails] =
+		await Promise.all([
+			reconcileStaleSchedulingRows(getDefaultRecallClient()),
+			reconcileMissedDoneRows(),
+			backfillChatComments(),
+			sendPendingRecapEmails(),
+		]);
+	return { staleScheduling, missedRecordings, chatBackfill, recapEmails };
 }
