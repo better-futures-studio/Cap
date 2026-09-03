@@ -30,6 +30,8 @@ export async function AppProviders({ children }: PropsWithChildren) {
 								googleAuthAvailable: !!serverEnv().GOOGLE_CLIENT_ID,
 								emailAuthAvailable:
 									serverEnv().CAP_DISABLE_EMAIL_LOGIN !== "true",
+								orgCreationDisabled:
+									serverEnv().CAP_DISABLE_ORG_CREATION === "true",
 							}}
 						>
 							<ReactQueryProvider>

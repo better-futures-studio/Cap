@@ -34,6 +34,8 @@ function createServerEnv() {
 			SMTP_URL: z.string().optional(),
 			// Set to "true" to remove email/OTP login and force OAuth (e.g. Google)
 			CAP_DISABLE_EMAIL_LOGIN: z.string().optional(),
+			// Set to "true" to stop users creating additional organizations
+			CAP_DISABLE_ORG_CREATION: z.string().optional(),
 
 			/// S3 configuration
 			// Though they are prefixed with `CAP_AWS`, these don't have to be

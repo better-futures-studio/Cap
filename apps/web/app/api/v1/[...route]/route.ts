@@ -5649,6 +5649,12 @@ const AgentManagementHandlersLive = HttpApiBuilder.group(
 						yield* requireUserConfirmedRequest(requestId);
 						const principal = yield* Agent.AgentPrincipal;
 						yield* requireScope(principal, "organizations:manage", requestId);
+						if (serverEnv().CAP_DISABLE_ORG_CREATION === "true") {
+							return yield* badRequest(
+								requestId,
+								"Creating organizations is disabled on this server",
+							);
+						}
 						const name = payload.name.trim();
 						if (name.length === 0 || name.length > 255) {
 							return yield* badRequest(

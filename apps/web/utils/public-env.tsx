@@ -6,6 +6,7 @@ type PublicEnvContext = {
 	webUrl: string;
 	googleAuthAvailable: boolean;
 	emailAuthAvailable: boolean;
+	orgCreationDisabled: boolean;
 	workosAuthAvailable: boolean;
 };
 

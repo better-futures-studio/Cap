@@ -44,6 +44,7 @@ vi.mock("@/utils/public-env", () => ({
 	usePublicEnv: () => ({
 		googleAuthAvailable: false,
 		emailAuthAvailable: true,
+		orgCreationDisabled: false,
 		workosAuthAvailable: true,
 	}),
 }));
