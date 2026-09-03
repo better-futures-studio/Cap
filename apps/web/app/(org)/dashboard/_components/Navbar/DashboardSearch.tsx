@@ -28,6 +28,7 @@ import {
 	Upload,
 	UserRound,
 	UsersRound,
+	Video,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -171,6 +172,14 @@ export function DashboardSearch({
 				href: "/dashboard/import",
 				value: "import upload loom video image media file",
 				icon: Upload,
+			},
+			{
+				id: "meetings",
+				title: "Meetings",
+				subtitle: "Send a bot to record a meeting",
+				href: "/dashboard/meetings",
+				value: "meetings recall bot zoom google meet teams calendar",
+				icon: Video,
 			},
 			{
 				id: "analytics",

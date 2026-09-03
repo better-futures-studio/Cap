@@ -46,6 +46,7 @@ import {
 	canViewOrganizationSettings,
 	getEffectiveOrganizationRole,
 } from "@/lib/permissions/roles";
+import { usePublicEnv } from "@/utils/public-env";
 import { useDashboardContext } from "../../Contexts";
 import {
 	CapIcon,
@@ -59,7 +60,6 @@ import type { CogIconHandle } from "../AnimatedIcons/Cog";
 import { MemberAvatars } from "./MemberAvatars";
 import SpacesList from "./SpacesList";
 import { updateActiveOrganization } from "./server";
-import { usePublicEnv } from "@/utils/public-env";
 
 interface Props {
 	toggleMobileNav?: () => void;
@@ -103,6 +103,13 @@ const AdminNavItems = ({ toggleMobileNav }: Props) => {
 			href: `/dashboard/import`,
 			matchChildren: true,
 			icon: <ImportIcon />,
+			subNav: [],
+		},
+		{
+			name: "Meetings",
+			href: `/dashboard/meetings`,
+			matchChildren: true,
+			icon: <RecordIcon />,
 			subNav: [],
 		},
 		{
