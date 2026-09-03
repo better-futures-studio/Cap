@@ -72,6 +72,19 @@ function statusBadgeClass(status: MeetingBotStatus) {
 	return "bg-blue-500/10 text-blue-600";
 }
 
+function formatEventTime(date: Date) {
+	const day = date.toLocaleDateString(undefined, {
+		weekday: "short",
+		month: "short",
+		day: "numeric",
+	});
+	const time = date.toLocaleTimeString(undefined, {
+		hour: "numeric",
+		minute: "2-digit",
+	});
+	return `${day} · ${time}`;
+}
+
 function RecordingCell({ bot }: { bot: MeetingBotRow }) {
 	if (bot.videoReady && bot.videoId) {
 		return (
@@ -79,16 +92,16 @@ function RecordingCell({ bot }: { bot: MeetingBotRow }) {
 				href={`/s/${bot.videoId}`}
 				target="_blank"
 				rel="noopener noreferrer"
-				className="text-[12px] font-medium text-blue-600 hover:underline"
+				className="text-xs font-medium text-blue-600 hover:underline"
 			>
 				View recording
 			</a>
 		);
 	}
 	if (bot.videoId) {
-		return <span className="text-[12px] text-gray-9">Processing…</span>;
+		return <span className="text-xs text-gray-10">Processing…</span>;
 	}
-	return <span className="text-[12px] text-gray-9">—</span>;
+	return <span className="text-xs text-gray-10">—</span>;
 }
 
 function SendBotForm({
@@ -130,21 +143,17 @@ function SendBotForm({
 
 	return (
 		<div className="rounded-xl border border-gray-3 overflow-hidden">
-			<div className="px-3.5 py-3">
-				<p className="text-[13px] font-medium text-gray-12">
-					Send a bot to a meeting
-				</p>
-				<p className="text-[11px] text-gray-9">
-					The bot joins as a visible participant and announces the recording in
-					chat.
+			<div className="px-4 py-3">
+				<p className="text-sm font-semibold text-gray-12">
+					Send a bot to a meeting{" "}
+					<span className="text-xs font-normal text-gray-10">
+						— joins as a visible participant and announces the recording in chat
+					</span>
 				</p>
 			</div>
-			<div className="border-t border-gray-3 px-3.5 py-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+			<div className="border-t border-gray-3 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-end">
 				<div className="flex-1 flex flex-col gap-1.5">
-					<label
-						htmlFor={meetingUrlId}
-						className="text-[11px] font-medium text-gray-10"
-					>
+					<label htmlFor={meetingUrlId} className="text-xs text-gray-10">
 						Meeting URL
 					</label>
 					<Input
@@ -156,15 +165,13 @@ function SendBotForm({
 					/>
 				</div>
 				<div className="flex flex-col gap-1.5">
-					<label
-						htmlFor={joinAtId}
-						className="text-[11px] font-medium text-gray-10"
-					>
+					<label htmlFor={joinAtId} className="text-xs text-gray-10">
 						Join at
 					</label>
 					<Input
 						id={joinAtId}
 						type="datetime-local"
+						className="w-56"
 						value={joinAt}
 						onChange={(event) => setJoinAt(event.target.value)}
 						disabled={isPending}
@@ -210,12 +217,12 @@ function RecentMeetings({
 
 	return (
 		<div className="rounded-xl border border-gray-3 overflow-hidden">
-			<div className="px-3.5 py-3">
-				<p className="text-[13px] font-medium text-gray-12">Recent meetings</p>
+			<div className="px-4 py-3">
+				<p className="text-sm font-semibold text-gray-12">Recent meetings</p>
 			</div>
 			<div className="border-t border-gray-3">
 				{bots.length === 0 ? (
-					<p className="px-3.5 py-4 text-[12px] text-gray-9">
+					<p className="px-4 py-3 text-xs text-gray-10">
 						No meetings recorded yet.
 					</p>
 				) : (
@@ -233,26 +240,26 @@ function RecentMeetings({
 						<TableBody>
 							{bots.map((bot) => (
 								<TableRow key={bot.id}>
-									<TableCell className="max-w-[220px]">
-										<p className="truncate text-[12px] font-medium text-gray-12">
+									<TableCell className="max-w-[220px] py-2">
+										<p className="truncate text-sm text-gray-12">
 											{bot.title ?? bot.meetingUrl}
 										</p>
 										{bot.title && (
-											<p className="truncate text-[11px] text-gray-9">
+											<p className="truncate text-xs text-gray-10">
 												{bot.meetingUrl}
 											</p>
 										)}
 									</TableCell>
-									<TableCell className="text-[12px]">
+									<TableCell className="py-2 text-sm">
 										{new Date(bot.joinAt).toLocaleString()}
 									</TableCell>
-									<TableCell className="text-[12px] capitalize">
+									<TableCell className="py-2 text-sm capitalize">
 										{bot.source}
 									</TableCell>
-									<TableCell>
+									<TableCell className="py-2">
 										<span
 											className={classNames(
-												"inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-md",
+												"inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-md",
 												statusBadgeClass(bot.status),
 											)}
 										>
@@ -260,15 +267,15 @@ function RecentMeetings({
 										</span>
 										{(bot.status === "fatal" || bot.status === "failed") &&
 											bot.errorMessage && (
-												<p className="mt-1 text-[11px] text-red-600">
+												<p className="mt-1 text-xs text-red-600">
 													{bot.errorMessage}
 												</p>
 											)}
 									</TableCell>
-									<TableCell>
+									<TableCell className="py-2">
 										<RecordingCell bot={bot} />
 									</TableCell>
-									<TableCell>
+									<TableCell className="py-2">
 										{CANCELLABLE_STATUSES.has(bot.status) && (
 											<Button
 												type="button"
@@ -303,8 +310,8 @@ function CalendarSection({
 
 	if (!settings.calendarConfigured) {
 		return (
-			<div className="rounded-xl border border-gray-3 px-3.5 py-4">
-				<p className="text-[12px] text-gray-9">
+			<div className="rounded-xl border border-gray-3 px-4 py-3">
+				<p className="text-xs text-gray-10">
 					Calendar recording isn't configured on this deployment.
 				</p>
 			</div>
@@ -314,11 +321,11 @@ function CalendarSection({
 	if (!settings.calendar) {
 		return (
 			<div className="rounded-xl border border-gray-3 overflow-hidden">
-				<div className="px-3.5 py-3">
-					<p className="text-[13px] font-medium text-gray-12">Calendar</p>
+				<div className="px-4 py-3">
+					<p className="text-sm font-semibold text-gray-12">Calendar</p>
 				</div>
-				<div className="border-t border-gray-3 px-3.5 py-4 flex items-center justify-between gap-3">
-					<p className="text-[12px] text-gray-10">
+				<div className="border-t border-gray-3 px-4 py-3 flex items-center justify-between gap-3">
+					<p className="text-xs text-gray-10">
 						Connect Google Calendar to opt in to recording meetings, either per
 						event or automatically.
 					</p>
@@ -393,14 +400,26 @@ function CalendarSection({
 		});
 	};
 
+	const isConnected = calendar.status === "connected";
+
 	return (
 		<div className="rounded-xl border border-gray-3 overflow-hidden">
-			<div className="flex items-center gap-3 px-3.5 py-3">
-				<div className="flex-1 min-w-0">
-					<p className="text-[13px] font-medium text-gray-12">Calendar</p>
-					<p className="truncate text-[11px] text-gray-9">
-						{calendar.platformEmail ?? "Google Calendar"} · {calendar.status}
-					</p>
+			<div className="flex items-center gap-3 px-4 py-3">
+				<div className="flex-1 min-w-0 flex items-center gap-2">
+					<p className="text-sm font-semibold text-gray-12">Calendar</p>
+					<span className="truncate text-xs text-gray-10">
+						{calendar.platformEmail ?? "Google Calendar"}
+					</span>
+					<span
+						className={classNames(
+							"inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-md shrink-0",
+							isConnected
+								? "bg-green-500/10 text-green-600"
+								: "bg-gray-3 text-gray-10",
+						)}
+					>
+						{calendar.status}
+					</span>
 				</div>
 				<Button
 					type="button"
@@ -412,11 +431,11 @@ function CalendarSection({
 					Disconnect
 				</Button>
 			</div>
-			<div className="border-t border-gray-3 px-3.5 py-4 flex flex-col gap-4">
+			<div className="border-t border-gray-3 px-4 py-3 flex flex-col gap-3">
 				<div className="flex items-center justify-between gap-3">
-					<p className="text-[12px] text-gray-10 max-w-md">
-						Automatically record every meeting on my calendar that has a video
-						link. Off by default.
+					<p className="text-xs text-gray-10">
+						Automatically record every meeting with a video link (off by
+						default)
 					</p>
 					<Switch
 						checked={calendar.autoRecord}
@@ -425,35 +444,37 @@ function CalendarSection({
 					/>
 				</div>
 
-				<div className="flex flex-col gap-2">
-					<p className="text-[11px] font-medium text-gray-10">
+				<div className="flex flex-col gap-1.5">
+					<p className="text-xs text-gray-10">
 						Upcoming meetings (next 14 days)
 					</p>
 					{settings.upcoming.length === 0 ? (
-						<p className="text-[12px] text-gray-9">
+						<p className="text-xs text-gray-10">
 							No upcoming meetings with a video link.
 						</p>
 					) : (
-						settings.upcoming.map((event) => (
-							<div
-								key={event.id}
-								className="flex items-center justify-between gap-3 rounded-lg bg-gray-2 px-3 py-2.5"
-							>
-								<div className="min-w-0">
-									<p className="truncate text-[12px] font-medium text-gray-12">
+						<div className="rounded-lg bg-gray-2 divide-y divide-gray-3 max-h-80 overflow-y-auto">
+							{settings.upcoming.map((event) => (
+								<div
+									key={event.id}
+									className="flex items-center gap-3 py-1.5 px-3"
+								>
+									<p className="flex-1 min-w-0 truncate text-sm text-gray-12">
 										{event.title ?? "Untitled meeting"}
 									</p>
-									<p className="truncate text-[10px] text-gray-9">
-										{new Date(event.startTime).toLocaleString()}
+									<p className="shrink-0 text-xs text-gray-10">
+										{formatEventTime(new Date(event.startTime))}
 									</p>
+									<Switch
+										checked={event.recording}
+										disabled={isPending}
+										onCheckedChange={(checked) =>
+											toggleEvent(event.id, checked)
+										}
+									/>
 								</div>
-								<Switch
-									checked={event.recording}
-									disabled={isPending}
-									onCheckedChange={(checked) => toggleEvent(event.id, checked)}
-								/>
-							</div>
-						))
+							))}
+						</div>
 					)}
 				</div>
 			</div>
@@ -498,12 +519,12 @@ export function MeetingsPage({
 	}, [bots, router]);
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-3">
 			{calendarSettings.configured ? (
 				<SendBotForm orgId={orgId} onScheduled={() => router.refresh()} />
 			) : (
-				<div className="rounded-xl border border-gray-3 px-3.5 py-4">
-					<p className="text-[12px] text-gray-9">
+				<div className="rounded-xl border border-gray-3 px-4 py-3">
+					<p className="text-xs text-gray-10">
 						Meeting bots aren't configured on this deployment.
 					</p>
 				</div>
