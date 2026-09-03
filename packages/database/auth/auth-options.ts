@@ -128,45 +128,49 @@ export const authOptions = (ssoContext?: SsoAuthContext): NextAuthOptions => {
 							}),
 						]
 					: []),
-				EmailProvider({
-					// next-auth defaults to 24h, but the code is 6 digits and the
-					// verify path has no attempt limiting, so a day-long window is a
-					// practical brute-force target. The OTP email and the dev console
-					// have always told users 10 minutes; this makes that true.
-					maxAge: OTP_CODE_MAX_AGE_SECONDS,
-					async generateVerificationToken() {
-						return crypto.randomInt(100000, 1000000).toString();
-					},
-					async sendVerificationRequest({ identifier, token }) {
-						if (!serverEnv().RESEND_API_KEY) {
-							console.log("\n");
-							console.log(
-								"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-							);
-							console.log("🔐 VERIFICATION CODE (Development Mode)");
-							console.log(
-								"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-							);
-							console.log(`📧 Email: ${identifier}`);
-							console.log(`🔢 Code: ${token}`);
-							console.log(
-								`⏱  Expires in: ${OTP_CODE_MAX_AGE_SECONDS / 60} minutes`,
-							);
-							console.log(
-								"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-							);
-							console.log("\n");
-						} else {
-							const { OTPEmail } = await import("../emails/otp-email");
-							const email = OTPEmail({ code: token, email: identifier });
-							await sendEmail({
-								email: identifier,
-								subject: `Your Cap Verification Code`,
-								react: email,
-							});
-						}
-					},
-				}),
+				...(serverEnv().CAP_DISABLE_EMAIL_LOGIN === "true"
+					? []
+					: [
+							EmailProvider({
+								// next-auth defaults to 24h, but the code is 6 digits and the
+								// verify path has no attempt limiting, so a day-long window is a
+								// practical brute-force target. The OTP email and the dev console
+								// have always told users 10 minutes; this makes that true.
+								maxAge: OTP_CODE_MAX_AGE_SECONDS,
+								async generateVerificationToken() {
+									return crypto.randomInt(100000, 1000000).toString();
+								},
+								async sendVerificationRequest({ identifier, token }) {
+									if (!serverEnv().RESEND_API_KEY && !serverEnv().SMTP_URL) {
+										console.log("\n");
+										console.log(
+											"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+										);
+										console.log("🔐 VERIFICATION CODE (Development Mode)");
+										console.log(
+											"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+										);
+										console.log(`📧 Email: ${identifier}`);
+										console.log(`🔢 Code: ${token}`);
+										console.log(
+											`⏱  Expires in: ${OTP_CODE_MAX_AGE_SECONDS / 60} minutes`,
+										);
+										console.log(
+											"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+										);
+										console.log("\n");
+									} else {
+										const { OTPEmail } = await import("../emails/otp-email");
+										const email = OTPEmail({ code: token, email: identifier });
+										await sendEmail({
+											email: identifier,
+											subject: `Your Cap Verification Code`,
+											react: email,
+										});
+									}
+								},
+							}),
+						]),
 			];
 
 			return _providers;

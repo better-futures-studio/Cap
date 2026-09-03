@@ -43,6 +43,7 @@ vi.mock("@/app/utils/analytics", () => ({ trackEvent: vi.fn() }));
 vi.mock("@/utils/public-env", () => ({
 	usePublicEnv: () => ({
 		googleAuthAvailable: false,
+		emailAuthAvailable: true,
 		workosAuthAvailable: true,
 	}),
 }));

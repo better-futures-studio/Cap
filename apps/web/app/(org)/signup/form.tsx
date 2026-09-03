@@ -517,42 +517,46 @@ const NormalSignup = ({
 
 	return (
 		<motion.div>
-			<motion.div layout className="flex flex-col space-y-3">
-				<MotionInput
-					id={emailInputId}
-					name="email"
-					autoFocus
-					type="email"
-					placeholder={emailSent ? "" : "tim@apple.com"}
-					autoComplete="email"
-					required
-					value={email}
-					disabled={emailSent || loading}
-					onChange={(e) => {
-						setEmail(e.target.value.toLowerCase());
-					}}
-				/>
-				<MotionButton
-					variant="dark"
-					type="submit"
-					disabled={loading || emailSent}
-					spinner={loading}
-					icon={
-						loading ? undefined : (
-							<FontAwesomeIcon className="mr-1 size-4" icon={faEnvelope} />
-						)
-					}
-				>
-					{loading ? "Sending code..." : "Sign up with email"}
-				</MotionButton>
-			</motion.div>
+			{publicEnv.emailAuthAvailable && (
+				<motion.div layout className="flex flex-col space-y-3">
+					<MotionInput
+						id={emailInputId}
+						name="email"
+						autoFocus
+						type="email"
+						placeholder={emailSent ? "" : "tim@apple.com"}
+						autoComplete="email"
+						required
+						value={email}
+						disabled={emailSent || loading}
+						onChange={(e) => {
+							setEmail(e.target.value.toLowerCase());
+						}}
+					/>
+					<MotionButton
+						variant="dark"
+						type="submit"
+						disabled={loading || emailSent}
+						spinner={loading}
+						icon={
+							loading ? undefined : (
+								<FontAwesomeIcon className="mr-1 size-4" icon={faEnvelope} />
+							)
+						}
+					>
+						{loading ? "Sending code..." : "Sign up with email"}
+					</MotionButton>
+				</motion.div>
+			)}
 			{(publicEnv.googleAuthAvailable || publicEnv.workosAuthAvailable) && (
 				<>
-					<div className="flex gap-4 items-center my-4">
-						<span className="flex-1 h-px bg-gray-5" />
-						<p className="text-sm text-center text-gray-10">OR</p>
-						<span className="flex-1 h-px bg-gray-5" />
-					</div>
+					{publicEnv.emailAuthAvailable && (
+						<div className="flex gap-4 items-center my-4">
+							<span className="flex-1 h-px bg-gray-5" />
+							<p className="text-sm text-center text-gray-10">OR</p>
+							<span className="flex-1 h-px bg-gray-5" />
+						</div>
+					)}
 					<motion.div
 						layout
 						className="flex flex-col gap-3 justify-center items-center"

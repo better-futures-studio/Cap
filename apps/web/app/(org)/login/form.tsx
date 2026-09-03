@@ -542,35 +542,37 @@ const NormalLogin = ({
 
 	return (
 		<motion.div>
-			<motion.div layout className="flex flex-col space-y-3">
-				<MotionInput
-					id={emailInputId}
-					name="email"
-					autoFocus
-					type="email"
-					placeholder={emailSent ? "" : "tim@apple.com"}
-					autoComplete="email"
-					required
-					value={email}
-					disabled={emailSent || loading}
-					onChange={(e) => {
-						setEmail(e.target.value.toLowerCase());
-					}}
-				/>
-				<MotionButton
-					variant="dark"
-					type="submit"
-					disabled={loading || emailSent}
-					spinner={loading}
-					icon={
-						loading ? undefined : (
-							<FontAwesomeIcon className="mr-1 size-4" icon={faEnvelope} />
-						)
-					}
-				>
-					{loading ? "Sending code..." : "Login with email"}
-				</MotionButton>
-				{/* {NODE_ENV === "development" && (
+			{publicEnv.emailAuthAvailable && (
+				<>
+					<motion.div layout className="flex flex-col space-y-3">
+						<MotionInput
+							id={emailInputId}
+							name="email"
+							autoFocus
+							type="email"
+							placeholder={emailSent ? "" : "tim@apple.com"}
+							autoComplete="email"
+							required
+							value={email}
+							disabled={emailSent || loading}
+							onChange={(e) => {
+								setEmail(e.target.value.toLowerCase());
+							}}
+						/>
+						<MotionButton
+							variant="dark"
+							type="submit"
+							disabled={loading || emailSent}
+							spinner={loading}
+							icon={
+								loading ? undefined : (
+									<FontAwesomeIcon className="mr-1 size-4" icon={faEnvelope} />
+								)
+							}
+						>
+							{loading ? "Sending code..." : "Login with email"}
+						</MotionButton>
+						{/* {NODE_ENV === "development" && (
                   <div className="flex justify-center items-center px-6 py-3 mt-3 bg-red-600 rounded-xl">
                     <p className="text-lg text-white">
                       <span className="font-medium text-white">
@@ -580,27 +582,31 @@ const NormalLogin = ({
                     </p>
                   </div>
                 )} */}
-			</motion.div>
-			<motion.p
-				layout="position"
-				className="mt-3 mb-2 text-xs text-center text-gray-9"
-			>
-				Don't have an account?{" "}
-				<Link
-					href="/signup"
-					className="text-xs font-semibold text-blue-9 hover:text-blue-8"
-				>
-					Sign up here
-				</Link>
-			</motion.p>
+					</motion.div>
+					<motion.p
+						layout="position"
+						className="mt-3 mb-2 text-xs text-center text-gray-9"
+					>
+						Don't have an account?{" "}
+						<Link
+							href="/signup"
+							className="text-xs font-semibold text-blue-9 hover:text-blue-8"
+						>
+							Sign up here
+						</Link>
+					</motion.p>
+				</>
+			)}
 
 			{(publicEnv.googleAuthAvailable || publicEnv.workosAuthAvailable) && (
 				<>
-					<div className="flex gap-4 items-center mt-4 mb-4">
-						<span className="flex-1 h-px bg-gray-5" />
-						<p className="text-sm text-center text-gray-10">OR</p>
-						<span className="flex-1 h-px bg-gray-5" />
-					</div>
+					{publicEnv.emailAuthAvailable && (
+						<div className="flex gap-4 items-center mt-4 mb-4">
+							<span className="flex-1 h-px bg-gray-5" />
+							<p className="text-sm text-center text-gray-10">OR</p>
+							<span className="flex-1 h-px bg-gray-5" />
+						</div>
+					)}
 					<motion.div
 						layout
 						className="flex flex-col gap-3 justify-center items-center"
