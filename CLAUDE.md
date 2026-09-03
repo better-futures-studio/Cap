@@ -63,8 +63,8 @@ Browser checks as the logged-in owner: `agent-browser` with the real Chrome
   mount never rendered.
 - Desktop recordings keep thumbnails at `source.thumbnailKey` under
   `.recording/outputs/`, not at `screenshot/screen-capture.jpg`.
-- Serverless sleeping is on for Cap Web and the media server. First request
-  after idle can be slow or 502 once.
+- Serverless sleeping is on for Cap Web and the media server; the first
+  request after idle wakes the container.
 
 ### Recall.ai meeting bots
 
