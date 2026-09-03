@@ -35,6 +35,14 @@ export type RecallBot = {
 		id: string;
 		media_shortcuts?: { video_mixed?: { data?: { download_url?: string } } };
 	}[];
+	platform?: string | null;
+	slack_team?: { id: string } | null;
+	meeting_metadata?: {
+		title?: string | null;
+		slack_channel_id?: string;
+		slack_huddle_id?: string;
+	} | null;
+	meeting_url?: string | null;
 };
 
 export type RecallRecording = {
@@ -128,6 +136,29 @@ export type RecallBotConfig = {
 	};
 	metadata?: Record<string, unknown>;
 	automatic_video_output?: RecallAutomaticVideoOutput;
+	recording_config?: RecordingConfig;
+};
+
+export type RecordingConfig = {
+	video_mixed_mp4: Record<string, never>;
+	participant_events: Record<string, never>;
+	meeting_metadata: Record<string, never>;
+	video_mixed_layout: "speaker_view";
+	start_recording_on: "participant_join";
+	transcript: {
+		provider: {
+			recallai_streaming: {
+				mode: "prioritize_low_latency";
+				language_code: "en";
+			};
+		};
+		diarization: { use_separate_streams_when_available: true };
+	};
+	realtime_endpoints: {
+		type: "webhook";
+		url: string;
+		events: ["transcript.data", "participant_events.chat_message"];
+	}[];
 };
 
 const defaultSleep = (ms: number) =>
@@ -235,6 +266,7 @@ export function createRecallClient(
 		botName: string;
 		metadata: Record<string, unknown>;
 		automaticVideoOutput?: RecallAutomaticVideoOutput;
+		recordingConfig?: RecordingConfig;
 	}): Promise<{ id: string }> {
 		return request("/api/v1/bot/", {
 			method: "POST",
@@ -253,12 +285,29 @@ export function createRecallClient(
 				...(params.automaticVideoOutput
 					? { automatic_video_output: params.automaticVideoOutput }
 					: {}),
+				...(params.recordingConfig
+					? { recording_config: params.recordingConfig }
+					: {}),
 			},
 		});
 	}
 
 	async function getBot(id: string): Promise<RecallBot> {
 		return request(`/api/v1/bot/${id}/`);
+	}
+
+	async function sendChatMessage(
+		id: string,
+		params: { message: string; pin?: boolean },
+	): Promise<void> {
+		await request(`/api/v1/bot/${id}/send_chat_message/`, {
+			method: "POST",
+			body: {
+				to: "everyone",
+				message: params.message,
+				...(params.pin ? { pin: true } : {}),
+			},
+		});
 	}
 
 	async function deleteScheduledBot(id: string): Promise<void> {
@@ -402,9 +451,29 @@ export function createRecallClient(
 		}
 	}
 
+	async function activateSlackTeam(
+		id: string,
+		params: { botName: string },
+	): Promise<void> {
+		await request(`/api/v2/slack-teams/${id}/`, {
+			method: "PATCH",
+			body: { bot_name: params.botName },
+		});
+	}
+
+	async function deleteSlackTeam(id: string): Promise<void> {
+		try {
+			await request<void>(`/api/v2/slack-teams/${id}/`, { method: "DELETE" });
+		} catch (error) {
+			if (error instanceof RecallApiError && error.status === 404) return;
+			throw error;
+		}
+	}
+
 	return {
 		createBot,
 		getBot,
+		sendChatMessage,
 		deleteScheduledBot,
 		getRecording,
 		createAsyncTranscript,
@@ -417,6 +486,8 @@ export function createRecallClient(
 		getCalendarEvent,
 		scheduleCalendarEventBot,
 		removeCalendarEventBot,
+		activateSlackTeam,
+		deleteSlackTeam,
 	};
 }
 

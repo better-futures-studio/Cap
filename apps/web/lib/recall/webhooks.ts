@@ -1,6 +1,14 @@
 import { db } from "@cap/database";
-import { type MeetingBotStatus, meetingBots } from "@cap/database/schema";
-import { eq } from "drizzle-orm";
+import { nanoId } from "@cap/database/helpers";
+import {
+	type MeetingBotStatus,
+	meetingBots,
+	organizations,
+	slackHuddleTeams,
+} from "@cap/database/schema";
+import { serverEnv } from "@cap/env";
+import { Organisation } from "@cap/web-domain";
+import { and, eq, notInArray } from "drizzle-orm";
 import { start } from "workflow/api";
 import { syncCalendarStatus } from "@/lib/recall/calendars";
 import { syncCalendarEventsWorkflow } from "@/workflows/recall-calendar-sync";
@@ -10,6 +18,8 @@ import {
 	importRecallRecordingWorkflow,
 } from "@/workflows/recall-meeting";
 import { applyBotStatusEvent } from "./bots";
+import { getRecallConfig } from "./config";
+import { getDefaultRecallClient } from "./default-client";
 
 const TERMINAL_STATUSES: MeetingBotStatus[] = [
 	"fatal",
@@ -266,6 +276,139 @@ async function handleCalendarSyncEvents(data: unknown): Promise<void> {
 	console.info("[recall-webhook] started calendar sync", { recallCalendarId });
 }
 
+async function resolveDefaultOrgId(): Promise<Organisation.OrganisationId | null> {
+	const configured = serverEnv().CAP_DEFAULT_ORG_ID;
+	if (configured) return Organisation.OrganisationId.make(configured);
+	const [org] = await db()
+		.select({ id: organizations.id })
+		.from(organizations)
+		.limit(1);
+	return org?.id ?? null;
+}
+
+function slackTeamIdFrom(data: unknown): string | undefined {
+	return asString(asRecord(data, "slack_team")?.id);
+}
+
+async function upsertSlackHuddleTeam({
+	recallSlackTeamId,
+	botName,
+	status,
+}: {
+	recallSlackTeamId: string;
+	botName: string;
+	status: "invited" | "active" | "revoked";
+}): Promise<void> {
+	const [existing] = await db()
+		.select({ id: slackHuddleTeams.id })
+		.from(slackHuddleTeams)
+		.where(eq(slackHuddleTeams.recallSlackTeamId, recallSlackTeamId))
+		.limit(1);
+	if (existing) {
+		await db()
+			.update(slackHuddleTeams)
+			.set({ status, botName })
+			.where(eq(slackHuddleTeams.id, existing.id));
+		return;
+	}
+
+	const orgId = await resolveDefaultOrgId();
+	if (!orgId) {
+		console.info("[recall-webhook] slack team has no org", {
+			recallSlackTeamId,
+		});
+		return;
+	}
+
+	await db().insert(slackHuddleTeams).values({
+		id: nanoId(),
+		orgId,
+		recallSlackTeamId,
+		botName,
+		status,
+	});
+}
+
+async function handleSlackTeamInvited(data: unknown): Promise<void> {
+	const recallSlackTeamId = slackTeamIdFrom(data);
+	if (!recallSlackTeamId) {
+		console.info("[recall-webhook] ignored slack_team.invited", {
+			reason: "missing-fields",
+		});
+		return;
+	}
+
+	const config = getRecallConfig();
+	const botName = config?.botName ?? "Boca Pro Notetaker";
+	await upsertSlackHuddleTeam({
+		recallSlackTeamId,
+		botName,
+		status: "invited",
+	});
+
+	if (!config) {
+		console.info(
+			"[recall-webhook] slack team invited but Recall not configured",
+		);
+		return;
+	}
+
+	try {
+		await getDefaultRecallClient().activateSlackTeam(recallSlackTeamId, {
+			botName: config.botName,
+		});
+		await db()
+			.update(slackHuddleTeams)
+			.set({ status: "active" })
+			.where(eq(slackHuddleTeams.recallSlackTeamId, recallSlackTeamId));
+	} catch (error) {
+		console.error("[recall-webhook] activate slack team failed", {
+			recallSlackTeamId,
+			error: error instanceof Error ? error.message : "unknown",
+		});
+	}
+}
+
+async function handleSlackTeamActive(data: unknown): Promise<void> {
+	const recallSlackTeamId = slackTeamIdFrom(data);
+	if (!recallSlackTeamId) {
+		console.info("[recall-webhook] ignored slack_team.active", {
+			reason: "missing-fields",
+		});
+		return;
+	}
+
+	await db()
+		.update(slackHuddleTeams)
+		.set({ status: "active" })
+		.where(eq(slackHuddleTeams.recallSlackTeamId, recallSlackTeamId));
+}
+
+async function handleSlackTeamAccessRevoked(data: unknown): Promise<void> {
+	const recallSlackTeamId = slackTeamIdFrom(data);
+	if (!recallSlackTeamId) {
+		console.info("[recall-webhook] ignored slack_team.access_revoked", {
+			reason: "missing-fields",
+		});
+		return;
+	}
+
+	await db()
+		.update(slackHuddleTeams)
+		.set({ status: "revoked" })
+		.where(eq(slackHuddleTeams.recallSlackTeamId, recallSlackTeamId));
+
+	await db()
+		.update(meetingBots)
+		.set({ status: "cancelled" })
+		.where(
+			and(
+				eq(meetingBots.slackTeamId, recallSlackTeamId),
+				notInArray(meetingBots.status, TERMINAL_STATUSES),
+			),
+		);
+}
+
 export async function dispatchRecallWebhook(
 	payload: RecallWebhookPayload,
 ): Promise<void> {
@@ -294,6 +437,15 @@ export async function dispatchRecallWebhook(
 			return;
 		case "calendar.sync_events":
 			await handleCalendarSyncEvents(data);
+			return;
+		case "slack_team.invited":
+			await handleSlackTeamInvited(data);
+			return;
+		case "slack_team.active":
+			await handleSlackTeamActive(data);
+			return;
+		case "slack_team.access_revoked":
+			await handleSlackTeamAccessRevoked(data);
 			return;
 		default:
 			console.info("[recall-webhook] ignored event", { event });

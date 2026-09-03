@@ -40,6 +40,12 @@ vi.mock("@cap/database/schema", () => {
 			"createdAt",
 		]),
 		videoUploads: table("video_uploads", ["videoId"]),
+		slackHuddleTeams: table("slack_huddle_teams", [
+			"id",
+			"orgId",
+			"status",
+			"createdAt",
+		]),
 	};
 });
 vi.mock("drizzle-orm", () => ({

@@ -6,7 +6,9 @@ const PLATFORM_HOSTS: [RegExp, string][] = [
 	[/webex\.com$/, "Webex"],
 ];
 
-export function meetingPlatformLabel(url: string): string {
+export function meetingPlatformLabel(url: string, source?: string): string {
+	if (!url && source === "slack") return "Slack Huddle";
+
 	let hostname: string;
 	try {
 		hostname = new URL(url).hostname.toLowerCase();

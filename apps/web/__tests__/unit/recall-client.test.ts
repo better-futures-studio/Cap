@@ -10,6 +10,8 @@ const config: RecallConfig = {
 	botName: "Boca Pro Notetaker",
 	publicBaseUrl: "https://cap.boca.pro",
 	botImageUrl: "https://cap.boca.pro/meeting-bot/recording.jpg",
+	liveAgent: false,
+	agentTrigger: "@notetaker",
 	calendarGoogle: null,
 };
 
@@ -136,6 +138,31 @@ describe("createRecallClient", () => {
 			status: 400,
 		});
 		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("PATCHes a Slack team with the bot name", async () => {
+		const fetchMock = vi.fn(
+			async (_url: RequestInfo | URL, _init?: RequestInit) =>
+				jsonResponse(200, { id: "team_1" }),
+		);
+		const client = createRecallClient(config, { fetch: fetchMock });
+
+		await client.activateSlackTeam("team_1", { botName: "Boca Pro Notetaker" });
+
+		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(url).toBe("https://us-west-2.recall.ai/api/v2/slack-teams/team_1/");
+		expect(init.method).toBe("PATCH");
+		expect(JSON.parse(init.body as string)).toEqual({
+			bot_name: "Boca Pro Notetaker",
+		});
+	});
+
+	it("ignores 404 when deleting a Slack team", async () => {
+		const fetchMock = vi.fn(async () => jsonResponse(404, {}));
+		const client = createRecallClient(config, { fetch: fetchMock });
+
+		await expect(client.deleteSlackTeam("team_1")).resolves.toBeUndefined();
+		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 
 	it("follows pagination when listing calendar events, capped by page count", async () => {

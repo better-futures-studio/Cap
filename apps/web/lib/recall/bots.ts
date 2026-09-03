@@ -1,6 +1,11 @@
 import { db } from "@cap/database";
 import { nanoId } from "@cap/database/helpers";
-import { type MeetingBotStatus, meetingBots } from "@cap/database/schema";
+import {
+	type MeetingBotStatus,
+	meetingBots,
+	organizations,
+	slackHuddleTeams,
+} from "@cap/database/schema";
 import type { Organisation, User } from "@cap/web-domain";
 import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { loadBotVideoOutput } from "./bot-image";
@@ -11,6 +16,7 @@ import {
 } from "./client";
 import { getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
+import { buildLiveRecordingConfig } from "./realtime-config";
 
 export const SUPPORTED_MEETING_HOSTS = [
 	/zoom\.us$/,
@@ -202,6 +208,7 @@ export async function scheduleManualMeetingBot(
 			botName,
 			metadata: { cap_meeting_bot_id: id, cap_org_id: orgId },
 			...(automaticVideoOutput ? { automaticVideoOutput } : {}),
+			...(config ? { recordingConfig: buildLiveRecordingConfig(config) } : {}),
 		});
 		await db()
 			.update(meetingBots)
@@ -317,11 +324,21 @@ export async function applyBotStatusEvent({
 		? new Date()
 		: parsedEventAt;
 
-	const rows = await db()
+	let rows = await db()
 		.select()
 		.from(meetingBots)
 		.where(eq(meetingBots.recallBotId, recallBotId))
 		.limit(50);
+
+	if (rows.length === 0) {
+		await createSlackHuddleMeetingBot(recallBotId);
+		rows = await db()
+			.select()
+			.from(meetingBots)
+			.where(eq(meetingBots.recallBotId, recallBotId))
+			.limit(50);
+		if (rows.length === 0) return;
+	}
 
 	for (const row of rows) {
 		if (
@@ -377,4 +394,70 @@ export async function reconcileStaleSchedulingRows(
 		console.info("[recall] marked stale scheduling rows failed", { count });
 	}
 	return count;
+}
+
+async function createSlackHuddleMeetingBot(recallBotId: string): Promise<void> {
+	let slackTeamId: string | undefined;
+	let title: string | null = null;
+	let slackChannelId: string | null = null;
+	try {
+		const bot = await getDefaultRecallClient().getBot(recallBotId);
+		slackTeamId = bot.slack_team?.id;
+		title = bot.meeting_metadata?.title ?? null;
+		slackChannelId = bot.meeting_metadata?.slack_channel_id ?? null;
+	} catch (error) {
+		console.info("[recall] could not fetch unknown bot", {
+			recallBotId,
+			status: error instanceof RecallApiError ? error.status : undefined,
+		});
+		return;
+	}
+
+	if (!slackTeamId) {
+		console.info("[recall] ignored unknown bot without slack team", {
+			recallBotId,
+		});
+		return;
+	}
+
+	const [team] = await db()
+		.select()
+		.from(slackHuddleTeams)
+		.where(eq(slackHuddleTeams.recallSlackTeamId, slackTeamId))
+		.limit(1);
+	if (!team) {
+		console.info("[recall] slack huddle bot has no matching team", {
+			recallBotId,
+			slackTeamId,
+		});
+		return;
+	}
+
+	const [org] = await db()
+		.select({ ownerId: organizations.ownerId })
+		.from(organizations)
+		.where(eq(organizations.id, team.orgId))
+		.limit(1);
+	if (!org) {
+		console.info("[recall] slack huddle team org missing", {
+			orgId: team.orgId,
+		});
+		return;
+	}
+
+	await db()
+		.insert(meetingBots)
+		.values({
+			id: nanoId(),
+			orgId: team.orgId,
+			ownerId: org.ownerId,
+			source: "slack",
+			meetingUrl: "",
+			title: title ?? "Slack huddle",
+			joinAt: new Date(),
+			recallBotId,
+			slackTeamId,
+			slackChannelId,
+			status: "scheduled",
+		});
 }

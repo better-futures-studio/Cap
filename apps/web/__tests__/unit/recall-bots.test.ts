@@ -38,7 +38,18 @@ vi.mock("@cap/database/schema", () => {
 			"chatSyncedAt",
 			"createdAt",
 			"updatedAt",
+			"slackTeamId",
+			"slackChannelId",
 		]),
+		slackHuddleTeams: table("slack_huddle_teams", [
+			"id",
+			"orgId",
+			"recallSlackTeamId",
+			"botName",
+			"status",
+			"workspaceName",
+		]),
+		organizations: table("organizations", ["id", "ownerId"]),
 	};
 });
 vi.mock("drizzle-orm", () => ({

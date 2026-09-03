@@ -5,6 +5,7 @@ import { getCurrentUser } from "@cap/database/auth/session";
 import {
 	type MeetingBotStatus,
 	meetingBots,
+	slackHuddleTeams,
 	videoUploads,
 } from "@cap/database/schema";
 import type { Organisation } from "@cap/web-domain";
@@ -235,4 +236,19 @@ export async function disconnectCalendarAction({
 	const user = await requireUser(orgId);
 	await disconnectCalendar({ calendarRowId, userId: user.id });
 	revalidatePath(MEETINGS_PATH);
+}
+
+export async function getSlackHuddleStatus({
+	orgId,
+}: {
+	orgId: Organisation.OrganisationId;
+}) {
+	await requireUser(orgId);
+	const [row] = await db()
+		.select({ status: slackHuddleTeams.status })
+		.from(slackHuddleTeams)
+		.where(eq(slackHuddleTeams.orgId, orgId))
+		.orderBy(desc(slackHuddleTeams.createdAt))
+		.limit(1);
+	return row ?? null;
 }

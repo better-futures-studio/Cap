@@ -11,6 +11,7 @@ import {
 	cancelMeetingBotAction,
 	disconnectCalendarAction,
 	type getMeetingCalendarSettings,
+	type getSlackHuddleStatus,
 	type listMeetingBots,
 	scheduleMeetingBot,
 	setCalendarAutoRecordAction,
@@ -27,6 +28,7 @@ type MeetingBotRow = Awaited<
 >["upcoming"][number];
 type CalendarSettings = Awaited<ReturnType<typeof getMeetingCalendarSettings>>;
 type CalendarEvent = CalendarSettings["upcoming"][number];
+type SlackHuddleStatus = Awaited<ReturnType<typeof getSlackHuddleStatus>>;
 
 const TERMINAL_STATUSES = new Set<MeetingBotStatus>([
 	"complete",
@@ -248,6 +250,31 @@ function CalendarStrip({
 	);
 }
 
+function SlackStrip({ status }: { status: SlackHuddleStatus }) {
+	if (status) {
+		return (
+			<div className="flex items-center gap-3 text-sm">
+				<span className="inline-flex items-center gap-1.5 text-gray-12">
+					<span
+						className={classNames(
+							"h-1.5 w-1.5 rounded-full",
+							status.status === "active" ? "bg-green-500" : "bg-gray-8",
+						)}
+					/>
+					Slack Huddles · {status.status}
+				</span>
+			</div>
+		);
+	}
+
+	return (
+		<p className="text-sm text-gray-10">
+			Slack Huddle recording is set up in the Recall dashboard (invite the bot's
+			email to your workspace)
+		</p>
+	);
+}
+
 function UpcomingCalendarRow({
 	orgId,
 	calendarRowId,
@@ -337,11 +364,21 @@ function UpcomingBotRow({
 				{formatTime(new Date(bot.joinAt))}
 			</span>
 			<div className="min-w-0 flex-1">
-				<p className="truncate text-sm text-gray-12">
-					{bot.title ?? meetingUrlLabel(bot.meetingUrl)}
-				</p>
+				{bot.status === "in_call_not_recording" ||
+				bot.status === "in_call_recording" ? (
+					<a
+						href={`/dashboard/meetings/${bot.id}`}
+						className="block truncate text-sm text-gray-12 hover:underline"
+					>
+						{bot.title ?? meetingUrlLabel(bot.meetingUrl)}
+					</a>
+				) : (
+					<p className="truncate text-sm text-gray-12">
+						{bot.title ?? meetingUrlLabel(bot.meetingUrl)}
+					</p>
+				)}
 				<p className="text-xs text-gray-10">
-					{meetingPlatformLabel(bot.meetingUrl)}
+					{meetingPlatformLabel(bot.meetingUrl, bot.source)}
 				</p>
 			</div>
 			<div className="flex shrink-0 items-center gap-2">
@@ -436,7 +473,7 @@ function UpcomingSection({
 }
 
 function PastRow({ bot }: { bot: MeetingBotRow }) {
-	const platform = meetingPlatformLabel(bot.meetingUrl);
+	const platform = meetingPlatformLabel(bot.meetingUrl, bot.source);
 	const title = bot.title ?? meetingUrlLabel(bot.meetingUrl);
 
 	let result: React.ReactNode;
@@ -514,12 +551,14 @@ export function MeetingsPage({
 	initialUpcomingBots,
 	initialPastBots,
 	calendarSettings,
+	slackHuddleStatus,
 	result,
 }: {
 	orgId: Organisation.OrganisationId;
 	initialUpcomingBots: MeetingBotRow[];
 	initialPastBots: MeetingBotRow[];
 	calendarSettings: CalendarSettings;
+	slackHuddleStatus: SlackHuddleStatus;
 	result?: string;
 }) {
 	const router = useRouter();
@@ -564,6 +603,7 @@ export function MeetingsPage({
 				</p>
 			)}
 			<CalendarStrip orgId={orgId} settings={calendarSettings} />
+			<SlackStrip status={slackHuddleStatus} />
 			<UpcomingSection
 				orgId={orgId}
 				bots={upcomingBots}

@@ -26,6 +26,11 @@ describe("meetingPlatformLabel", () => {
 		expect(meetingPlatformLabel("https://example.com/call")).toBe("Meeting");
 		expect(meetingPlatformLabel("not a url")).toBe("Meeting");
 	});
+
+	it("labels Slack huddles when the URL is empty", () => {
+		expect(meetingPlatformLabel("", "slack")).toBe("Slack Huddle");
+		expect(meetingPlatformLabel("https://zoom.us/j/123", "slack")).toBe("Zoom");
+	});
 });
 
 describe("meetingUrlLabel", () => {

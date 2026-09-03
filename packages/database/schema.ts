@@ -1768,7 +1768,9 @@ export const developerDailyStorageSnapshotsRelations = relations(
 	}),
 );
 
-export type MeetingBotSource = "manual" | "calendar";
+export type MeetingBotSource = "manual" | "calendar" | "slack";
+
+export type SlackHuddleTeamStatus = "invited" | "active" | "revoked";
 
 export type MeetingBotStatus =
 	| "scheduling"
@@ -1802,6 +1804,8 @@ export const meetingBots = mysqlTable(
 		endAt: timestamp("endAt"),
 		calendarId: nanoIdNullable("calendarId"),
 		calendarEventId: varchar("calendarEventId", { length: 64 }),
+		slackTeamId: varchar("slackTeamId", { length: 64 }),
+		slackChannelId: varchar("slackChannelId", { length: 64 }),
 		recallBotId: varchar("recallBotId", { length: 64 }),
 		recallRecordingId: varchar("recallRecordingId", { length: 64 }),
 		recallTranscriptId: varchar("recallTranscriptId", { length: 64 }),
@@ -1854,3 +1858,24 @@ export const recallWebhookEvents = mysqlTable("recall_webhook_events", {
 	event: varchar("event", { length: 64 }).notNull(),
 	receivedAt: timestamp("receivedAt").notNull().defaultNow(),
 });
+
+export const slackHuddleTeams = mysqlTable(
+	"slack_huddle_teams",
+	{
+		id: nanoId("id").notNull().primaryKey(),
+		orgId: nanoId("orgId").notNull().$type<Organisation.OrganisationId>(),
+		recallSlackTeamId: varchar("recallSlackTeamId", { length: 64 }).notNull(),
+		botName: varchar("botName", { length: 255 }).notNull(),
+		status: varchar("status", { length: 32 })
+			.notNull()
+			.$type<SlackHuddleTeamStatus>(),
+		workspaceName: varchar("workspaceName", { length: 255 }),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+		updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+	},
+	(table) => [
+		uniqueIndex("slack_huddle_teams_recall_slack_team_id_idx").on(
+			table.recallSlackTeamId,
+		),
+	],
+);
