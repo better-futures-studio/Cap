@@ -15,13 +15,11 @@ describe("buildJoinChatMessage", () => {
 
 	it("includes trigger examples when the live agent is on", () => {
 		const message = buildJoinChatMessage({ ...config, liveAgent: true });
-		expect(message).toBe(
-			[
-				"Boca Pro Notetaker is recording this meeting.",
-				"Ask me anything with /nt — e.g. /nt summarize, /nt action items, /nt catch me up, or /nt what's the weather in Tampa?",
-				"Save a note to the recording with /nt note: … or /nt action item: …",
-			].join("\n"),
-		);
+		expect(message.split("\n\n")).toEqual([
+			"Boca Pro Notetaker is recording this meeting.",
+			"Ask me anything with /nt, for example:\n/nt summarize\n/nt action items\n/nt catch me up\n/nt what's the weather in Tampa?",
+			"Save a note to the recording:\n/nt note: …\n/nt action item: …",
+		]);
 		expect(message.length).toBeLessThan(400);
 	});
 });

@@ -9,7 +9,17 @@ export function buildJoinChatMessage(
 	const trigger = config.agentTrigger;
 	return [
 		recording,
-		`Ask me anything with ${trigger} — e.g. ${trigger} summarize, ${trigger} action items, ${trigger} catch me up, or ${trigger} what's the weather in Tampa?`,
-		`Save a note to the recording with ${trigger} note: … or ${trigger} action item: …`,
-	].join("\n");
+		[
+			`Ask me anything with ${trigger}, for example:`,
+			`${trigger} summarize`,
+			`${trigger} action items`,
+			`${trigger} catch me up`,
+			`${trigger} what's the weather in Tampa?`,
+		].join("\n"),
+		[
+			"Save a note to the recording:",
+			`${trigger} note: …`,
+			`${trigger} action item: …`,
+		].join("\n"),
+	].join("\n\n");
 }
