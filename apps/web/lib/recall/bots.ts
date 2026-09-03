@@ -3,7 +3,12 @@ import { nanoId } from "@cap/database/helpers";
 import { type MeetingBotStatus, meetingBots } from "@cap/database/schema";
 import type { Organisation, User } from "@cap/web-domain";
 import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
-import { RecallApiError, type RecallClient } from "./client";
+import { loadBotVideoOutput } from "./bot-image";
+import {
+	RecallApiError,
+	type RecallAutomaticVideoOutput,
+	type RecallClient,
+} from "./client";
 import { getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 
@@ -120,6 +125,7 @@ type MeetingBotDeps = {
 	client?: RecallClient;
 	now?: () => Date;
 	botName?: string;
+	botImage?: RecallAutomaticVideoOutput | null;
 };
 
 export async function scheduleManualMeetingBot(
@@ -180,8 +186,14 @@ export async function scheduleManualMeetingBot(
 		});
 
 	const client = deps.client ?? getDefaultRecallClient();
-	const botName =
-		deps.botName ?? getRecallConfig()?.botName ?? "Boca Pro Notetaker";
+	const config = getRecallConfig();
+	const botName = deps.botName ?? config?.botName ?? "Boca Pro Notetaker";
+	const automaticVideoOutput =
+		deps.botImage !== undefined
+			? deps.botImage
+			: config
+				? await loadBotVideoOutput(config)
+				: null;
 
 	try {
 		const bot = await client.createBot({
@@ -189,6 +201,7 @@ export async function scheduleManualMeetingBot(
 			joinAt: scheduledJoinAt.toISOString(),
 			botName,
 			metadata: { cap_meeting_bot_id: id, cap_org_id: orgId },
+			...(automaticVideoOutput ? { automaticVideoOutput } : {}),
 		});
 		await db()
 			.update(meetingBots)

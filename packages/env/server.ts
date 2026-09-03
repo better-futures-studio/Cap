@@ -180,6 +180,12 @@ function createServerEnv() {
 				.string()
 				.optional()
 				.describe("Display name the meeting bot joins calls as"),
+			RECALL_BOT_IMAGE_URL: z
+				.string()
+				.optional()
+				.describe(
+					"JPEG shown as the meeting bot's camera while recording; defaults to <WEB_URL>/meeting-bot/recording.jpg",
+				),
 			RECALL_CALENDAR_GOOGLE_CLIENT_ID: z
 				.string()
 				.optional()

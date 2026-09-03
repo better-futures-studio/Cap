@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/recall/bot-image", () => ({
+	loadBotVideoOutput: vi.fn(async () => null),
+}));
+
 import { decideCalendarEventAction } from "@/lib/recall/calendars";
 
 const now = new Date("2024-01-01T12:00:00.000Z");

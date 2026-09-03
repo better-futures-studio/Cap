@@ -52,6 +52,9 @@ vi.mock("@/lib/recall/config", () => ({
 	getRecallConfig: () => null,
 	isRecallConfigured: () => false,
 }));
+vi.mock("@/lib/recall/bot-image", () => ({
+	loadBotVideoOutput: vi.fn(async () => null),
+}));
 vi.mock("@/lib/recall/default-client", () => ({
 	getDefaultRecallClient: () => {
 		throw new Error("default Recall client should not be used in tests");

@@ -7,8 +7,10 @@ import {
 } from "@cap/database/schema";
 import type { Organisation, User } from "@cap/web-domain";
 import { and, desc, eq, notInArray } from "drizzle-orm";
+import { loadBotVideoOutput } from "./bot-image";
 import {
 	RecallApiError,
+	type RecallAutomaticVideoOutput,
 	type RecallCalendarEvent,
 	type RecallClient,
 } from "./client";
@@ -127,10 +129,12 @@ export async function scheduleCalendarEventBotForRow({
 	calendar,
 	event,
 	client = getDefaultRecallClient(),
+	botImage,
 }: {
 	calendar: CalendarRef;
 	event: RecallCalendarEvent;
 	client?: RecallClient;
+	botImage?: RecallAutomaticVideoOutput | null;
 }): Promise<void> {
 	const config = getRecallConfig();
 	if (!config) throw new Error("Recall is not configured");
@@ -140,6 +144,9 @@ export async function scheduleCalendarEventBotForRow({
 		event,
 		title: extractEventTitle(event),
 	});
+
+	const automaticVideoOutput =
+		botImage !== undefined ? botImage : await loadBotVideoOutput(config);
 
 	try {
 		const updated = await client.scheduleCalendarEventBot(event.id, {
@@ -154,6 +161,9 @@ export async function scheduleCalendarEventBotForRow({
 					},
 				},
 				metadata: { cap_meeting_bot_id: rowId, cap_org_id: calendar.orgId },
+				...(automaticVideoOutput
+					? { automatic_video_output: automaticVideoOutput }
+					: {}),
 			},
 		});
 		const recallBotId = updated.bots.at(-1)?.bot_id ?? null;

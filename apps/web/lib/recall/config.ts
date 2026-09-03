@@ -12,6 +12,7 @@ export type RecallConfig = {
 	verificationSecret: string | null;
 	botName: string;
 	publicBaseUrl: string;
+	botImageUrl: string;
 	calendarGoogle: { clientId: string; clientSecret: string } | null;
 };
 
@@ -29,6 +30,9 @@ export function getRecallConfig(
 		verificationSecret: env.RECALL_WEBHOOK_VERIFICATION_SECRET ?? null,
 		botName: env.RECALL_BOT_NAME || DEFAULT_BOT_NAME,
 		publicBaseUrl: env.WEB_URL,
+		botImageUrl:
+			env.RECALL_BOT_IMAGE_URL ||
+			`${env.WEB_URL.replace(/\/$/, "")}/meeting-bot/recording.jpg`,
 		calendarGoogle:
 			env.RECALL_CALENDAR_GOOGLE_CLIENT_ID &&
 			env.RECALL_CALENDAR_GOOGLE_CLIENT_SECRET

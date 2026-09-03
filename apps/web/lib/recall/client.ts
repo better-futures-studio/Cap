@@ -93,12 +93,17 @@ type RecallCalendarEventsPage = {
 	results: RecallCalendarEvent[];
 };
 
+export type RecallAutomaticVideoOutput = {
+	in_call_recording: { kind: "jpeg"; b64_data: string };
+};
+
 export type RecallBotConfig = {
 	bot_name: string;
 	chat?: {
 		on_bot_join: { send_to: "everyone"; message: string; pin: boolean };
 	};
 	metadata?: Record<string, unknown>;
+	automatic_video_output?: RecallAutomaticVideoOutput;
 };
 
 const defaultSleep = (ms: number) =>
@@ -205,6 +210,7 @@ export function createRecallClient(
 		joinAt: string;
 		botName: string;
 		metadata: Record<string, unknown>;
+		automaticVideoOutput?: RecallAutomaticVideoOutput;
 	}): Promise<{ id: string }> {
 		return request("/api/v1/bot/", {
 			method: "POST",
@@ -220,6 +226,9 @@ export function createRecallClient(
 						pin: true,
 					},
 				},
+				...(params.automaticVideoOutput
+					? { automatic_video_output: params.automaticVideoOutput }
+					: {}),
 			},
 		});
 	}

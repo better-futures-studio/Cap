@@ -9,6 +9,7 @@ const config: RecallConfig = {
 	verificationSecret: null,
 	botName: "Boca Pro Notetaker",
 	publicBaseUrl: "https://cap.boca.pro",
+	botImageUrl: "https://cap.boca.pro/meeting-bot/recording.jpg",
 	calendarGoogle: null,
 };
 
