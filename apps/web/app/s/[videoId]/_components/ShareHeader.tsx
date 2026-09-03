@@ -741,7 +741,7 @@ export const ShareHeader = ({
 					</Button>
 				</div>
 			)}
-			{sharingDialogMounted && (
+			{isOwner && (
 				<SharingDialog
 					isOpen={isSharingDialogOpen}
 					onClose={() => setIsSharingDialogOpen(false)}
