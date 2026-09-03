@@ -195,9 +195,6 @@ export const ShareHeader = ({
 	// keeps its exit animation instead of being torn out of the tree on close.
 	const [shareLinkDialogMounted, setShareLinkDialogMounted] = useState(false);
 	const [upgradeModalMounted, setUpgradeModalMounted] = useState(false);
-	const [settingsDialogMounted, setSettingsDialogMounted] = useState(false);
-	const [passwordDialogMounted, setPasswordDialogMounted] = useState(false);
-	const [deleteDialogMounted, setDeleteDialogMounted] = useState(false);
 	const [isSettingsDialogOpen, setIsSettingsDialogOpenRaw] = useState(false);
 	const [isPasswordDialogOpen, setIsPasswordDialogOpenRaw] = useState(false);
 	const [isDeleteDialogOpen, setIsDeleteDialogOpenRaw] = useState(false);
@@ -206,18 +203,9 @@ export const ShareHeader = ({
 		setUpgradeModalOpenRaw(open);
 	};
 	const setIsSharingDialogOpen = setIsSharingDialogOpenRaw;
-	const setIsSettingsDialogOpen = (open: boolean) => {
-		if (open) setSettingsDialogMounted(true);
-		setIsSettingsDialogOpenRaw(open);
-	};
-	const setIsPasswordDialogOpen = (open: boolean) => {
-		if (open) setPasswordDialogMounted(true);
-		setIsPasswordDialogOpenRaw(open);
-	};
-	const setIsDeleteDialogOpen = (open: boolean) => {
-		if (open) setDeleteDialogMounted(true);
-		setIsDeleteDialogOpenRaw(open);
-	};
+	const setIsSettingsDialogOpen = setIsSettingsDialogOpenRaw;
+	const setIsPasswordDialogOpen = setIsPasswordDialogOpenRaw;
+	const setIsDeleteDialogOpen = setIsDeleteDialogOpenRaw;
 	const [passwordProtected, setPasswordProtected] = useState(
 		Boolean(data.hasPassword),
 	);
@@ -771,7 +759,7 @@ export const ShareHeader = ({
 			)}
 			{isOwner && (
 				<>
-					{settingsDialogMounted && (
+					{
 						<SettingsDialog
 							isOpen={isSettingsDialogOpen}
 							onClose={() => setIsSettingsDialogOpen(false)}
@@ -782,8 +770,8 @@ export const ShareHeader = ({
 							organizationSettings={data.orgSettings}
 							onSaved={refresh}
 						/>
-					)}
-					{passwordDialogMounted && (
+					}
+					{
 						<PasswordDialog
 							isOpen={isPasswordDialogOpen}
 							onClose={() => setIsPasswordDialogOpen(false)}
@@ -791,15 +779,15 @@ export const ShareHeader = ({
 							hasPassword={passwordProtected}
 							onPasswordUpdated={handlePasswordUpdated}
 						/>
-					)}
-					{deleteDialogMounted && (
+					}
+					{
 						<DeleteCapDialog
 							open={isDeleteDialogOpen}
 							videoId={data.id}
 							videoTitle={displayTitle}
 							onClose={() => setIsDeleteDialogOpen(false)}
 						/>
-					)}
+					}
 				</>
 			)}
 			{/* Sits in the page bar above both panes, so the spacing is the bar's
