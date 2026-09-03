@@ -32,6 +32,11 @@ export function resolveDefaultPlaybackSpeed(
 	return DEFAULT_PLAYBACK_SPEED;
 }
 
+export function formatPlaybackSpeedLabel(rate: number): string {
+	if (!Number.isFinite(rate)) return "1x";
+	return `${Number.parseFloat(rate.toFixed(2))}x`;
+}
+
 export function formatPlaybackDuration(totalSeconds: number): string {
 	if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0s";
 

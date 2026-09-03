@@ -58,6 +58,7 @@ import { useComposedRefs } from "@/app/lib/compose-refs";
 import { cn } from "@/app/lib/utils";
 import {
 	formatPlaybackDuration,
+	formatPlaybackSpeedLabel,
 	normalizePlaybackSpeed,
 	PLAYBACK_SPEEDS,
 } from "@/lib/playback-speed";
@@ -292,6 +293,23 @@ function useMediaPlayerContext(consumerName: string) {
 		throw new Error(`\`${consumerName}\` must be used within \`${ROOT_NAME}\``);
 	}
 	return context;
+}
+
+function useMediaPlayerControl() {
+	const context = useMediaPlayerContext("useMediaPlayerControl");
+	const store = useStoreContext("useMediaPlayerControl");
+	const setMenuOpen = React.useCallback(
+		(open: boolean) => {
+			store.setState("menuOpen", open);
+		},
+		[store],
+	);
+	return {
+		mediaId: context.mediaId,
+		disabled: context.disabled,
+		portalContainer: context.portalContainer,
+		setMenuOpen,
+	};
 }
 
 interface MediaPlayerRootProps
@@ -2688,7 +2706,7 @@ function MediaPlayerPlaybackSpeed(props: MediaPlayerPlaybackSpeedProps) {
 							className,
 						)}
 					>
-						{mediaPlaybackRate}x
+						{formatPlaybackSpeedLabel(mediaPlaybackRate)}
 					</PlayerButton>
 				</DropdownMenuTrigger>
 			</MediaPlayerTooltip>
@@ -2704,7 +2722,8 @@ function MediaPlayerPlaybackSpeed(props: MediaPlayerPlaybackSpeedProps) {
 						className="justify-between"
 						onSelect={() => onPlaybackRateChange(speed)}
 					>
-						{speed}x{mediaPlaybackRate === speed && <CheckIcon />}
+						{formatPlaybackSpeedLabel(speed)}
+						{mediaPlaybackRate === speed && <CheckIcon />}
 					</DropdownMenuItem>
 				))}
 			</DropdownMenuContent>
@@ -3584,7 +3603,7 @@ function MediaPlayerSettings(props: MediaPlayerSettingsProps) {
 					<DropdownMenuSubTrigger>
 						<span className="flex-1">Speed</span>
 						<Badge variant="outline" className="rounded">
-							{mediaPlaybackRate}x
+							{formatPlaybackSpeedLabel(mediaPlaybackRate)}
 						</Badge>
 					</DropdownMenuSubTrigger>
 					<DropdownMenuSubContent>
@@ -3594,7 +3613,8 @@ function MediaPlayerSettings(props: MediaPlayerSettingsProps) {
 								className="justify-between"
 								onSelect={() => onPlaybackRateChange(speed)}
 							>
-								{speed}x{mediaPlaybackRate === speed && <CheckIcon />}
+								{formatPlaybackSpeedLabel(speed)}
+								{mediaPlaybackRate === speed && <CheckIcon />}
 							</DropdownMenuItem>
 						))}
 					</DropdownMenuSubContent>
@@ -3844,6 +3864,7 @@ export {
 	MediaPlayerPortal as Portal,
 	MediaPlayerTooltip as Tooltip,
 	useMediaSelector as useMediaPlayer,
+	useMediaPlayerControl,
 	useStoreSelector as useMediaPlayerStore,
 };
 

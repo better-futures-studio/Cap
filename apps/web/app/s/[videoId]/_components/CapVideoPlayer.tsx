@@ -55,6 +55,7 @@ import {
 	MediaPlayerVolume,
 	MediaPlayerVolumeIndicator,
 } from "./video/media-player";
+import { PlaybackSpeedButton } from "./video/playback-speed-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./video/tooltip";
 import { captureVideoFrameDataUrl } from "./video-frame-thumbnail";
 
@@ -945,6 +946,7 @@ export function CapVideoPlayer({
 								)}
 							</div>
 							<div className="flex gap-2 items-center">
+								<PlaybackSpeedButton />
 								{!disableCaptions && (
 									<MediaPlayerCaptions
 										setToggleCaptions={setToggleCaptions}

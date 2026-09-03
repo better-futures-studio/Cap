@@ -6,12 +6,12 @@ import {
 	MediaPlayerControls,
 	MediaPlayerControlsOverlay,
 	MediaPlayerPlay,
-	MediaPlayerPlaybackSpeed,
 	MediaPlayerSeek,
 	MediaPlayerTime,
 	MediaPlayerVideo,
 	MediaPlayerVolume,
 } from "../../video/media-player";
+import { PlaybackSpeedButton } from "../../video/playback-speed-button";
 import { formatClock } from "../timeline-format";
 
 /**
@@ -66,7 +66,7 @@ export function MediaPreviewPanel({
 								<MediaPlayerVolume expandable />
 								<MediaPlayerTime fallbackDuration={durationSeconds} />
 								<div className="flex-1" />
-								<MediaPlayerPlaybackSpeed />
+								<PlaybackSpeedButton />
 							</div>
 						</MediaPlayerControls>
 					</MediaPlayer>

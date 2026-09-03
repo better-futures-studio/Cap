@@ -46,6 +46,7 @@ import {
 	MediaPlayerVolume,
 	MediaPlayerVolumeIndicator,
 } from "./video/media-player";
+import { PlaybackSpeedButton } from "./video/playback-speed-button";
 
 // Mounted only mid-upload; its RPC client drags the Effect runtime along, so
 // keeping it behind a dynamic import keeps that chunk off finished videos.
@@ -845,6 +846,7 @@ export function HLSVideoPlayer({
 								)}
 							</div>
 							<div className="flex gap-2 items-center">
+								<PlaybackSpeedButton />
 								{!disableCaptions && (
 									<MediaPlayerCaptions
 										setToggleCaptions={setToggleCaptions}
