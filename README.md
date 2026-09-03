@@ -1,202 +1,222 @@
-<p align="center">
-	<img width="150" height="150" src="https://github.com/CapSoftware/Cap/blob/main/apps/desktop/src-tauri/icons/Square310x310Logo.png" alt="Cap logo">
-</p>
-
-<h1 align="center">Cap</h1>
+<h1 align="center">Cap (Boca Pro fork)</h1>
 
 <p align="center">
-	Beautiful, shareable screen recordings. Open source, fast, and built for teams that want to own their data.
+	Self-hosted screen recording and meeting notes for one company, running at
+	<a href="https://cap.boca.pro">cap.boca.pro</a>.
 </p>
 
-<p align="center">
-	<a href="https://cap.so">Website</a>
-	 |
-	<a href="https://cap.so/download">Download</a>
-	 |
-	<a href="https://cap.so/docs">Docs</a>
-	 |
-	<a href="https://cap.so/pricing">Pricing</a>
-	 |
-	<a href="https://cap.link/discord">Discord</a>
-</p>
+This is `better-futures-studio/Cap`, a hard fork of
+[`CapSoftware/Cap`](https://github.com/CapSoftware/Cap) (upstream, remote
+`upstream` in this repo). Upstream Cap is an open source Loom alternative:
+desktop apps for macOS and Windows that record screen, camera, and
+microphone, a web dashboard for sharing and commenting on recordings,
+transcription, and AI summaries. This fork keeps that base and adds meeting
+recording: Recall.ai bots that join video calls, an in-call assistant,
+Google Calendar scheduling, recap emails, and a few opinionated defaults for
+running the whole thing as a single-tenant deployment — Google-only login,
+one organization, no self-serve signup outside the company domain.
 
-<p align="center">
-	<a href="https://console.algora.io/org/CapSoftware/bounties?status=open">
-		<img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fconsole.algora.io%2Fapi%2Fshields%2FCapSoftware%2Fbounties%3Fstatus%3Dopen" alt="Open bounties">
-	</a>
-</p>
+There is one deployment of this fork: https://cap.boca.pro, for Boca Pro.
+It is not built for other companies to fork and reuse without changes; the
+defaults below assume a single organization.
 
-<img src="https://raw.githubusercontent.com/CapSoftware/Cap/refs/heads/main/apps/web/public/landing-cover.png" alt="Cap app preview">
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how a meeting goes
+from a pasted link to a recap email.
 
-Cap is the open source alternative to Loom. It gives you fast screen recording, polished local editing, instant share links, comments, transcripts, analytics, team workspaces, custom domains, custom S3 storage, and full self-hosting when you need complete control.
+## Features
 
-Use Cap for product demos, bug reports, onboarding, tutorials, design reviews, engineering walkthroughs, async standups, client updates, and any moment where showing the work is faster than scheduling another call.
+### Meeting bots
 
-## Why Cap
+- **Get a bot into a call.** Paste a meeting URL on the Meetings page, or
+  connect Google Calendar (Recall Calendar V2) and opt a call in from the
+  calendar view. A per-calendar auto-record switch, and per-series
+  record/skip rules, cover recurring meetings. Nothing records until a user
+  opts in — connecting a calendar does not record anything by itself.
+- **One bot per meeting.** Each meeting maps to one `meeting_bots` row; the
+  bot joins with a branded camera card showing as the recording indicator.
 
-- **Record, edit, share.** Capture your screen, camera, and microphone, then share a link or export a finished video.
-- **Instant Mode for speed.** Upload while recording and get a shareable link the moment you stop.
-- **Studio Mode for polish.** Record locally, edit with backgrounds, zooms, trimming, captions, and export controls.
-- **Desktop apps for your team.** Cap runs on macOS and Windows, with a web dashboard for viewing, sharing, and managing recordings.
-- **Own your storage.** Use Cap Cloud, connect your own S3-compatible bucket, keep recordings local, or self-host the full platform.
-- **Privacy by default.** Share publicly or privately, add passwords, use your own domain, or keep sensitive recordings off hosted infrastructure.
-- **Async collaboration.** Comments, reactions, transcripts, viewer analytics, and team workspaces keep feedback attached to the video.
-- **Cap AI.** Generate titles, summaries, clickable chapters, captions, and transcripts automatically.
-- **Move from Loom.** Import existing Loom videos into Cap and keep your library in one place.
+### After the call
 
-## Recording Modes
+- **Recording lands in Cap.** The bot's recording is copied into R2 and
+  runs through the same processing pipeline as a normal Cap upload.
+- **Transcription with speaker names.** Recall's own transcription (default
+  provider) produces a VTT transcript with speaker labels. If Recall
+  transcription fails, the video falls back to Cap's own AssemblyAI
+  pipeline automatically.
+- **AI summary and action items.** Cap's AI pipeline runs against the
+  transcript and produces a summary plus a structured action item list.
+- **Speaker analytics.** Per-speaker talk time and turn counts are computed
+  from the transcript.
+- **Chat and notes as timeline comments.** In-meeting chat messages, and
+  any `/nt` notes or action items captured during the call, are imported as
+  timeline comments on the recording after it processes.
+- **Recap email.** Each user sets a recap preference — off, to themselves
+  only, or to all attendees — and Cap emails a summary once the recording
+  and transcript are ready.
+- **Attendee-only visibility.** When a recap goes to attendees, the
+  recording is shared with them through a private Space scoped to that
+  meeting, instead of being made org-wide public.
 
-| Mode | Best for | How it works |
-| --- | --- | --- |
-| Instant Mode | Fast feedback, bug reports, async updates | Cap uploads while you record, then gives you a share link as soon as recording stops. |
-| Studio Mode | Product demos, tutorials, launches, client work | Cap records locally, opens the editor, and lets you export or share a polished video. |
+### In-call assistant (off by default)
 
-## Data Ownership
+Set `RECALL_LIVE_AGENT=true` to enable it. While enabled, bots stream live
+transcription to the app, and chat messages starting with `/nt` (or naming
+the bot) are answered in the meeting chat by Cap's configured AI provider,
+using the running transcript as context. General questions can use OpenAI
+web search. "note:" and "action item:" messages are captured for the
+post-meeting timeline instead of being answered. A live view of the
+transcript and chat is available at `/dashboard/meetings/<id>` while the
+meeting is in progress. Supported on Zoom, Google Meet, and Microsoft
+Teams — Recall does not expose an in-call chat channel on Webex or Slack.
 
-Cap is designed for people and teams who do not want their recording workflow locked inside a black box.
+### Slack Huddles
 
-- Use Cap Cloud for the fastest hosted experience.
-- Connect AWS S3, Cloudflare R2, Backblaze B2, MinIO, Wasabi, or another S3-compatible provider.
-- Serve share pages from your own domain.
-- Self-host Cap Web, the API, database, media server, and object storage with Docker Compose.
-- Point Cap Desktop at your self-hosted instance from `Settings > Cap Server URL`.
+Built and working, pending the one-time Recall dashboard setup (bot
+subdomain, DNS records, workspace invite) described in
+[`ARCHITECTURE.md`](ARCHITECTURE.md). Once a Slack workspace
+invites the bot, `slack_team.invited` activates it and it auto-joins public
+huddles under its configured name.
 
-## Get Started
+### Custom vocabulary and language
 
-For most users, the fastest path is:
+Org-level custom vocabulary terms (with optional spelling) improve
+transcription accuracy for names and jargon. Setting
+`RECALL_TRANSCRIPTION_PROVIDER=assemblyai` switches transcription to
+AssemblyAI through Recall (instead of Recall's own engine) for both
+post-meeting and live transcripts, and adds English/Arabic code-switching
+support; it requires an AssemblyAI key configured on the Recall dashboard.
 
-1. Download Cap for macOS or Windows from [cap.so/download](https://cap.so/download).
-2. Sign in or create an account.
-3. Choose Instant Mode or Studio Mode.
-4. Record your first Cap.
-5. Share the link, export the file, or keep it local.
+## Architecture
 
-The full product docs live at [cap.so/docs](https://cap.so/docs).
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full picture:
+services, the meeting data flow from bot creation through webhooks and
+workflows to the recap email, the database tables this fork adds, and where
+the code lives in the tree.
 
-## Self-Hosting
+## Setup for a new deployment
 
-The fastest way to self-host Cap Web is Docker Compose:
+This section is for standing up another instance of this fork (a staging
+environment, a fresh Railway project). It assumes familiarity with the
+upstream [self-hosting guide](https://cap.so/docs/self-hosting) for the
+parts unrelated to meetings (storage, general AI provider, database).
 
-```bash
-git clone https://github.com/CapSoftware/Cap.git
-cd Cap
-docker compose up -d
-```
+### Environment variables
 
-Cap will be available at `http://localhost:3000`.
+**Recall.ai** (all read by `apps/web/lib/recall/config.ts`; see
+`packages/env/server.ts` for the exact schema):
 
-Login links appear in the service logs when email is not configured:
-
-```bash
-docker compose logs cap-web
-```
-
-### Deployment Options
-
-| Method | Best for |
+| Variable | Purpose |
 | --- | --- |
-| Docker Compose | VPS, home servers, and any Docker-capable host |
-| [Railway](https://railway.com/new/template/PwpGcf) | One-click managed hosting |
-| Coolify | Self-hosted PaaS deployments with `docker-compose.coolify.yml` |
+| `RECALL_API_KEY` | Recall.ai REST API key. |
+| `RECALL_REGION` | Recall region; the API base URL is `https://<region>.recall.ai`. This deployment uses `us-west-2`. |
+| `RECALL_WEBHOOK_VERIFICATION_SECRET` | Workspace webhook verification secret (`whsec_...`). |
+| `RECALL_BOT_NAME` | Display name the meeting bot joins calls as. |
+| `RECALL_LIVE_AGENT` | Enable live transcripts and the in-call chat agent. Off by default. |
+| `RECALL_AGENT_TRIGGER` | Chat command that invokes the live meeting agent. Defaults to `/nt`. |
+| `RECALL_BOT_IMAGE_URL` | JPEG shown as the bot's camera while recording. Defaults to `<WEB_URL>/meeting-bot/recording.jpg`. |
+| `RECALL_CALENDAR_GOOGLE_CLIENT_ID` | Google OAuth web client id for the Recall Calendar V2 flow. |
+| `RECALL_CALENDAR_GOOGLE_CLIENT_SECRET` | Matching client secret. |
+| `RECALL_CALENDAR_SETUP_CALLBACK_URI` | Recall regional callback URL the hosted calendar setup forwarder redirects to. Optional; derived from `RECALL_REGION` when unset. |
+| `RECALL_TRANSCRIPTION_PROVIDER` | `recallai` (default) or `assemblyai`. See above. |
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/PwpGcf)
+Everything else the app needs — storage, database, email, general AI
+provider, AssemblyAI key for Cap's own transcription fallback, login
+restrictions — is documented in `CLAUDE.md` and the upstream self-hosting
+guide; this list only covers the Recall-specific variables.
 
-For production, configure public URLs and replace the default secrets before exposing the deployment to the internet:
+### Recall workspace setup
 
-```bash
-CAP_URL=https://cap.yourdomain.com
-S3_PUBLIC_URL=https://s3.yourdomain.com
-```
+1. Create a Recall.ai account and workspace, then generate an API key —
+   this becomes `RECALL_API_KEY`. Note the workspace's region.
+2. Get the workspace webhook verification secret from the Recall dashboard
+   — this becomes `RECALL_WEBHOOK_VERIFICATION_SECRET`.
+3. Add a dashboard webhook endpoint pointing at
+   `https://<your-domain>/api/webhooks/recall`, subscribed to:
+   - `bot.*`
+   - `recording.done`, `recording.failed`
+   - `transcript.done`, `transcript.failed`
+   - `calendar.update`, `calendar.sync_events`
+   - `slack_team.invited`, `slack_team.active`, `slack_team.access_revoked`
+4. Set up Calendar V2 through Recall's hosted setup flow. This app exposes
+   two routes involved in that flow:
+   - `/api/integrations/recall-calendar/callback` — completes the app's own
+     Google OAuth handshake.
+   - `/api/integrations/recall-calendar/setup-callback` — forwards Recall's
+     hosted-setup OAuth redirect on to the regional Recall endpoint.
+   Both full URLs (`https://<your-domain>/api/integrations/recall-calendar/callback`
+   and `https://<your-domain>/api/integrations/recall-calendar/setup-callback`)
+   must be registered as authorized redirect URIs on the Google OAuth client.
+5. To enable the in-call assistant, set `RECALL_LIVE_AGENT=true` and confirm
+   `RECALL_AGENT_TRIGGER` if you want something other than `/nt`.
+6. To use AssemblyAI instead of Recall's own transcription, configure the
+   AssemblyAI key on the Recall dashboard's Transcription page first, then
+   set `RECALL_TRANSCRIPTION_PROVIDER=assemblyai`.
 
-See the [self-hosting guide](https://cap.so/docs/self-hosting) for email setup, AI providers, SSL, storage, production hardening, and troubleshooting.
+### Google OAuth client
 
-## Local Development
+Use a dedicated Google OAuth **web** client for the Recall Calendar V2 flow
+(separate from any OAuth client used for Cap login). Set its consent screen
+audience to **Internal** if the Google Workspace is restricted to one
+organization — this avoids Google's verification process, since only users
+on that Workspace will ever authorize it.
 
-Cap is a Turborepo monorepo with Rust, TypeScript, Tauri, SolidStart, Next.js, Drizzle, MySQL, Tailwind CSS, and shared media crates.
+### Railway notes
 
-Requirements:
+- Railway injects `PORT` at runtime; pin `PORT=3000` on Cap Web so the media
+  server's internal webhook URL (`http://cap-web.railway.internal:3000`)
+  keeps matching.
+- Railway private networking is IPv6 — the web Dockerfile binds
+  `HOSTNAME="::"`.
+- Database migrations run automatically at boot
+  (`apps/web/instrumentation.node.ts`), retrying with backoff; there is no
+  separate migration step in the deploy.
+- Add a `cron` service hitting `/api/cron/recover-failed-video-processing`,
+  `/api/cron/finalize-stale-desktop-segments`, and `/api/cron/recall-reconcile`
+  on a schedule (bearer `CRON_SECRET`).
 
-- Node.js 20 or newer
-- pnpm 10.5.2
-- Rust 1.88 or newer
-- Docker for MySQL, MinIO, and local services
+### Running locally
 
-Install and set up the repo:
+From upstream, trimmed to what's relevant here:
 
 ```bash
 pnpm install
 pnpm env-setup
 pnpm cap-setup
+pnpm dev:web
 ```
 
-Common commands:
+Requires Node.js 20+, pnpm 10.5.2, and Docker for MySQL/MinIO. Set the
+`RECALL_*` variables above to exercise the meeting features locally; without
+them, Recall integration is simply disabled (`getRecallConfig()` returns
+`null`) and the rest of Cap works as usual.
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm dev` | Start the full local development stack |
-| `pnpm dev:web` | Start the web app without the desktop app |
-| `pnpm dev:desktop` | Start the desktop app |
-| `pnpm build` | Build the workspace |
-| `pnpm tauri:build` | Build the desktop release |
-| `pnpm lint` | Run Biome linting |
-| `pnpm format` | Format with Biome |
-| `pnpm typecheck` | Run TypeScript project references |
-| `cargo test -p <crate>` | Run Rust tests for a crate |
+## Development notes
 
-Database commands:
+- Meeting-related unit tests live in `apps/web/__tests__/unit/recall-*.test.ts`
+  (calendar OAuth, webhook verification and dispatch, the chat agent,
+  recap email logic, visibility rules, speaker stats, vocabulary, Slack
+  Huddles, and more).
+- Before pushing, run:
+  ```bash
+  pnpm vitest run
+  pnpm exec biome check .
+  pnpm typecheck
+  pnpm run build:web
+  ```
+  `build:web` matters even when the other checks pass: the workflow
+  bundler used by `apps/web/workflows/*.ts` only fails at build time, not
+  under vitest or tsc.
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm db:generate` | Generate database artifacts |
-| `pnpm db:push` | Push schema changes |
-| `pnpm db:studio` | Open Drizzle Studio |
+## Upstream and license
 
-## Repository Map
+This fork tracks [`CapSoftware/Cap`](https://github.com/CapSoftware/Cap).
+Screen recording, the desktop apps, the editor, sharing, comments,
+transcription, and Cap AI are upstream's work; this fork adds the Recall.ai
+meeting integration and the Boca Pro deployment configuration on top.
 
-| Path | What lives there |
-| --- | --- |
-| `apps/desktop` | Tauri v2 desktop app with SolidStart UI and Rust backend |
-| `apps/web` | Next.js web app for marketing, docs, dashboard, sharing, API routes, and auth |
-| `apps/cli` | Rust CLI |
-| `apps/media-server` | Media processing service used by the web app |
-| `apps/discord-bot` | Discord integration |
-| `packages/database` | Drizzle schema and database access |
-| `packages/ui` | Shared React UI |
-| `packages/ui-solid` | Shared Solid UI |
-| `packages/web-backend` | Backend service layer |
-| `packages/web-domain` | Web domain models and types |
-| `packages/env` | Environment validation |
-| `packages/sdk-embed` | Embed SDK |
-| `packages/sdk-recorder` | Recorder SDK |
-| `crates/*` | Recording, capture, camera, audio, encoding, rendering, muxing, export, and test crates |
-| `scripts/*` | Setup, analytics, build, and maintenance tooling |
-| `infra/*` | Infrastructure configuration |
+License terms are as upstream states them:
 
-The web API uses Effect and `@effect/platform` HTTP APIs. Desktop capture and export paths are backed by Rust crates for fast recording, rendering, and platform-specific media access.
-
-## Analytics
-
-Cap uses [Tinybird](https://www.tinybird.co) for viewer telemetry dashboards. Set `TINYBIRD_ADMIN_TOKEN` or `TINYBIRD_TOKEN` before running analytics commands.
-
-| Command | Purpose |
-| --- | --- |
-| `pnpm analytics:setup` | Deploy Tinybird datasources and pipes from `scripts/analytics/tinybird` |
-| `pnpm analytics:check` | Validate that the Tinybird workspace matches the app expectations |
-
-`analytics:setup` can remove Tinybird resources outside the checked-in analytics configuration. Use it only against the workspace you intend to manage from this repo.
-
-## Contributing
-
-Cap is built in public. Issues, pull requests, design feedback, bug reports, docs fixes, and bounties are welcome.
-
-- Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
-- Join the community on [Discord](https://cap.link/discord).
-- Check open bounties on [Algora](https://console.algora.io/org/CapSoftware/bounties?status=open).
-
-## License
-
-Portions of this software are licensed as follows:
-
-- Code in the `cap-camera*` and `scap-*` crate families is licensed under the MIT License. See [licenses/LICENSE-MIT](https://github.com/CapSoftware/Cap/blob/main/licenses/LICENSE-MIT).
-- Third-party components are licensed under the original license provided by their owner.
-- All other content not mentioned above is available under the AGPLv3 license as defined in [LICENSE](https://github.com/CapSoftware/Cap/blob/main/LICENSE).
+- Code in the `cap-camera*` and `scap-*` crate families is MIT licensed.
+  See [licenses/LICENSE-MIT](https://github.com/CapSoftware/Cap/blob/main/licenses/LICENSE-MIT).
+- Third-party components keep their original license.
+- Everything else is AGPLv3, as defined in [LICENSE](https://github.com/CapSoftware/Cap/blob/main/LICENSE).
