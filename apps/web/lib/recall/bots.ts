@@ -1,0 +1,349 @@
+import { db } from "@cap/database";
+import { nanoId } from "@cap/database/helpers";
+import { type MeetingBotStatus, meetingBots } from "@cap/database/schema";
+import type { Organisation, User } from "@cap/web-domain";
+import { and, eq, inArray, lt } from "drizzle-orm";
+import { RecallApiError, type RecallClient } from "./client";
+import { getRecallConfig } from "./config";
+import { getDefaultRecallClient } from "./default-client";
+
+export const SUPPORTED_MEETING_HOSTS = [
+	/zoom\.us$/,
+	/meet\.google\.com$/,
+	/teams\.microsoft\.com$/,
+	/teams\.live\.com$/,
+	/webex\.com$/,
+];
+
+const ACTIVE_SCHEDULE_STATUSES: MeetingBotStatus[] = [
+	"scheduling",
+	"scheduled",
+	"joining_call",
+	"in_waiting_room",
+	"in_call_not_recording",
+	"in_call_recording",
+];
+
+const TERMINAL_STATUSES: MeetingBotStatus[] = [
+	"fatal",
+	"failed",
+	"cancelled",
+	"opted_out",
+	"complete",
+];
+
+const PAST_DONE_STATUSES: MeetingBotStatus[] = ["importing", "transcribing"];
+
+const CANCELLABLE_STATUSES: MeetingBotStatus[] = ["scheduling", "scheduled"];
+
+const BOT_STATUS_BY_CODE: Record<string, MeetingBotStatus> = {
+	ready: "scheduled",
+	joining_call: "joining_call",
+	in_waiting_room: "in_waiting_room",
+	in_call_not_recording: "in_call_not_recording",
+	in_call_recording: "in_call_recording",
+	call_ended: "call_ended",
+	done: "done",
+	fatal: "fatal",
+};
+
+const JOIN_AT_MAX_MS = 30 * 24 * 60 * 60 * 1000;
+const JOIN_AT_PAST_MS = 5 * 60 * 1000;
+const DUPLICATE_WINDOW_MS = 2 * 60 * 60 * 1000;
+const STALE_SCHEDULING_MS = 10 * 60 * 1000;
+
+export type MeetingPlatform =
+	| "zoom"
+	| "google_meet"
+	| "microsoft_teams"
+	| "webex";
+
+function getAffectedRows(result: unknown): number {
+	if (Array.isArray(result)) {
+		return (
+			(result[0] as { affectedRows?: number } | undefined)?.affectedRows ?? 0
+		);
+	}
+	return (result as { affectedRows?: number } | undefined)?.affectedRows ?? 0;
+}
+
+function platformForHost(hostname: string): MeetingPlatform | null {
+	const host = hostname.toLowerCase();
+	if (SUPPORTED_MEETING_HOSTS[0]?.test(host)) return "zoom";
+	if (SUPPORTED_MEETING_HOSTS[1]?.test(host)) return "google_meet";
+	if (
+		SUPPORTED_MEETING_HOSTS[2]?.test(host) ||
+		SUPPORTED_MEETING_HOSTS[3]?.test(host)
+	) {
+		return "microsoft_teams";
+	}
+	if (SUPPORTED_MEETING_HOSTS[4]?.test(host)) return "webex";
+	return null;
+}
+
+export function parseMeetingUrl(
+	input: string,
+): { url: string; platform: MeetingPlatform } | null {
+	const trimmed = input.trim();
+	if (!trimmed) return null;
+
+	const withProtocol = /^https?:\/\//i.test(trimmed)
+		? trimmed
+		: `https://${trimmed}`;
+
+	let parsed: URL;
+	try {
+		parsed = new URL(withProtocol);
+	} catch {
+		return null;
+	}
+
+	if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+
+	const platform = platformForHost(parsed.hostname);
+	if (!platform) return null;
+
+	parsed.username = "";
+	parsed.password = "";
+	return { url: parsed.toString(), platform };
+}
+
+type ScheduleManualMeetingBotInput = {
+	orgId: Organisation.OrganisationId;
+	userId: User.UserId;
+	meetingUrl: string;
+	joinAt?: Date;
+	title?: string;
+};
+
+type MeetingBotDeps = {
+	client?: RecallClient;
+	now?: () => Date;
+	botName?: string;
+};
+
+export async function scheduleManualMeetingBot(
+	{ orgId, userId, meetingUrl, joinAt, title }: ScheduleManualMeetingBotInput,
+	deps: MeetingBotDeps = {},
+): Promise<{ id: string; status: MeetingBotStatus }> {
+	const parsed = parseMeetingUrl(meetingUrl);
+	if (!parsed) {
+		throw new Error("Unsupported meeting URL");
+	}
+
+	const now = (deps.now ?? (() => new Date()))();
+	const scheduledJoinAt = joinAt ?? now;
+	const joinAtMs = scheduledJoinAt.getTime();
+	if (!Number.isFinite(joinAtMs)) {
+		throw new Error("Invalid join time");
+	}
+	if (joinAtMs - now.getTime() > JOIN_AT_MAX_MS) {
+		throw new Error("Join time is more than 30 days ahead");
+	}
+	if (now.getTime() - joinAtMs > JOIN_AT_PAST_MS) {
+		throw new Error("Join time is more than 5 minutes in the past");
+	}
+
+	const existing = await db()
+		.select()
+		.from(meetingBots)
+		.where(
+			and(
+				eq(meetingBots.orgId, orgId),
+				eq(meetingBots.meetingUrl, parsed.url),
+				inArray(meetingBots.status, ACTIVE_SCHEDULE_STATUSES),
+			),
+		)
+		.limit(50);
+
+	const duplicate = existing.find(
+		(row) =>
+			Math.abs(row.joinAt.getTime() - scheduledJoinAt.getTime()) <
+			DUPLICATE_WINDOW_MS,
+	);
+	if (duplicate) {
+		return { id: duplicate.id, status: duplicate.status };
+	}
+
+	const id = nanoId();
+	await db()
+		.insert(meetingBots)
+		.values({
+			id,
+			orgId,
+			ownerId: userId,
+			source: "manual",
+			meetingUrl: parsed.url,
+			title: title ?? null,
+			joinAt: scheduledJoinAt,
+			status: "scheduling",
+		});
+
+	const client = deps.client ?? getDefaultRecallClient();
+	const botName =
+		deps.botName ?? getRecallConfig()?.botName ?? "Boca Pro Notetaker";
+
+	try {
+		const bot = await client.createBot({
+			meetingUrl: parsed.url,
+			joinAt: scheduledJoinAt.toISOString(),
+			botName,
+			metadata: { cap_meeting_bot_id: id, cap_org_id: orgId },
+		});
+		await db()
+			.update(meetingBots)
+			.set({
+				recallBotId: bot.id,
+				status: "scheduled",
+				errorMessage: null,
+			})
+			.where(eq(meetingBots.id, id));
+		console.info("[recall] scheduled bot", {
+			meetingBotId: id,
+			recallBotId: bot.id,
+			host: parsed.platform,
+		});
+		return { id, status: "scheduled" };
+	} catch (error) {
+		if (error instanceof RecallApiError) {
+			await db()
+				.update(meetingBots)
+				.set({
+					status: "failed",
+					errorMessage: `Recall rejected the request (HTTP ${error.status})`,
+				})
+				.where(eq(meetingBots.id, id));
+			console.error("[recall] create bot rejected", {
+				meetingBotId: id,
+				status: error.status,
+			});
+			return { id, status: "failed" };
+		}
+		console.error("[recall] create bot unconfirmed", { meetingBotId: id });
+		return { id, status: "scheduling" };
+	}
+}
+
+export async function cancelMeetingBot(
+	{
+		id,
+		orgId,
+		userId,
+	}: {
+		id: string;
+		orgId: Organisation.OrganisationId;
+		userId: User.UserId;
+	},
+	deps: { client?: RecallClient } = {},
+): Promise<{ id: string; status: MeetingBotStatus }> {
+	const [row] = await db()
+		.select()
+		.from(meetingBots)
+		.where(
+			and(
+				eq(meetingBots.id, id),
+				eq(meetingBots.orgId, orgId),
+				eq(meetingBots.ownerId, userId),
+			),
+		)
+		.limit(1);
+
+	if (!row) {
+		throw new Error("Meeting bot not found");
+	}
+	if (!CANCELLABLE_STATUSES.includes(row.status)) {
+		throw new Error("Meeting bot cannot be cancelled");
+	}
+
+	const client = deps.client ?? getDefaultRecallClient();
+	if (row.source === "calendar") {
+		if (row.calendarEventId) {
+			await client.removeCalendarEventBot(row.calendarEventId);
+		}
+		await db()
+			.update(meetingBots)
+			.set({ status: "opted_out", errorMessage: null })
+			.where(eq(meetingBots.id, id));
+		console.info("[recall] opted out calendar bot", { meetingBotId: id });
+		return { id, status: "opted_out" };
+	}
+
+	if (row.recallBotId) {
+		await client.deleteScheduledBot(row.recallBotId);
+	}
+	await db()
+		.update(meetingBots)
+		.set({ status: "cancelled", errorMessage: null })
+		.where(eq(meetingBots.id, id));
+	console.info("[recall] cancelled bot", {
+		meetingBotId: id,
+		recallBotId: row.recallBotId,
+	});
+	return { id, status: "cancelled" };
+}
+
+export async function applyBotStatusEvent({
+	recallBotId,
+	code,
+	subCode,
+}: {
+	recallBotId: string;
+	code: string;
+	subCode?: string | null;
+	updatedAt?: string | Date;
+}): Promise<void> {
+	const status = BOT_STATUS_BY_CODE[code];
+	if (!status) {
+		console.info("[recall] ignored bot status", { recallBotId, code });
+		return;
+	}
+
+	const rows = await db()
+		.select()
+		.from(meetingBots)
+		.where(eq(meetingBots.recallBotId, recallBotId))
+		.limit(50);
+
+	for (const row of rows) {
+		if (
+			TERMINAL_STATUSES.includes(row.status) ||
+			PAST_DONE_STATUSES.includes(row.status)
+		) {
+			continue;
+		}
+
+		await db()
+			.update(meetingBots)
+			.set({
+				status,
+				statusSubCode: subCode ?? null,
+				...(status === "fatal"
+					? { errorMessage: subCode || "Bot failed" }
+					: {}),
+			})
+			.where(eq(meetingBots.id, row.id));
+	}
+}
+
+export async function reconcileStaleSchedulingRows(
+	_client?: RecallClient,
+): Promise<number> {
+	const cutoff = new Date(Date.now() - STALE_SCHEDULING_MS);
+	const result = await db()
+		.update(meetingBots)
+		.set({
+			status: "failed",
+			errorMessage: "Bot creation was not confirmed",
+		})
+		.where(
+			and(
+				eq(meetingBots.status, "scheduling"),
+				lt(meetingBots.createdAt, cutoff),
+			),
+		);
+	const count = getAffectedRows(result);
+	if (count > 0) {
+		console.info("[recall] marked stale scheduling rows failed", { count });
+	}
+	return count;
+}
