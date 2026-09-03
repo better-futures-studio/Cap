@@ -358,7 +358,7 @@ export function createRecallClient(
 							speech_models: ["universal-2"],
 							language_detection: true,
 							language_detection_options: { code_switching: true },
-							...(keyTerms.length > 0 ? { word_boost: keyTerms } : {}),
+							...(keyTerms.length > 0 ? { keyterms_prompt: keyTerms } : {}),
 							...(spelling.length > 0
 								? {
 										custom_spelling: spelling.map((entry) => ({

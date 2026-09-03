@@ -188,7 +188,7 @@ describe("createRecallClient", () => {
 		});
 	});
 
-	it("maps vocabulary to word_boost and custom_spelling for assemblyai", async () => {
+	it("maps vocabulary to keyterms_prompt and custom_spelling for assemblyai", async () => {
 		const fetchMock = vi.fn(
 			async (_url: RequestInfo | URL, _init?: RequestInit) =>
 				jsonResponse(200, { id: "tr_1" }),
@@ -208,7 +208,7 @@ describe("createRecallClient", () => {
 					speech_models: ["universal-2"],
 					language_detection: true,
 					language_detection_options: { code_switching: true },
-					word_boost: ["Boca Pro", "Cap"],
+					keyterms_prompt: ["Boca Pro", "Cap"],
 					custom_spelling: [{ from: ["bokapro"], to: "Boca Pro" }],
 				},
 			},
