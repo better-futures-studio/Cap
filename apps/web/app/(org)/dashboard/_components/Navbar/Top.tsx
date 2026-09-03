@@ -127,7 +127,7 @@ const Top = () => {
 				</div>
 			</div>
 			<div className="hidden flex-1 justify-start px-6 min-w-0 lg:flex">
-				<DashboardSearch />
+				{buildEnv.NEXT_PUBLIC_IS_CAP && <DashboardSearch />}
 			</div>
 			<div className="flex gap-4 justify-end items-center shrink-0">
 				{buildEnv.NEXT_PUBLIC_IS_CAP && <ReferButton />}
