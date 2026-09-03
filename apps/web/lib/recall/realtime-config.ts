@@ -23,7 +23,7 @@ export function buildLiveRecordingConfig(
 		realtime_endpoints: [
 			{
 				type: "webhook",
-				url: `${config.publicBaseUrl.replace(/\/$/, "")}/api/webhooks/recall/realtime/`,
+				url: `${config.publicBaseUrl.replace(/\/$/, "")}/api/webhooks/recall/realtime`,
 				events: ["transcript.data", "participant_events.chat_message"],
 			},
 		],

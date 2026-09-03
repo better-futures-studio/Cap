@@ -27,7 +27,7 @@ describe("buildLiveRecordingConfig", () => {
 			realtime_endpoints: [
 				{
 					type: "webhook",
-					url: "https://cap.test/api/webhooks/recall/realtime/",
+					url: "https://cap.test/api/webhooks/recall/realtime",
 					events: ["transcript.data", "participant_events.chat_message"],
 				},
 			],

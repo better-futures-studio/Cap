@@ -93,7 +93,7 @@ Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
   `slack_team.invited|active|access_revoked`. Verified with the workspace
   verification secret; duplicate `webhook-id`s are ignored.
 - In-call agent (off by default): set `RECALL_LIVE_AGENT=true` to create bots
-  with real-time transcription streamed to `/api/webhooks/recall/realtime/`
+  with real-time transcription streamed to `/api/webhooks/recall/realtime`
   (same verification secret). Chat messages starting with
   `RECALL_AGENT_TRIGGER` (default `@notetaker`) or naming the bot are answered
   in the meeting chat via Cap's AI provider; "note:" / "action item:" messages
