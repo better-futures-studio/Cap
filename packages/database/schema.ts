@@ -1809,6 +1809,7 @@ export const meetingBots = mysqlTable(
 			.notNull()
 			.$type<MeetingBotStatus>(),
 		statusSubCode: varchar("statusSubCode", { length: 128 }),
+		statusUpdatedAt: timestamp("statusUpdatedAt"),
 		errorMessage: text("errorMessage"),
 		videoId: nanoIdNullable("videoId").$type<Video.VideoId>(),
 		createdAt: timestamp("createdAt").notNull().defaultNow(),

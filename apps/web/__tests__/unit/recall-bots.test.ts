@@ -32,6 +32,7 @@ vi.mock("@cap/database/schema", () => {
 			"recallTranscriptId",
 			"status",
 			"statusSubCode",
+			"statusUpdatedAt",
 			"errorMessage",
 			"videoId",
 			"createdAt",
@@ -44,6 +45,8 @@ vi.mock("drizzle-orm", () => ({
 	eq: (column: string, value: unknown) => ({ op: "eq", column, value }),
 	inArray: (column: string, value: unknown[]) => ({ op: "in", column, value }),
 	lt: (column: string, value: unknown) => ({ op: "lt", column, value }),
+	or: (...args: unknown[]) => ({ op: "or", args }),
+	isNull: (column: string) => ({ op: "isNull", column }),
 }));
 vi.mock("@/lib/recall/config", () => ({
 	getRecallConfig: () => null,
@@ -81,8 +84,12 @@ function matches(row: Row, condition?: Condition): boolean {
 	if (condition.op === "and") {
 		return (condition.args ?? []).every((part) => matches(row, part));
 	}
+	if (condition.op === "or") {
+		return (condition.args ?? []).some((part) => matches(row, part));
+	}
 	const key = condition.column?.split(".")[1] ?? "";
 	const value = row[key];
+	if (condition.op === "isNull") return value === null || value === undefined;
 	if (condition.op === "eq") return value === condition.value;
 	if (condition.op === "in") {
 		return Array.isArray(condition.value) && condition.value.includes(value);
@@ -319,6 +326,35 @@ describe("applyBotStatusEvent", () => {
 
 		expect(bots()[0]?.status).toBe("in_call_recording");
 		expect(bots()[1]?.status).toBe("in_call_recording");
+	});
+
+	it("keeps the newest event when webhooks arrive out of order", async () => {
+		rows.meeting_bots = [
+			{
+				id: "mb_1",
+				recallBotId: "bot_1",
+				status: "scheduled",
+				statusSubCode: null,
+				statusUpdatedAt: null,
+				errorMessage: null,
+			},
+		];
+
+		await applyBotStatusEvent({
+			recallBotId: "bot_1",
+			code: "in_call_recording",
+			updatedAt: "2026-09-03T19:40:52.500Z",
+		});
+		await applyBotStatusEvent({
+			recallBotId: "bot_1",
+			code: "in_call_not_recording",
+			updatedAt: "2026-09-03T19:40:51.000Z",
+		});
+
+		expect(bots()[0]).toMatchObject({
+			status: "in_call_recording",
+			statusUpdatedAt: new Date("2026-09-03T19:40:52.500Z"),
+		});
 	});
 
 	it("sets fatal errorMessage from the subCode", async () => {

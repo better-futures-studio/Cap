@@ -2,7 +2,7 @@ import { db } from "@cap/database";
 import { nanoId } from "@cap/database/helpers";
 import { type MeetingBotStatus, meetingBots } from "@cap/database/schema";
 import type { Organisation, User } from "@cap/web-domain";
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { RecallApiError, type RecallClient } from "./client";
 import { getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
@@ -286,6 +286,7 @@ export async function applyBotStatusEvent({
 	recallBotId,
 	code,
 	subCode,
+	updatedAt,
 }: {
 	recallBotId: string;
 	code: string;
@@ -297,6 +298,11 @@ export async function applyBotStatusEvent({
 		console.info("[recall] ignored bot status", { recallBotId, code });
 		return;
 	}
+
+	const parsedEventAt = updatedAt ? new Date(updatedAt) : new Date();
+	const eventAt = Number.isNaN(parsedEventAt.getTime())
+		? new Date()
+		: parsedEventAt;
 
 	const rows = await db()
 		.select()
@@ -311,17 +317,29 @@ export async function applyBotStatusEvent({
 		) {
 			continue;
 		}
+		if (row.statusUpdatedAt && row.statusUpdatedAt >= eventAt) continue;
 
+		// Svix delivers a bot's lifecycle events concurrently, so two handlers
+		// can race on the same row; the WHERE clause makes the newest event win.
 		await db()
 			.update(meetingBots)
 			.set({
 				status,
 				statusSubCode: subCode ?? null,
+				statusUpdatedAt: eventAt,
 				...(status === "fatal"
 					? { errorMessage: subCode || "Bot failed" }
 					: {}),
 			})
-			.where(eq(meetingBots.id, row.id));
+			.where(
+				and(
+					eq(meetingBots.id, row.id),
+					or(
+						isNull(meetingBots.statusUpdatedAt),
+						lt(meetingBots.statusUpdatedAt, eventAt),
+					),
+				),
+			);
 	}
 }
 

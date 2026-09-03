@@ -1,0 +1,1 @@
+ALTER TABLE `meeting_bots` ADD `statusUpdatedAt` timestamp;
