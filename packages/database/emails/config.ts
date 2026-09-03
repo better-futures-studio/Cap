@@ -1,5 +1,7 @@
 import { buildEnv, serverEnv } from "@cap/env";
 import type { JSXElementConstructor, ReactElement } from "react";
+import { render } from "@react-email/render";
+import nodemailer from "nodemailer";
 import { Resend } from "resend";
 
 export const resend = () =>
@@ -35,7 +37,8 @@ export const sendEmail = async ({
 	}[];
 }) => {
 	const r = resend();
-	if (!r) {
+	const smtpUrl = serverEnv().SMTP_URL;
+	if (!r && !smtpUrl) {
 		return Promise.resolve();
 	}
 
@@ -47,6 +50,21 @@ export const sendEmail = async ({
 	else if (buildEnv.NEXT_PUBLIC_IS_CAP)
 		from = "Cap Auth <no-reply@auth.cap.so>";
 	else from = `auth@${serverEnv().RESEND_FROM_DOMAIN}`;
+
+	if (!r) {
+		// ponytail: plain SMTP path for self-hosters without Resend. No
+		// scheduling or idempotency; add if a self-hosted flow needs them.
+		await nodemailer.createTransport(smtpUrl).sendMail({
+			from,
+			to: email,
+			subject,
+			html: await render(react),
+			cc,
+			replyTo,
+			attachments,
+		});
+		return;
+	}
 
 	return r.emails.send(
 		{

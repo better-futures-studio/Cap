@@ -29,6 +29,9 @@ function createServerEnv() {
 			// Cap uses Resend for email sending, including sending login code emails
 			RESEND_API_KEY: z.string().optional(),
 			RESEND_FROM_DOMAIN: z.string().optional(),
+			// SMTP fallback used when RESEND_API_KEY is unset, e.g. Postmark:
+			// smtp://<server-token>:<server-token>@smtp.postmarkapp.com:587
+			SMTP_URL: z.string().optional(),
 
 			/// S3 configuration
 			// Though they are prefixed with `CAP_AWS`, these don't have to be
