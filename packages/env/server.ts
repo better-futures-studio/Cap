@@ -87,6 +87,12 @@ function createServerEnv() {
 				.string()
 				.optional()
 				.describe("Comma-separated list of permitted signup domains"),
+			CAP_DEFAULT_ORG_ID: z
+				.string()
+				.optional()
+				.describe(
+					"Single-tenant mode: new users join this organization instead of getting their own",
+				),
 
 			/// AI providers
 			ASSEMBLY_API_KEY: z.string().optional().describe("Audio transcription"),

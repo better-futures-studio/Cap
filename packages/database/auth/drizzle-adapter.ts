@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { serverEnv } from "@cap/env";
 import { isProSubscription, STRIPE_AVAILABLE, stripe } from "@cap/utils";
 import { type ImageUpload, Organisation, User } from "@cap/web-domain";
 import { and, eq } from "drizzle-orm";
@@ -159,19 +160,27 @@ export function DrizzleAdapter(
 					return;
 				}
 
-				const organizationId = Organisation.OrganisationId.make(nanoId());
+				// ponytail: single-tenant install. When CAP_DEFAULT_ORG_ID is set,
+				// every new user joins that org as a member instead of getting a
+				// personal "My Organization". Pair with CAP_ALLOWED_SIGNUP_DOMAINS.
+				const defaultOrgId = serverEnv().CAP_DEFAULT_ORG_ID;
+				const organizationId = defaultOrgId
+					? Organisation.OrganisationId.make(defaultOrgId)
+					: Organisation.OrganisationId.make(nanoId());
 
-				await tx.insert(organizations).values({
-					id: organizationId,
-					ownerId: userId,
-					name: "My Organization",
-				});
+				if (!defaultOrgId) {
+					await tx.insert(organizations).values({
+						id: organizationId,
+						ownerId: userId,
+						name: "My Organization",
+					});
+				}
 
 				await tx.insert(organizationMembers).values({
 					id: nanoId(),
 					organizationId,
 					userId,
-					role: "owner",
+					role: defaultOrgId ? "member" : "owner",
 				});
 
 				await tx
