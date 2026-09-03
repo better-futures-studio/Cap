@@ -158,6 +158,35 @@ describe("createRecallClient", () => {
 		});
 	});
 
+	it("sends key_terms and spelling on createAsyncTranscript", async () => {
+		const fetchMock = vi.fn(
+			async (_url: RequestInfo | URL, _init?: RequestInit) =>
+				jsonResponse(200, { id: "tr_1" }),
+		);
+		const client = createRecallClient(config, { fetch: fetchMock });
+
+		await client.createAsyncTranscript("rec_1", {
+			keyTerms: ["Boca Pro", "Cap"],
+			spelling: [{ find: ["bokapro"], replace: "Boca Pro" }],
+		});
+
+		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(url).toBe(
+			"https://us-west-2.recall.ai/api/v1/recording/rec_1/create_transcript/",
+		);
+		expect(init.method).toBe("POST");
+		expect(JSON.parse(init.body as string)).toEqual({
+			provider: {
+				recallai_async: {
+					language_code: "auto",
+					key_terms: ["Boca Pro", "Cap"],
+					spelling: [{ find: ["bokapro"], replace: "Boca Pro" }],
+				},
+			},
+			diarization: { use_separate_streams_when_available: true },
+		});
+	});
+
 	it("ignores 404 when deleting a Slack team", async () => {
 		const fetchMock = vi.fn(async () => jsonResponse(404, {}));
 		const client = createRecallClient(config, { fetch: fetchMock });

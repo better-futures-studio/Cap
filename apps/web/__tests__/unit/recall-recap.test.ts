@@ -63,6 +63,9 @@ vi.mock("@/lib/recall/default-client", () => ({
 		throw new Error("default Recall client should not be used in tests");
 	},
 }));
+vi.mock("@/lib/recall/visibility", () => ({
+	shareMeetingRecordingWithAttendees: vi.fn(async () => undefined),
+}));
 
 type Row = Record<string, unknown>;
 type Table = { table: string };

@@ -33,6 +33,12 @@ import {
 	isRecallConfigured,
 } from "@/lib/recall/config";
 import { parseRecapMode } from "@/lib/recall/recap";
+import { getMeetingSpeakerStats } from "@/lib/recall/speaker-stats";
+import {
+	addMeetingVocabularyTerm,
+	listMeetingVocabularyTerms,
+	removeMeetingVocabularyTerm,
+} from "@/lib/recall/vocabulary";
 
 const MEETINGS_PATH = "/dashboard/meetings";
 
@@ -312,6 +318,53 @@ export async function getMeetingActionItemsAction({
 }) {
 	await requireUser(orgId);
 	return getMeetingActionItems(videoId);
+}
+
+export async function getMeetingSpeakerStatsAction({
+	orgId,
+	videoId,
+}: {
+	orgId: Organisation.OrganisationId;
+	videoId: string;
+}) {
+	await requireUser(orgId);
+	return getMeetingSpeakerStats(videoId);
+}
+
+export async function listMeetingVocabulary({
+	orgId,
+}: {
+	orgId: Organisation.OrganisationId;
+}) {
+	await requireUser(orgId);
+	return listMeetingVocabularyTerms(orgId);
+}
+
+export async function addMeetingVocabulary({
+	orgId,
+	term,
+	spelling,
+}: {
+	orgId: Organisation.OrganisationId;
+	term: string;
+	spelling?: string | null;
+}) {
+	await requireUser(orgId);
+	const row = await addMeetingVocabularyTerm({ orgId, term, spelling });
+	revalidatePath(MEETINGS_PATH);
+	return row;
+}
+
+export async function removeMeetingVocabulary({
+	orgId,
+	id,
+}: {
+	orgId: Organisation.OrganisationId;
+	id: string;
+}) {
+	await requireUser(orgId);
+	await removeMeetingVocabularyTerm({ orgId, id });
+	revalidatePath(MEETINGS_PATH);
 }
 
 export async function getSlackHuddleStatus({

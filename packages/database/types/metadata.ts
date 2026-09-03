@@ -79,12 +79,28 @@ export interface VideoMetadata {
 		rawFileKey?: string;
 	};
 	meetingActionItems?: MeetingActionItem[];
+	meetingSpeakerStats?: MeetingSpeakerStats;
 }
 
 export type MeetingActionItem = {
 	text: string;
 	owner: string | null;
 	due: string | null;
+};
+
+export type MeetingSpeakerStat = {
+	name: string;
+	speakingSeconds: number;
+	turns: number;
+	words: number;
+	questions: number;
+	longestMonologueSeconds: number;
+	share: number;
+};
+
+export type MeetingSpeakerStats = {
+	speakers: MeetingSpeakerStat[];
+	totalSpeakingSeconds: number;
 };
 
 export type VideoEditRange = {

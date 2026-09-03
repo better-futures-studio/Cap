@@ -7,7 +7,7 @@ import {
 	videos,
 	videoUploads,
 } from "@cap/database/schema";
-import { serverEnv } from "@cap/env";
+import type { VideoMetadata } from "@cap/database/types";
 import { Storage } from "@cap/web-backend/src/Storage/index";
 import { Comment, Video } from "@cap/web-domain";
 import { eq } from "drizzle-orm";
@@ -19,11 +19,19 @@ import { importMeetingChatComments } from "@/lib/recall/chat-comments";
 import { RecallApiError } from "@/lib/recall/client";
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
 import { readLiveTranscript } from "@/lib/recall/live-transcript";
-import { sharePrimaryRecordingWithOrganization } from "@/lib/recall/shared-recording";
+import { computeSpeakerStats } from "@/lib/recall/speaker-stats";
 import {
 	type RecallTranscriptPart,
 	recallTranscriptToVtt,
 } from "@/lib/recall/transcript";
+import {
+	meetingVideoIsPublic,
+	shareMeetingRecordingWithAttendees,
+} from "@/lib/recall/visibility";
+import {
+	listMeetingVocabularyTerms,
+	toRecallTranscriptVocabulary,
+} from "@/lib/recall/vocabulary";
 import { startVideoProcessingWorkflow } from "@/lib/video-processing";
 import { decodeStorageVideo } from "@/lib/video-storage";
 import { runWorkflowPromise } from "@/lib/workflow-runtime";
@@ -81,8 +89,8 @@ async function completeSharedRows(
 		})
 		.where(eq(meetingBots.statusSubCode, sharedSubCode(meetingBotId)));
 
-	if (status === "complete" && videoId) {
-		await sharePrimaryRecordingWithOrganization({ meetingBotId, videoId });
+	if (status === "complete") {
+		await shareMeetingRecordingWithAttendees(meetingBotId);
 	}
 }
 
@@ -214,7 +222,7 @@ async function createVideoRow(meetingBotId: string): Promise<{
 				storageIntegrationId: Option.getOrNull(
 					uploadResult.storageIntegrationId,
 				),
-				public: serverEnv().CAP_VIDEOS_DEFAULT_PUBLIC,
+				public: meetingVideoIsPublic(),
 				transcriptionStatus: "PROCESSING",
 			});
 	}
@@ -360,6 +368,7 @@ async function createTranscript({
 
 	const [row] = await db()
 		.select({
+			orgId: meetingBots.orgId,
 			recallTranscriptId: meetingBots.recallTranscriptId,
 		})
 		.from(meetingBots)
@@ -375,7 +384,26 @@ async function createTranscript({
 
 	const client = getDefaultRecallClient();
 	try {
-		const transcript = await client.createAsyncTranscript(recordingId);
+		let keyTerms: string[] = [];
+		let spelling: { find: string[]; replace: string }[] = [];
+		if (row) {
+			try {
+				const vocabulary = toRecallTranscriptVocabulary(
+					await listMeetingVocabularyTerms(row.orgId),
+				);
+				keyTerms = vocabulary.keyTerms;
+				spelling = vocabulary.spelling;
+			} catch (error) {
+				console.error("[recall] load vocabulary failed", {
+					meetingBotId,
+					error: error instanceof Error ? error.message : "unknown",
+				});
+			}
+		}
+		const transcript = await client.createAsyncTranscript(recordingId, {
+			keyTerms,
+			spelling,
+		});
 		await db()
 			.update(meetingBots)
 			.set({
@@ -523,6 +551,11 @@ export async function importRecallRecordingWorkflow({
 		} catch {
 			console.error("[recall] live capture import failed", { meetingBotId });
 		}
+		try {
+			await shareRecordingWithAttendees(meetingBotId);
+		} catch {
+			console.error("[recall] attendee share failed", { meetingBotId });
+		}
 	} catch (error) {
 		await markImportFailed(meetingBotId, error);
 		throw error instanceof FatalError
@@ -562,7 +595,9 @@ async function writeRecallTranscript({
 	}
 
 	const parts = await client.downloadJson<RecallTranscriptPart[]>(downloadUrl);
-	const vtt = recallTranscriptToVtt(Array.isArray(parts) ? parts : []);
+	const transcriptParts = Array.isArray(parts) ? parts : [];
+	const vtt = recallTranscriptToVtt(transcriptParts);
+	const speakerStats = computeSpeakerStats(transcriptParts);
 
 	const [video] = await db()
 		.select()
@@ -582,9 +617,13 @@ async function writeRecallTranscript({
 		})
 		.pipe(runWorkflowPromise);
 
+	const metadata: VideoMetadata = {
+		...((video.metadata as VideoMetadata) || {}),
+		meetingSpeakerStats: speakerStats,
+	};
 	await db()
 		.update(videos)
-		.set({ transcriptionStatus: "COMPLETE" })
+		.set({ transcriptionStatus: "COMPLETE", metadata })
 		.where(eq(videos.id, row.videoId));
 	await db()
 		.update(meetingBots)
@@ -597,6 +636,13 @@ async function writeRecallTranscript({
 	await completeSharedRows(meetingBotId, row.videoId, "complete");
 
 	await startAiGeneration(row.videoId, row.ownerId);
+}
+
+async function shareRecordingWithAttendees(
+	meetingBotId: string,
+): Promise<void> {
+	"use step";
+	await shareMeetingRecordingWithAttendees(meetingBotId);
 }
 
 async function fallbackToCapTranscription(meetingBotId: string): Promise<void> {

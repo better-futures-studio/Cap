@@ -21,6 +21,7 @@ export function MeetingRecap({
 	date = "",
 	duration = "",
 	summary = "",
+	talkTime = "",
 	actionItems = [],
 	recapMode = "self",
 }: {
@@ -30,6 +31,7 @@ export function MeetingRecap({
 	date: string;
 	duration: string;
 	summary: string;
+	talkTime?: string | null;
 	actionItems: { text: string; owner: string | null; due: string | null }[];
 	recapMode: string;
 }) {
@@ -60,6 +62,9 @@ export function MeetingRecap({
 							Summary
 						</Text>
 						<Text className="text-sm leading-6 text-black">{summary}</Text>
+						{talkTime ? (
+							<Text className="text-sm leading-6 text-black">{talkTime}</Text>
+						) : null}
 						{actionItems.length > 0 ? (
 							<>
 								<Text className="text-sm font-semibold leading-6 text-black">

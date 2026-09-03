@@ -330,6 +330,13 @@
 			"when": 1788476415099,
 			"tag": "0046_past_silver_sable",
 			"breakpoints": true
+		},
+		{
+			"idx": 47,
+			"version": "5",
+			"when": 1788478009040,
+			"tag": "0047_wooden_master_mold",
+			"breakpoints": true
 		}
 	]
 }

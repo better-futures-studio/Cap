@@ -20,6 +20,8 @@ import type {
 } from "./client";
 import { getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
+import { formatTalkTimeLine, parseMeetingSpeakerStats } from "./speaker-stats";
+import { shareMeetingRecordingWithAttendees } from "./visibility";
 
 export type { MeetingRecapMode };
 
@@ -260,6 +262,10 @@ export async function sendMeetingRecap(
 	const actionItems: MeetingActionItem[] = parseMeetingActionItems(
 		metadata.meetingActionItems,
 	);
+	const talkTime = formatTalkTimeLine(
+		parseMeetingSpeakerStats(metadata.meetingSpeakerStats),
+	);
+	await shareMeetingRecordingWithAttendees(meetingBotId, { client });
 
 	try {
 		for (const email of recipients) {
@@ -273,6 +279,7 @@ export async function sendMeetingRecap(
 					date,
 					duration,
 					summary: metadata.summary ?? "",
+					talkTime,
 					actionItems,
 					recapMode: mode,
 				}),

@@ -1867,6 +1867,20 @@ export const meetingPreferences = mysqlTable("meeting_preferences", {
 	updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
 });
 
+export const meetingVocabulary = mysqlTable(
+	"meeting_vocabulary",
+	{
+		id: nanoId("id").notNull().primaryKey(),
+		orgId: nanoId("orgId").notNull().$type<Organisation.OrganisationId>(),
+		term: varchar("term", { length: 255 }).notNull(),
+		spelling: varchar("spelling", { length: 255 }),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+	},
+	(table) => [
+		uniqueIndex("meeting_vocabulary_org_term_idx").on(table.orgId, table.term),
+	],
+);
+
 export const meetingCalendarSeriesRules = mysqlTable(
 	"meeting_calendar_series_rules",
 	{

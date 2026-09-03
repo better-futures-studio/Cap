@@ -335,11 +335,26 @@ export function createRecallClient(
 
 	async function createAsyncTranscript(
 		recordingId: string,
+		options: {
+			keyTerms?: string[];
+			spelling?: { find: string[]; replace: string }[];
+		} = {},
 	): Promise<{ id: string }> {
+		const recallaiAsync: {
+			language_code: string;
+			key_terms?: string[];
+			spelling?: { find: string[]; replace: string }[];
+		} = { language_code: "auto" };
+		if (options.keyTerms && options.keyTerms.length > 0) {
+			recallaiAsync.key_terms = options.keyTerms;
+		}
+		if (options.spelling && options.spelling.length > 0) {
+			recallaiAsync.spelling = options.spelling;
+		}
 		return request(`/api/v1/recording/${recordingId}/create_transcript/`, {
 			method: "POST",
 			body: {
-				provider: { recallai_async: { language_code: "auto" } },
+				provider: { recallai_async: recallaiAsync },
 				diarization: { use_separate_streams_when_available: true },
 			},
 		});

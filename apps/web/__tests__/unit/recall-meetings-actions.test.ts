@@ -93,6 +93,14 @@ vi.mock("@/lib/recall/calendars", () => ({
 vi.mock("@/lib/recall/action-items", () => ({
 	getMeetingActionItems: vi.fn(),
 }));
+vi.mock("@/lib/recall/speaker-stats", () => ({
+	getMeetingSpeakerStats: vi.fn(),
+}));
+vi.mock("@/lib/recall/vocabulary", () => ({
+	listMeetingVocabularyTerms: vi.fn(),
+	addMeetingVocabularyTerm: vi.fn(),
+	removeMeetingVocabularyTerm: vi.fn(),
+}));
 vi.mock("@/lib/recall/recap", () => ({
 	parseRecapMode: (value: unknown) =>
 		value === "off" || value === "self" || value === "attendees"
