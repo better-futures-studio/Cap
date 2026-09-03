@@ -27,10 +27,11 @@ describe("answerLiveMeeting", () => {
 
 			expect(response).toBe("- launch Friday");
 			expect(answer).toHaveBeenCalledTimes(1);
-			const [system, prompt] = answer.mock.calls[0] ?? [];
+			const [system, prompt, options] = answer.mock.calls[0] ?? [];
 			expect(system).toContain("launch Friday");
 			expect(prompt).not.toBe(question);
 			expect(prompt).toMatch(/meeting so far|action items/i);
+			expect(options).toEqual({ webSearch: false });
 		},
 	);
 
@@ -46,6 +47,23 @@ describe("answerLiveMeeting", () => {
 		expect(answer).toHaveBeenCalledWith(
 			expect.stringContaining("Ada: We will launch Friday."),
 			"When is the launch?",
+			{ webSearch: true },
+		);
+	});
+
+	it("allows web search for general questions and keeps the new system prompt", async () => {
+		const answer = vi.fn().mockResolvedValue("Sunny, about 72F.");
+
+		const response = await answerLiveMeeting(
+			{ meetingBotId: "meeting_1", question: "What's the weather in NYC?" },
+			{ readTranscript: async () => transcript, answer },
+		);
+
+		expect(response).toBe("Sunny, about 72F.");
+		expect(answer).toHaveBeenCalledWith(
+			expect.stringContaining("use web search"),
+			"What's the weather in NYC?",
+			{ webSearch: true },
 		);
 	});
 

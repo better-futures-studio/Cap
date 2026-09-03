@@ -1,4 +1,5 @@
-import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { generateText, stepCountIs } from "ai";
 import { runWithAiProviders } from "@/lib/ai/run";
 import { getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
@@ -11,13 +12,24 @@ import {
 
 const MAX_REPLY_CHARS = 600;
 
+const LIVE_MEETING_SYSTEM =
+	"You are Boca Pro Notetaker, a helpful assistant inside a live meeting. Use the transcript below as context when the question is about the meeting. For anything else, answer directly; use web search when the answer depends on current or external information (weather, news, prices, facts you are not sure of). Keep replies under 600 characters, plain text, no markdown, no links unless asked.";
+
+export type ChatAnswerOptions = {
+	webSearch: boolean;
+};
+
 export type ChatAgentDeps = {
 	readTranscript?: (meetingBotId: string) => Promise<LiveTranscript | null>;
 	appendCapture?: (
 		meetingBotId: string,
 		capture: { t: number; speaker: string; text: string },
 	) => Promise<void>;
-	answer?: (system: string, prompt: string) => Promise<string>;
+	answer?: (
+		system: string,
+		prompt: string,
+		options: ChatAnswerOptions,
+	) => Promise<string>;
 	send?: (botId: string, params: { message: string }) => Promise<void>;
 	botName?: string;
 	trigger?: string;
@@ -29,13 +41,28 @@ function clipped(text: string) {
 	return text.trim().slice(0, MAX_REPLY_CHARS);
 }
 
-async function llmAnswer(system: string, prompt: string) {
+async function llmAnswer(
+	system: string,
+	prompt: string,
+	options: ChatAnswerOptions,
+) {
 	return runWithAiProviders("chat", async (selection) => {
+		const useWebSearch = options.webSearch && selection.provider === "openai";
 		const result = await generateText({
 			model: selection.model(),
 			system,
 			prompt,
 			maxOutputTokens: selection.defaultMaxOutputTokens,
+			...(useWebSearch
+				? {
+						tools: {
+							web_search: openai.tools.webSearch({
+								searchContextSize: "low",
+							}),
+						},
+						stopWhen: stepCountIs(3),
+					}
+				: {}),
 		});
 		return result.text;
 	});
@@ -106,12 +133,11 @@ export async function answerLiveMeeting(
 			: /\b(summarize|summary)\b/i.test(prompt)
 				? "Summarize the meeting so far in at most five short bullets."
 				: null;
-	const system =
-		"You are Boca Pro Notetaker, in a live meeting. Answer briefly (max ~600 chars) using only the transcript so far. If the answer is not in the transcript, say so.";
 	return clipped(
 		await (deps.answer ?? llmAnswer)(
-			`${system}\n\nTranscript:\n${transcript}`,
+			`${LIVE_MEETING_SYSTEM}\n\nTranscript:\n${transcript}`,
 			intent ?? prompt,
+			{ webSearch: intent === null },
 		),
 	);
 }

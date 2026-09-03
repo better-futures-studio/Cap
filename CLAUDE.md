@@ -97,7 +97,8 @@ Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
   (same verification secret). Chat messages starting with
   `RECALL_AGENT_TRIGGER` (default `@notetaker`) or naming the bot are answered
   in the meeting chat via Cap's AI provider; "note:" / "action item:" messages
-  become timeline comments after the call. Live view:
+  become timeline comments after the call. General questions use OpenAI web
+  search (Responses API built-in tool). Live view:
   `/dashboard/meetings/<id>`. Zoom, Meet, Teams only (no chat on Webex/Slack).
 - Recall MCP server (`recall-ai`, https://us-west-2.recall.ai/mcp) is
   registered at user scope; use it for bot logs and webhook deliveries.
