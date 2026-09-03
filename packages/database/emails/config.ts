@@ -38,7 +38,8 @@ export const sendEmail = async ({
 }) => {
 	const r = resend();
 	const smtpUrl = serverEnv().SMTP_URL;
-	if (!r && !smtpUrl) {
+	const postmarkToken = serverEnv().POSTMARK_SERVER_TOKEN;
+	if (!r && !smtpUrl && !postmarkToken) {
 		return Promise.resolve();
 	}
 
@@ -50,6 +51,36 @@ export const sendEmail = async ({
 	else if (buildEnv.NEXT_PUBLIC_IS_CAP)
 		from = "Cap Auth <no-reply@auth.cap.so>";
 	else from = `auth@${serverEnv().RESEND_FROM_DOMAIN}`;
+
+	if (!r && postmarkToken) {
+		const html = await render(react);
+		const res = await fetch("https://api.postmarkapp.com/email", {
+			method: "POST",
+			headers: {
+				Accept: "application/json",
+				"Content-Type": "application/json",
+				"X-Postmark-Server-Token": postmarkToken,
+			},
+			body: JSON.stringify({
+				From: from,
+				To: email,
+				Subject: subject,
+				HtmlBody: html,
+				Cc: Array.isArray(cc) ? cc.join(",") : cc,
+				ReplyTo: replyTo,
+				MessageStream: "outbound",
+				Attachments: attachments?.map((a) => ({
+					Name: a.filename,
+					Content: Buffer.from(a.content).toString("base64"),
+					ContentType: a.contentType ?? "application/octet-stream",
+				})),
+			}),
+		});
+		if (!res.ok) {
+			throw new Error(`Postmark ${res.status}: ${await res.text()}`);
+		}
+		return;
+	}
 
 	if (!r) {
 		// ponytail: plain SMTP path for self-hosters without Resend. No

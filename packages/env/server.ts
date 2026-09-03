@@ -32,6 +32,8 @@ function createServerEnv() {
 			// SMTP fallback used when RESEND_API_KEY is unset, e.g. Postmark:
 			// smtp://<server-token>:<server-token>@smtp.postmarkapp.com:587
 			SMTP_URL: z.string().optional(),
+			// Postmark HTTP API (preferred over SMTP_URL; Railway blocks outbound SMTP)
+			POSTMARK_SERVER_TOKEN: z.string().optional(),
 			// Set to "true" to remove email/OTP login and force OAuth (e.g. Google)
 			CAP_DISABLE_EMAIL_LOGIN: z.string().optional(),
 			// Set to "true" to stop users creating additional organizations

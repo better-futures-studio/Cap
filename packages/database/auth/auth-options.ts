@@ -141,7 +141,11 @@ export const authOptions = (ssoContext?: SsoAuthContext): NextAuthOptions => {
 									return crypto.randomInt(100000, 1000000).toString();
 								},
 								async sendVerificationRequest({ identifier, token }) {
-									if (!serverEnv().RESEND_API_KEY && !serverEnv().SMTP_URL) {
+									if (
+										!serverEnv().RESEND_API_KEY &&
+										!serverEnv().SMTP_URL &&
+										!serverEnv().POSTMARK_SERVER_TOKEN
+									) {
 										console.log("\n");
 										console.log(
 											"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
