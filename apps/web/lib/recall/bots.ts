@@ -8,6 +8,7 @@ import {
 } from "@cap/database/schema";
 import type { Organisation, User } from "@cap/web-domain";
 import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { buildJoinChatMessage } from "./bot-chat";
 import { loadBotVideoOutput } from "./bot-image";
 import {
 	RecallApiError,
@@ -207,6 +208,9 @@ export async function scheduleManualMeetingBot(
 			joinAt: scheduledJoinAt.toISOString(),
 			botName,
 			metadata: { cap_meeting_bot_id: id, cap_org_id: orgId },
+			joinChatMessage: buildJoinChatMessage(
+				config ?? { botName, liveAgent: false, agentTrigger: "/nt" },
+			),
 			...(automaticVideoOutput ? { automaticVideoOutput } : {}),
 			...(config ? { recordingConfig: buildLiveRecordingConfig(config) } : {}),
 		});

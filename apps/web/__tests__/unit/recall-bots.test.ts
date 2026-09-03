@@ -258,6 +258,7 @@ describe("scheduleManualMeetingBot", () => {
 				cap_meeting_bot_id: result.id,
 				cap_org_id: orgId,
 			},
+			joinChatMessage: "Boca Pro Notetaker is recording this meeting.",
 		});
 		expect(bots()[0]).toMatchObject({
 			status: "scheduled",

@@ -154,7 +154,7 @@ export async function handleLiveChatMessage(
 ) {
 	const config = deps.botName && deps.trigger ? null : getRecallConfig();
 	const botName = deps.botName ?? config?.botName ?? "Boca Pro Notetaker";
-	const trigger = deps.trigger ?? config?.agentTrigger ?? "@notetaker";
+	const trigger = deps.trigger ?? config?.agentTrigger ?? "/nt";
 	if (input.speaker.trim().toLowerCase() === botName.trim().toLowerCase())
 		return false;
 	if (!isAgentMessage(input.text, trigger, botName)) return false;

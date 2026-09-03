@@ -11,7 +11,7 @@ const config: RecallConfig = {
 	publicBaseUrl: "https://cap.test/",
 	botImageUrl: "https://cap.test/bot.jpg",
 	liveAgent: true,
-	agentTrigger: "@notetaker",
+	agentTrigger: "/nt",
 	calendarGoogle: null,
 };
 

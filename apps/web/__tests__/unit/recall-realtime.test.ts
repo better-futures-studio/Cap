@@ -25,7 +25,7 @@ vi.mock("@/lib/recall/config", () => ({
 	getRecallConfig: () => ({
 		verificationSecret: secret,
 		botName: "Boca Pro Notetaker",
-		agentTrigger: "@notetaker",
+		agentTrigger: "/nt",
 	}),
 }));
 
@@ -175,10 +175,10 @@ describe("handleRealtimeEvent", () => {
 		const answer = vi.fn().mockResolvedValue("Friday.");
 		const send = vi.fn().mockResolvedValue(undefined);
 
-		await handleRealtimeEvent(chatPayload("@NoTeTaKeR when is launch?"), {
+		await handleRealtimeEvent(chatPayload("/Nt when is launch?"), {
 			chatAgent: {
 				botName: "Boca Pro Notetaker",
-				trigger: "@notetaker",
+				trigger: "/nt",
 				readTranscript: async () => ({
 					version: 1,
 					updatedAt: "2026-09-03T00:00:00.000Z",
@@ -202,7 +202,7 @@ describe("handleRealtimeEvent", () => {
 		await handleRealtimeEvent(chatPayload("when is launch?"), {
 			chatAgent: {
 				botName: "Boca Pro Notetaker",
-				trigger: "@notetaker",
+				trigger: "/nt",
 				answer,
 				send,
 			},
@@ -217,11 +217,11 @@ describe("handleRealtimeEvent", () => {
 		const send = vi.fn();
 
 		await handleRealtimeEvent(
-			chatPayload("@notetaker summarize", "Boca Pro Notetaker"),
+			chatPayload("/nt summarize", "Boca Pro Notetaker"),
 			{
 				chatAgent: {
 					botName: "Boca Pro Notetaker",
-					trigger: "@notetaker",
+					trigger: "/nt",
 					answer,
 					send,
 				},
@@ -236,7 +236,7 @@ describe("handleRealtimeEvent", () => {
 		const deferChat = vi.fn();
 		const handleChatMessage = vi.fn();
 
-		await handleRealtimeEvent(chatPayload("@notetaker summarize"), {
+		await handleRealtimeEvent(chatPayload("/nt summarize"), {
 			deferChat,
 			handleChatMessage,
 		});

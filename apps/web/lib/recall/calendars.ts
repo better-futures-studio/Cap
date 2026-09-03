@@ -7,6 +7,7 @@ import {
 } from "@cap/database/schema";
 import type { Organisation, User } from "@cap/web-domain";
 import { and, desc, eq, notInArray } from "drizzle-orm";
+import { buildJoinChatMessage } from "./bot-chat";
 import { loadBotVideoOutput } from "./bot-image";
 import {
 	RecallApiError,
@@ -158,7 +159,7 @@ export async function scheduleCalendarEventBotForRow({
 				chat: {
 					on_bot_join: {
 						send_to: "everyone",
-						message: `This meeting is being recorded by ${config.botName}.`,
+						message: buildJoinChatMessage(config),
 						pin: true,
 					},
 				},

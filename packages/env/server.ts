@@ -186,7 +186,9 @@ function createServerEnv() {
 			RECALL_AGENT_TRIGGER: z
 				.string()
 				.optional()
-				.describe("Chat command that invokes the live meeting agent"),
+				.describe(
+					"Chat command that invokes the live meeting agent (default /nt)",
+				),
 			RECALL_BOT_IMAGE_URL: z
 				.string()
 				.optional()

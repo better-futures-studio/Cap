@@ -76,13 +76,13 @@ describe("answerLiveMeeting", () => {
 			{
 				meetingBotId: "meeting_1",
 				recallBotId: "recall_bot_1",
-				text: "@notetaker note: Follow up with Ada",
+				text: "/nt note: Follow up with Ada",
 				speaker: "Lin",
 				timestamp: 18.5,
 			},
 			{
 				botName: "Boca Pro Notetaker",
-				trigger: "@notetaker",
+				trigger: "/nt",
 				readTranscript: async () => transcript,
 				appendCapture,
 				answer,
@@ -111,13 +111,13 @@ describe("answerLiveMeeting", () => {
 		const input = {
 			meetingBotId: "meeting_1",
 			recallBotId: "recall_bot_1",
-			text: "@notetaker when is launch?",
+			text: "/nt when is launch?",
 			speaker: "Ada",
 			timestamp: 20,
 		};
 		const deps = {
 			botName: "Boca Pro Notetaker",
-			trigger: "@notetaker",
+			trigger: "/nt",
 			readTranscript: async () => transcript,
 			answer,
 			send,

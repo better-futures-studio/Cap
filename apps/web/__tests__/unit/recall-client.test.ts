@@ -11,7 +11,7 @@ const config: RecallConfig = {
 	publicBaseUrl: "https://cap.boca.pro",
 	botImageUrl: "https://cap.boca.pro/meeting-bot/recording.jpg",
 	liveAgent: false,
-	agentTrigger: "@notetaker",
+	agentTrigger: "/nt",
 	calendarGoogle: null,
 };
 
@@ -53,6 +53,7 @@ describe("createRecallClient", () => {
 			joinAt: "2026-01-01T00:00:00.000Z",
 			botName: "Boca Pro Notetaker",
 			metadata: { cap_meeting_bot_id: "mb_1" },
+			joinChatMessage: "Boca Pro Notetaker is recording this meeting.",
 		});
 
 		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -66,7 +67,7 @@ describe("createRecallClient", () => {
 			chat: {
 				on_bot_join: {
 					send_to: "everyone",
-					message: "This meeting is being recorded by Boca Pro Notetaker.",
+					message: "Boca Pro Notetaker is recording this meeting.",
 					pin: true,
 				},
 			},

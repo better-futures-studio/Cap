@@ -265,6 +265,7 @@ export function createRecallClient(
 		joinAt: string;
 		botName: string;
 		metadata: Record<string, unknown>;
+		joinChatMessage: string;
 		automaticVideoOutput?: RecallAutomaticVideoOutput;
 		recordingConfig?: RecordingConfig;
 	}): Promise<{ id: string }> {
@@ -278,7 +279,7 @@ export function createRecallClient(
 				chat: {
 					on_bot_join: {
 						send_to: "everyone",
-						message: "This meeting is being recorded by Boca Pro Notetaker.",
+						message: params.joinChatMessage,
 						pin: true,
 					},
 				},
