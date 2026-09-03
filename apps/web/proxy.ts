@@ -71,7 +71,9 @@ export async function proxy(request: NextRequest) {
 				path.startsWith("/terms") ||
 				path.startsWith("/verify-otp") ||
 				path.startsWith("/embed/") ||
-				path.startsWith("/.well-known/workflow/")
+				path.startsWith("/.well-known/workflow/") ||
+				// static assets in /public (e.g. /google.svg)
+				/\.[a-z0-9]+$/i.test(path)
 			) &&
 			process.env.NODE_ENV !== "development"
 		)
