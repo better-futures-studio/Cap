@@ -799,7 +799,11 @@ export class Videos extends Effect.Service<Videos>()("Videos", {
 					prefix: `${video.ownerId}/${video.id}/`,
 				});
 				const contents = listResponse.Contents || [];
-				const thumbnailKey = findScreenshotObjectKey(contents);
+				// Desktop recordings keep their thumbnail inside the output folder.
+				const thumbnailKey =
+					(video.source.type === "desktopMP4"
+						? video.source.thumbnailKey
+						: undefined) ?? findScreenshotObjectKey(contents);
 				if (!thumbnailKey) return Option.none();
 				const url = yield* bucket.getSignedObjectUrl(thumbnailKey);
 				return Option.some(url);

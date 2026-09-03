@@ -76,7 +76,11 @@ export async function GET(request: NextRequest) {
 			.pipe(runPromise);
 		const contents = listResponse.Contents || [];
 
-		const thumbnailKey = findScreenshotObjectKey(contents);
+		// Desktop recordings keep their thumbnail inside the output folder.
+		const thumbnailKey =
+			(video.source.type === "desktopMP4"
+				? video.source.thumbnailKey
+				: undefined) ?? findScreenshotObjectKey(contents);
 
 		if (!thumbnailKey)
 			return new Response(
