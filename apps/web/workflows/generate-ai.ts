@@ -15,11 +15,11 @@ import { Effect, Option } from "effect";
 import { FatalError } from "workflow";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { AiUnavailableError, runWithAiProviders } from "@/lib/ai/run";
+import { loadCapturedActionItemComments } from "@/lib/recall/action-items";
 import {
-	loadCapturedActionItemComments,
 	mergeMeetingActionItems,
 	parseMeetingActionItems,
-} from "@/lib/recall/action-items";
+} from "@/lib/recall/parse-action-items";
 import { sendMeetingRecap } from "@/lib/recall/recap";
 import { enqueueVideoStorageNameSync } from "@/lib/sync-video-storage-names";
 import { decodeStorageVideo } from "@/lib/video-storage";

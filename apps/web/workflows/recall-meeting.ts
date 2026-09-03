@@ -17,6 +17,7 @@ import { startAiGeneration } from "@/lib/generate-ai";
 import { queueVideoTranscription } from "@/lib/queue-video-transcription";
 import { importMeetingChatComments } from "@/lib/recall/chat-comments";
 import { RecallApiError } from "@/lib/recall/client";
+import { getRecallConfig } from "@/lib/recall/config";
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
 import { readLiveTranscript } from "@/lib/recall/live-transcript";
 import { computeSpeakerStats } from "@/lib/recall/speaker-stats";
@@ -401,6 +402,7 @@ async function createTranscript({
 			}
 		}
 		const transcript = await client.createAsyncTranscript(recordingId, {
+			provider: getRecallConfig()?.transcriptionProvider,
 			keyTerms,
 			spelling,
 		});

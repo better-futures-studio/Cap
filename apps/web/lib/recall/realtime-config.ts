@@ -5,21 +5,34 @@ export function buildLiveRecordingConfig(
 	config: RecallConfig,
 ): RecordingConfig | undefined {
 	if (!config.liveAgent) return undefined;
+	const transcript: RecordingConfig["transcript"] =
+		config.transcriptionProvider === "assemblyai"
+			? {
+					provider: {
+						assembly_ai_v3_streaming: {
+							speech_model: "universal-streaming-multilingual",
+							language_detection: true,
+							format_turns: true,
+						},
+					},
+					diarization: { use_separate_streams_when_available: true },
+				}
+			: {
+					provider: {
+						recallai_streaming: {
+							mode: "prioritize_low_latency",
+							language_code: "en",
+						},
+					},
+					diarization: { use_separate_streams_when_available: true },
+				};
 	return {
 		video_mixed_mp4: {},
 		participant_events: {},
 		meeting_metadata: {},
 		video_mixed_layout: "speaker_view",
 		start_recording_on: "participant_join",
-		transcript: {
-			provider: {
-				recallai_streaming: {
-					mode: "prioritize_low_latency",
-					language_code: "en",
-				},
-			},
-			diarization: { use_separate_streams_when_available: true },
-		},
+		transcript,
 		realtime_endpoints: [
 			{
 				type: "webhook",

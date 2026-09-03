@@ -12,6 +12,7 @@ const config: RecallConfig = {
 	botImageUrl: "https://cap.boca.pro/meeting-bot/recording.jpg",
 	liveAgent: false,
 	agentTrigger: "/nt",
+	transcriptionProvider: "recallai",
 	calendarGoogle: null,
 };
 
@@ -181,6 +182,34 @@ describe("createRecallClient", () => {
 					language_code: "auto",
 					key_terms: ["Boca Pro", "Cap"],
 					spelling: [{ find: ["bokapro"], replace: "Boca Pro" }],
+				},
+			},
+			diarization: { use_separate_streams_when_available: true },
+		});
+	});
+
+	it("maps vocabulary to word_boost and custom_spelling for assemblyai", async () => {
+		const fetchMock = vi.fn(
+			async (_url: RequestInfo | URL, _init?: RequestInit) =>
+				jsonResponse(200, { id: "tr_1" }),
+		);
+		const client = createRecallClient(config, { fetch: fetchMock });
+
+		await client.createAsyncTranscript("rec_1", {
+			provider: "assemblyai",
+			keyTerms: ["Boca Pro", "Cap"],
+			spelling: [{ find: ["bokapro"], replace: "Boca Pro" }],
+		});
+
+		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(JSON.parse(init.body as string)).toEqual({
+			provider: {
+				assembly_ai_async: {
+					speech_models: ["universal-2"],
+					language_detection: true,
+					language_detection_options: { code_switching: true },
+					word_boost: ["Boca Pro", "Cap"],
+					custom_spelling: [{ from: ["bokapro"], to: "Boca Pro" }],
 				},
 			},
 			diarization: { use_separate_streams_when_available: true },

@@ -206,6 +206,13 @@ function createServerEnv() {
 				.describe(
 					"Recall regional callback URL the hosted calendar setup forwarder redirects to",
 				),
+			RECALL_TRANSCRIPTION_PROVIDER: z
+				.union([z.literal("recallai"), z.literal("assemblyai")])
+				.optional()
+				.default("recallai")
+				.describe(
+					"Post-meeting and live transcription provider used through Recall; 'assemblyai' requires the AssemblyAI key to be configured in the Recall dashboard and supports Arabic/English code-switching",
+				),
 
 			/// Tinybird analytics
 			TINYBIRD_HOST: z.string().optional(),

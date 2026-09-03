@@ -12,6 +12,7 @@ const config: RecallConfig = {
 	botImageUrl: "https://cap.test/bot.jpg",
 	liveAgent: true,
 	agentTrigger: "/nt",
+	transcriptionProvider: "recallai",
 	calendarGoogle: null,
 };
 
@@ -47,5 +48,20 @@ describe("buildLiveRecordingConfig", () => {
 		expect(
 			buildLiveRecordingConfig({ ...config, liveAgent: false }),
 		).toBeUndefined();
+	});
+
+	it("uses AssemblyAI streaming when the transcription provider is assemblyai", () => {
+		expect(
+			buildLiveRecordingConfig({
+				...config,
+				transcriptionProvider: "assemblyai",
+			})?.transcript.provider,
+		).toEqual({
+			assembly_ai_v3_streaming: {
+				speech_model: "universal-streaming-multilingual",
+				language_detection: true,
+				format_turns: true,
+			},
+		});
 	});
 });

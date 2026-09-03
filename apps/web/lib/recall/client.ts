@@ -1,4 +1,4 @@
-import type { RecallConfig } from "./config";
+import type { RecallConfig, RecallTranscriptionProvider } from "./config";
 
 const MAX_ATTEMPTS = 6;
 const MAX_CALENDAR_EVENT_PAGES = 20;
@@ -149,12 +149,20 @@ export type RecordingConfig = {
 	video_mixed_layout: "speaker_view";
 	start_recording_on: "participant_join";
 	transcript: {
-		provider: {
-			recallai_streaming: {
-				mode: "prioritize_low_latency";
-				language_code: "en";
-			};
-		};
+		provider:
+			| {
+					recallai_streaming: {
+						mode: "prioritize_low_latency";
+						language_code: "en";
+					};
+			  }
+			| {
+					assembly_ai_v3_streaming: {
+						speech_model: "universal-streaming-multilingual";
+						language_detection: true;
+						format_turns: true;
+					};
+			  };
 		diarization: { use_separate_streams_when_available: true };
 	};
 	realtime_endpoints: {
@@ -336,25 +344,42 @@ export function createRecallClient(
 	async function createAsyncTranscript(
 		recordingId: string,
 		options: {
+			provider?: RecallTranscriptionProvider;
 			keyTerms?: string[];
 			spelling?: { find: string[]; replace: string }[];
 		} = {},
 	): Promise<{ id: string }> {
-		const recallaiAsync: {
-			language_code: string;
-			key_terms?: string[];
-			spelling?: { find: string[]; replace: string }[];
-		} = { language_code: "auto" };
-		if (options.keyTerms && options.keyTerms.length > 0) {
-			recallaiAsync.key_terms = options.keyTerms;
-		}
-		if (options.spelling && options.spelling.length > 0) {
-			recallaiAsync.spelling = options.spelling;
-		}
+		const keyTerms = options.keyTerms ?? [];
+		const spelling = options.spelling ?? [];
+		const provider =
+			options.provider === "assemblyai"
+				? {
+						assembly_ai_async: {
+							speech_models: ["universal-2"],
+							language_detection: true,
+							language_detection_options: { code_switching: true },
+							...(keyTerms.length > 0 ? { word_boost: keyTerms } : {}),
+							...(spelling.length > 0
+								? {
+										custom_spelling: spelling.map((entry) => ({
+											from: entry.find,
+											to: entry.replace,
+										})),
+									}
+								: {}),
+						},
+					}
+				: {
+						recallai_async: {
+							language_code: "auto",
+							...(keyTerms.length > 0 ? { key_terms: keyTerms } : {}),
+							...(spelling.length > 0 ? { spelling } : {}),
+						},
+					};
 		return request(`/api/v1/recording/${recordingId}/create_transcript/`, {
 			method: "POST",
 			body: {
-				provider: { recallai_async: recallaiAsync },
+				provider,
 				diarization: { use_separate_streams_when_available: true },
 			},
 		});

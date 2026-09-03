@@ -92,6 +92,13 @@ Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
   `calendar.update`, `calendar.sync_events`,
   `slack_team.invited|active|access_revoked`. Verified with the workspace
   verification secret; duplicate `webhook-id`s are ignored.
+- Transcription provider (default `recallai`): set
+  `RECALL_TRANSCRIPTION_PROVIDER=assemblyai` to use AssemblyAI through Recall
+  for post-meeting (`assembly_ai_async`) and live
+  (`assembly_ai_v3_streaming`) transcripts. Requires the AssemblyAI key on
+  the Recall dashboard Transcription page (us-west-2, US hosts); supports
+  English/Arabic code-switching. `transcript.failed` still falls back to
+  Cap's own AssemblyAI pipeline.
 - In-call agent (off by default): set `RECALL_LIVE_AGENT=true` to create bots
   with real-time transcription streamed to `/api/webhooks/recall/realtime`
   (same verification secret). Chat messages starting with

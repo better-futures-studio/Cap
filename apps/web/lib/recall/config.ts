@@ -5,6 +5,8 @@ type ServerEnv = ReturnType<typeof serverEnv>;
 const DEFAULT_REGION = "us-west-2";
 const DEFAULT_BOT_NAME = "Boca Pro Notetaker";
 
+export type RecallTranscriptionProvider = "recallai" | "assemblyai";
+
 export type RecallConfig = {
 	apiKey: string;
 	region: string;
@@ -15,6 +17,7 @@ export type RecallConfig = {
 	botImageUrl: string;
 	liveAgent: boolean;
 	agentTrigger: string;
+	transcriptionProvider: RecallTranscriptionProvider;
 	calendarGoogle: { clientId: string; clientSecret: string } | null;
 };
 
@@ -37,6 +40,10 @@ export function getRecallConfig(
 			`${env.WEB_URL.replace(/\/$/, "")}/meeting-bot/recording.jpg`,
 		liveAgent: env.RECALL_LIVE_AGENT,
 		agentTrigger: env.RECALL_AGENT_TRIGGER || "/nt",
+		transcriptionProvider:
+			env.RECALL_TRANSCRIPTION_PROVIDER === "assemblyai"
+				? "assemblyai"
+				: "recallai",
 		calendarGoogle:
 			env.RECALL_CALENDAR_GOOGLE_CLIENT_ID &&
 			env.RECALL_CALENDAR_GOOGLE_CLIENT_SECRET
