@@ -1,4 +1,6 @@
+import type { MeetingActionItem } from "@cap/database/types";
 import ReactMarkdown from "react-markdown";
+import ActionItems from "./ActionItems";
 import { formatTimeMinutes } from "./utils/transcript-utils";
 
 type AiGenerationStatus =
@@ -24,6 +26,7 @@ interface SummaryChaptersProps {
 		aiGenerationStatus: AiGenerationStatus | null;
 	};
 	aiLoading: boolean;
+	actionItems?: MeetingActionItem[];
 }
 
 const SummaryChapters = ({
@@ -32,14 +35,17 @@ const SummaryChapters = ({
 	handleSeek,
 	aiData,
 	aiLoading,
+	actionItems = [],
 }: SummaryChaptersProps) => {
 	const hasSummary = !isSummaryDisabled && !!aiData?.summary;
 	const hasChapters =
 		!areChaptersDisabled &&
 		Array.isArray(aiData?.chapters) &&
 		aiData.chapters.length > 0;
+	const hasActionItems = actionItems.length > 0;
 
-	if (aiLoading || (!hasSummary && !hasChapters)) return null;
+	if (aiLoading || (!hasSummary && !hasChapters && !hasActionItems))
+		return null;
 
 	return (
 		<div className="p-4 bg-white rounded-2xl border border-gray-3">
@@ -75,6 +81,13 @@ const SummaryChapters = ({
 						))}
 					</div>
 				</div>
+			)}
+
+			{hasActionItems && (
+				<ActionItems
+					items={actionItems}
+					className={hasSummary || hasChapters ? "mt-6" : ""}
+				/>
 			)}
 		</div>
 	);

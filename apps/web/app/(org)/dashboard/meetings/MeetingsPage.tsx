@@ -1,7 +1,7 @@
 "use client";
 
-import type { MeetingBotStatus } from "@cap/database/schema";
-import { Button, Input, Switch } from "@cap/ui";
+import type { MeetingBotStatus, MeetingRecapMode } from "@cap/database/schema";
+import { Button, Input, Select, Switch } from "@cap/ui";
 import { classNames } from "@cap/utils";
 import type { Organisation } from "@cap/web-domain";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,8 @@ import {
 	type listMeetingBots,
 	scheduleMeetingBot,
 	setCalendarAutoRecordAction,
+	setCalendarSeriesRuleAction,
+	setMeetingPreferences,
 	toggleCalendarEventRecordingAction,
 } from "@/actions/meetings";
 import {
@@ -250,6 +252,59 @@ function CalendarStrip({
 	);
 }
 
+const RECAP_MODE_OPTIONS: { value: MeetingRecapMode; label: string }[] = [
+	{ value: "off", label: "Off" },
+	{ value: "self", label: "Just me" },
+	{ value: "attendees", label: "Me + attendees" },
+];
+
+function RecapPreference({
+	orgId,
+	initialRecapMode,
+}: {
+	orgId: Organisation.OrganisationId;
+	initialRecapMode: MeetingRecapMode;
+}) {
+	const [recapMode, setRecapMode] = useState(initialRecapMode);
+	const [isPending, startTransition] = useTransition();
+
+	const save = (mode: MeetingRecapMode) => {
+		const previous = recapMode;
+		setRecapMode(mode);
+		startTransition(async () => {
+			try {
+				await setMeetingPreferences({ orgId, recapMode: mode });
+				toast.success("Recap preference saved");
+			} catch (error) {
+				setRecapMode(previous);
+				toast.error(
+					error instanceof Error ? error.message : "Failed to save preference",
+				);
+			}
+		});
+	};
+
+	return (
+		<div className="flex flex-col gap-1">
+			<div className="flex items-center gap-3">
+				<span className="text-xs font-medium text-gray-12">Recap email</span>
+				<Select
+					size="sm"
+					value={recapMode}
+					onValueChange={(value) => save(value as MeetingRecapMode)}
+					disabled={isPending}
+					options={RECAP_MODE_OPTIONS}
+					placeholder="Recap email"
+				/>
+			</div>
+			<p className="text-xs text-gray-10">
+				Sent after the summary is ready. "Me + attendees" emails everyone on the
+				calendar invite.
+			</p>
+		</div>
+	);
+}
+
 function SlackStrip({ status }: { status: SlackHuddleStatus }) {
 	if (status) {
 		return (
@@ -307,6 +362,31 @@ function UpcomingCalendarRow({
 		});
 	};
 
+	const setSeriesRule = (record: boolean) => {
+		startTransition(async () => {
+			try {
+				await setCalendarSeriesRuleAction({
+					orgId,
+					calendarRowId,
+					eventId: event.id,
+					record,
+				});
+				toast.success(
+					record
+						? "Recording every occurrence"
+						: "Stopped recording the series",
+				);
+				router.refresh();
+			} catch (error) {
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to update the series",
+				);
+			}
+		});
+	};
+
 	return (
 		<div className="flex items-center gap-3 py-2">
 			<span className="w-20 shrink-0 text-xs text-gray-10">
@@ -318,6 +398,23 @@ function UpcomingCalendarRow({
 				</p>
 				<p className="text-xs text-gray-10">{meetingPlatformLabel(url)}</p>
 			</div>
+			{event.seriesKey && (
+				<div className="flex shrink-0 items-center gap-1.5">
+					{event.seriesRule !== null && (
+						<span className="text-xs text-gray-9">
+							Series: {event.seriesRule ? "on" : "off"}
+						</span>
+					)}
+					<button
+						type="button"
+						className="text-xs text-gray-10 hover:underline disabled:opacity-50"
+						disabled={isPending}
+						onClick={() => setSeriesRule(!event.seriesRule)}
+					>
+						All in series
+					</button>
+				</div>
+			)}
 			<label
 				htmlFor={recordId}
 				className="flex shrink-0 items-center gap-2 text-xs text-gray-10"
@@ -552,6 +649,7 @@ export function MeetingsPage({
 	initialPastBots,
 	calendarSettings,
 	slackHuddleStatus,
+	initialRecapMode,
 	result,
 }: {
 	orgId: Organisation.OrganisationId;
@@ -559,6 +657,7 @@ export function MeetingsPage({
 	initialPastBots: MeetingBotRow[];
 	calendarSettings: CalendarSettings;
 	slackHuddleStatus: SlackHuddleStatus;
+	initialRecapMode: MeetingRecapMode;
 	result?: string;
 }) {
 	const router = useRouter();
@@ -603,6 +702,7 @@ export function MeetingsPage({
 				</p>
 			)}
 			<CalendarStrip orgId={orgId} settings={calendarSettings} />
+			<RecapPreference orgId={orgId} initialRecapMode={initialRecapMode} />
 			<SlackStrip status={slackHuddleStatus} />
 			<UpcomingSection
 				orgId={orgId}

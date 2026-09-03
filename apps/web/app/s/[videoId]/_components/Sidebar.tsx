@@ -220,6 +220,7 @@ export const Sidebar = forwardRef<{ scrollToBottom: () => void }, SidebarProps>(
 							isSummaryDisabled={videoSettings?.disableSummary}
 							initialAiData={aiData || undefined}
 							aiGenerationEnabled={aiGenerationEnabled}
+							actionItems={data.metadata?.meetingActionItems}
 						/>
 					);
 				case "transcript":

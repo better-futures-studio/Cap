@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import {
 	getMeetingCalendarSettings,
+	getMeetingPreferences,
 	getSlackHuddleStatus,
 	listMeetingBots,
 } from "@/actions/meetings";
@@ -27,11 +28,13 @@ export default async function Page({
 		redirect("/dashboard/caps");
 	}
 
-	const [bots, calendarSettings, slackHuddleStatus] = await Promise.all([
-		listMeetingBots({ orgId: user.activeOrganizationId }),
-		getMeetingCalendarSettings({ orgId: user.activeOrganizationId }),
-		getSlackHuddleStatus({ orgId: user.activeOrganizationId }),
-	]);
+	const [bots, calendarSettings, slackHuddleStatus, meetingPreferences] =
+		await Promise.all([
+			listMeetingBots({ orgId: user.activeOrganizationId }),
+			getMeetingCalendarSettings({ orgId: user.activeOrganizationId }),
+			getSlackHuddleStatus({ orgId: user.activeOrganizationId }),
+			getMeetingPreferences({ orgId: user.activeOrganizationId }),
+		]);
 	const { calendar } = await searchParams;
 
 	return (
@@ -41,6 +44,7 @@ export default async function Page({
 			initialPastBots={bots.past}
 			calendarSettings={calendarSettings}
 			slackHuddleStatus={slackHuddleStatus}
+			initialRecapMode={meetingPreferences.recapMode}
 			result={calendar}
 		/>
 	);

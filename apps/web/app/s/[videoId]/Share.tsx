@@ -1112,13 +1112,16 @@ export const Share = ({
 													!aiLoading &&
 													((!isSummaryDisabled && Boolean(aiData.summary)) ||
 														(!areChaptersDisabled &&
-															(aiData.chapters?.length ?? 0) > 0)) && (
+															(aiData.chapters?.length ?? 0) > 0) ||
+														(data.metadata?.meetingActionItems?.length ?? 0) >
+															0) && (
 														<SummaryChapters
 															isSummaryDisabled={isSummaryDisabled}
 															areChaptersDisabled={areChaptersDisabled}
 															handleSeek={handleSeek}
 															aiData={aiData}
 															aiLoading={aiLoading}
+															actionItems={data.metadata?.meetingActionItems}
 														/>
 													)}
 											</motion.div>

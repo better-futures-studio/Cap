@@ -1,5 +1,6 @@
 "use client";
 
+import type { MeetingActionItem } from "@cap/database/types";
 import { Button } from "@cap/ui";
 import type { Video } from "@cap/web-domain";
 import {
@@ -9,6 +10,7 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import ActionItems from "../ActionItems";
 
 type AiGenerationStatus =
 	| "QUEUED"
@@ -34,6 +36,7 @@ interface SummaryProps {
 	aiGenerationEnabled?: boolean;
 	isSummaryDisabled?: boolean;
 	ownerIsPro: boolean;
+	actionItems?: MeetingActionItem[];
 }
 
 const formatTime = (time: number) => {
@@ -79,6 +82,7 @@ export const Summary: React.FC<SummaryProps> = ({
 	isSummaryDisabled = false,
 	aiGenerationEnabled = false,
 	ownerIsPro,
+	actionItems = [],
 }) => {
 	const [isRetrying, setIsRetrying] = useState(false);
 	const [retryError, setRetryError] = useState<string | null>(null);
@@ -182,7 +186,11 @@ export const Summary: React.FC<SummaryProps> = ({
 		);
 	}
 
-	if (!aiData?.summary && !aiData?.chapters?.length) {
+	if (
+		!aiData?.summary &&
+		!aiData?.chapters?.length &&
+		actionItems.length === 0
+	) {
 		return (
 			<div className="flex flex-col justify-center items-center p-8 h-full text-center">
 				<FontAwesomeIcon
@@ -264,6 +272,15 @@ export const Summary: React.FC<SummaryProps> = ({
 								))}
 							</div>
 						</div>
+					)}
+
+					{actionItems.length > 0 && (
+						<ActionItems
+							items={actionItems}
+							className={
+								aiData?.summary || aiData?.chapters?.length ? "mt-6" : ""
+							}
+						/>
 					)}
 				</div>
 			</div>
