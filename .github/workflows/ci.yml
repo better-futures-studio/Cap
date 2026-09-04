@@ -40,7 +40,6 @@ jobs:
               - 'apps/desktop/**'
               - 'apps/desktop-gpui/**'
               - 'crates/**'
-              - 'packages/database/**'
               - 'packages/ui-solid/**'
               - 'packages/utils/**'
               - 'packages/web-api-contract/**'
@@ -56,7 +55,6 @@ jobs:
               - 'pnpm-lock.yaml'
             rust:
               - '.cargo/**'
-              - '.github/**'
               - 'apps/cli/**'
               - 'apps/desktop-gpui/**'
               - 'crates/**'
