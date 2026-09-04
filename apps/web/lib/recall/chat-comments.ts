@@ -183,27 +183,35 @@ export async function importMeetingChatComments(
 			return true;
 		});
 
-		const values = [
+		const ordered = [
 			...chatEvents.map((event) => ({
-				id: Comment.CommentId.make(nanoId()),
-				type: "text" as const,
 				content: formatChatContent(event, botName, agentTrigger),
 				timestamp: roundedTimestamp(event.timestamp.relative),
-				authorId: row.ownerId,
-				videoId,
+				fromBot: false,
 			})),
 			...liveBotReplies.map((entry) => ({
-				id: Comment.CommentId.make(nanoId()),
-				type: "text" as const,
 				content: `${botName}: ${entry.text.trim()}`.slice(
 					0,
 					MAX_COMMENT_CONTENT,
 				),
 				timestamp: roundedTimestamp(entry.t),
-				authorId: row.ownerId,
-				videoId,
+				fromBot: true,
 			})),
-		];
+		].sort(
+			(left, right) =>
+				left.timestamp - right.timestamp ||
+				Number(left.fromBot) - Number(right.fromBot),
+		);
+		const base = (row.joinAt ?? row.createdAt).getTime();
+		const values = ordered.map((entry, index) => ({
+			id: Comment.CommentId.make(nanoId()),
+			type: "text" as const,
+			content: entry.content,
+			timestamp: entry.timestamp,
+			authorId: row.ownerId,
+			videoId,
+			createdAt: new Date(base + entry.timestamp * 1000 + index),
+		}));
 
 		if (values.length === 0) {
 			return { imported: 0, skipped: false };
