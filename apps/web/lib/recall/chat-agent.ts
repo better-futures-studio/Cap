@@ -79,6 +79,10 @@ async function llmAnswer(
 	});
 }
 
+export function isCapturePrompt(text: string) {
+	return /^(note|action item)\s*:/i.test(text.trim());
+}
+
 export function isAgentMessage(text: string, trigger: string, botName: string) {
 	const normalized = text.trim().toLowerCase();
 	const normalizedTrigger = trigger.trim().toLowerCase();
@@ -163,7 +167,7 @@ export async function answerLiveMeeting(
 	const context = liveContextAsText(document, CONTEXT_CHARS);
 	const prompt = question.trim();
 	const lower = prompt.toLowerCase();
-	if (/^(note|action item)\s*:/i.test(prompt)) {
+	if (isCapturePrompt(prompt)) {
 		const label = lower.startsWith("action item:") ? "Action item" : "Note";
 		const text = prompt.replace(/^(note|action item)\s*:\s*/i, "").trim();
 		if (!text) return "Please include the note text.";

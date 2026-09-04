@@ -283,14 +283,14 @@ export const Sidebar = forwardRef<{ scrollToBottom: () => void }, SidebarProps>(
 									onPointerEnter={() => prefetchTab(tab.id)}
 									onFocus={() => prefetchTab(tab.id)}
 									className={classNames(
-										"flex-1 px-5 py-3 text-sm font-medium relative transition-colors duration-200",
+										"flex-1 min-w-0 shrink px-2 py-3 text-sm font-medium relative transition-colors duration-200",
 										"hover:bg-gray-1",
 										activeTab === tab.id ? "bg-gray-3" : "",
 									)}
 								>
 									<span
 										className={classNames(
-											"relative z-10 text-sm",
+											"relative z-10 text-sm truncate block",
 											activeTab === tab.id ? "text-gray-12" : "text-gray-9",
 										)}
 									>

@@ -3,6 +3,8 @@ import { nanoId } from "@cap/database/helpers";
 import { comments, meetingBots } from "@cap/database/schema";
 import { Comment } from "@cap/web-domain";
 import { and, eq, isNull } from "drizzle-orm";
+import { buildJoinChatMessage } from "./bot-chat";
+import { isCapturePrompt, messageWithoutInvocation } from "./chat-agent";
 import {
 	RecallApiError,
 	type RecallClient,
@@ -28,6 +30,59 @@ function isAgentCommand(text: string, trigger: string): boolean {
 	return text.trim().toLowerCase().startsWith(normalizedTrigger);
 }
 
+function stripTrigger(text: string, trigger: string): string {
+	const normalizedTrigger = trigger.trim();
+	if (!normalizedTrigger) return text.trim();
+	const trimmed = text.trim();
+	if (!trimmed.toLowerCase().startsWith(normalizedTrigger.toLowerCase())) {
+		return trimmed;
+	}
+	return trimmed.slice(normalizedTrigger.length).trim();
+}
+
+function joinMessagePrefix(botName: string): string {
+	return buildJoinChatMessage({
+		botName,
+		liveAgent: false,
+		agentTrigger: "",
+	});
+}
+
+function isJoinMessage(text: string, botName: string): boolean {
+	const prefix = joinMessagePrefix(botName);
+	const trimmed = text.trim();
+	const firstLine = trimmed.split(/\r?\n/)[0]?.trim() ?? "";
+	return firstLine === prefix || trimmed.startsWith(prefix);
+}
+
+function isCaptureCommand(
+	text: string,
+	trigger: string,
+	botName: string,
+): boolean {
+	if (!isAgentCommand(text, trigger)) return false;
+	return isCapturePrompt(messageWithoutInvocation(text, trigger, botName));
+}
+
+function formatChatContent(
+	event: RecallParticipantEvent & { data: { text: string; to: string } },
+	botName: string,
+	trigger: string,
+): string {
+	const text = event.data.text.trim();
+	const name = event.participant.name?.trim() || "Participant";
+	if (name === botName) {
+		return `${botName}: ${text}`.slice(0, MAX_COMMENT_CONTENT);
+	}
+	if (isAgentCommand(text, trigger)) {
+		return `${name} (to ${botName}): ${stripTrigger(text, trigger)}`.slice(
+			0,
+			MAX_COMMENT_CONTENT,
+		);
+	}
+	return `${name}: ${text}`.slice(0, MAX_COMMENT_CONTENT);
+}
+
 function isChatEvent(
 	event: RecallParticipantEvent,
 	botName: string,
@@ -38,8 +93,8 @@ function isChatEvent(
 	if (!text) return false;
 	const relative = event.timestamp?.relative;
 	if (!Number.isFinite(relative) || relative < 0) return false;
-	if (event.participant?.name === botName) return false;
-	return !isAgentCommand(text, trigger);
+	if (event.participant?.name === botName) return !isJoinMessage(text, botName);
+	return !isCaptureCommand(text, trigger, botName);
 }
 
 export async function importMeetingChatComments(
@@ -96,12 +151,7 @@ export async function importMeetingChatComments(
 			.insert(comments)
 			.values(
 				chatEvents.map((event) => {
-					const text = event.data.text.trim();
-					const content =
-						`${event.participant.name?.trim() || "Participant"}: ${text}`.slice(
-							0,
-							MAX_COMMENT_CONTENT,
-						);
+					const content = formatChatContent(event, botName, agentTrigger);
 					return {
 						id: Comment.CommentId.make(nanoId()),
 						type: "text" as const,

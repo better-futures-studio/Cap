@@ -1,11 +1,29 @@
 import type { User, Video } from "@cap/web-domain";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildJoinChatMessage } from "@/lib/recall/bot-chat";
 import { importMeetingChatComments } from "@/lib/recall/chat-comments";
 import {
 	RecallApiError,
 	type RecallClient,
 	type RecallParticipantEvent,
 } from "@/lib/recall/client";
+
+const botName = "Meeting Notetaker";
+const agentTrigger = "/nt";
+const joinMessage = buildJoinChatMessage({
+	botName,
+	liveAgent: true,
+	agentTrigger,
+});
+
+function botParticipant() {
+	return {
+		id: 99,
+		name: botName,
+		is_host: false,
+		email: null,
+	};
+}
 
 const mocks = vi.hoisted(() => ({ db: vi.fn() }));
 vi.mock("@cap/database", () => ({ db: mocks.db }));
@@ -254,14 +272,19 @@ describe("importMeetingChatComments", () => {
 				id: "bot_pin",
 				action: "chat_message",
 				timestamp: { absolute: "2026-09-03T16:00:01.000Z", relative: 1 },
-				participant: {
-					id: 99,
-					name: "Meeting Notetaker",
-					is_host: false,
-					email: null,
-				},
+				participant: botParticipant(),
 				data: {
-					text: "This meeting is being recorded by Meeting Notetaker.",
+					text: joinMessage,
+					to: "everyone",
+				},
+			}),
+			participantEvent({
+				id: "bot_reply",
+				action: "chat_message",
+				timestamp: { absolute: "2026-09-03T16:00:30.000Z", relative: 30 },
+				participant: botParticipant(),
+				data: {
+					text: "The launch is Friday.",
 					to: "everyone",
 				},
 			}),
@@ -299,13 +322,20 @@ describe("importMeetingChatComments", () => {
 			{ client },
 		);
 
-		expect(result).toEqual({ imported: 2, skipped: false });
+		expect(result).toEqual({ imported: 3, skipped: false });
 		expect(bots()[0]?.chatSyncedAt).toBeInstanceOf(Date);
 		expect(commentRows()).toEqual([
 			expect.objectContaining({
 				type: "text",
 				content: "Alice: hello team",
 				timestamp: 12.346,
+				authorId: ownerId,
+				videoId,
+			}),
+			expect.objectContaining({
+				type: "text",
+				content: `${botName}: The launch is Friday.`,
+				timestamp: 30,
 				authorId: ownerId,
 				videoId,
 			}),
@@ -323,13 +353,25 @@ describe("importMeetingChatComments", () => {
 		);
 	});
 
-	it("skips agent commands and keeps a plain chat message", async () => {
+	it("imports agent questions, skips captures, and keeps a plain chat message", async () => {
 		seedBot();
 		const events: RecallParticipantEvent[] = [
 			participantEvent({
 				id: "command",
 				action: "chat_message",
 				data: { text: "  /NT what did we decide?  ", to: "everyone" },
+			}),
+			participantEvent({
+				id: "note",
+				action: "chat_message",
+				timestamp: { absolute: "2026-09-03T16:00:15.000Z", relative: 15 },
+				data: { text: "/nt note: Follow up with Ada", to: "everyone" },
+			}),
+			participantEvent({
+				id: "action",
+				action: "chat_message",
+				timestamp: { absolute: "2026-09-03T16:00:16.000Z", relative: 16 },
+				data: { text: "/nt action item: Ship the recap", to: "everyone" },
 			}),
 			participantEvent({
 				id: "plain",
@@ -347,8 +389,15 @@ describe("importMeetingChatComments", () => {
 			{ client },
 		);
 
-		expect(result).toEqual({ imported: 1, skipped: false });
+		expect(result).toEqual({ imported: 2, skipped: false });
 		expect(commentRows()).toEqual([
+			expect.objectContaining({
+				type: "text",
+				content: `Alice (to ${botName}): what did we decide?`,
+				timestamp: 10,
+				authorId: ownerId,
+				videoId,
+			}),
 			expect.objectContaining({
 				type: "text",
 				content: "Alice: shipping tomorrow",
