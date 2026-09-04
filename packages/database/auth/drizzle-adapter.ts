@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { serverEnv } from "@cap/env";
 import { isProSubscription, STRIPE_AVAILABLE, stripe } from "@cap/utils";
 import { type ImageUpload, Organisation, User } from "@cap/web-domain";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import type { Adapter } from "next-auth/adapters";
 import type Stripe from "stripe";
@@ -333,7 +333,13 @@ export function DrizzleAdapter(
 			return row;
 		},
 		async deleteUser(userId) {
-			await db.delete(users).where(eq(users.id, User.UserId.make(userId)));
+			await db
+				.update(users)
+				.set({
+					disabledAt: new Date(),
+					authSessionVersion: sql`${users.authSessionVersion} + 1`,
+				})
+				.where(eq(users.id, User.UserId.make(userId)));
 		},
 		async linkAccount(account: LinkAccountData) {
 			if (account.provider === "workos") {

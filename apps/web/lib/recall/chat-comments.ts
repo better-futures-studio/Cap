@@ -1,8 +1,14 @@
 import { db } from "@cap/database";
 import { nanoId } from "@cap/database/helpers";
-import { comments, meetingBots } from "@cap/database/schema";
-import { Comment } from "@cap/web-domain";
+import {
+	comments,
+	meetingBots,
+	organizationMembers,
+	users,
+} from "@cap/database/schema";
+import { Comment, type User } from "@cap/web-domain";
 import { and, eq, isNull } from "drizzle-orm";
+import { getOrCreateSystemUser } from "../system-users";
 import { buildJoinChatMessage } from "./bot-chat";
 import { isCapturePrompt, messageWithoutInvocation } from "./chat-agent";
 import {
@@ -66,23 +72,60 @@ function isCaptureCommand(
 	return isCapturePrompt(messageWithoutInvocation(text, trigger, botName));
 }
 
-function formatChatContent(
-	event: RecallParticipantEvent & { data: { text: string; to: string } },
-	botName: string,
-	trigger: string,
-): string {
-	const text = event.data.text.trim();
-	const name = event.participant.name?.trim() || "Participant";
-	if (name === botName) {
-		return `${botName}: ${text}`.slice(0, MAX_COMMENT_CONTENT);
+type OrgMember = {
+	id: User.UserId;
+	name: string | null;
+	email: string;
+};
+
+function matchOrgMember(
+	participant: { name: string | null; email: string | null },
+	members: OrgMember[],
+): OrgMember | null {
+	const email = participant.email?.trim().toLowerCase();
+	if (email) {
+		const byEmail = members.find(
+			(member) => member.email.trim().toLowerCase() === email,
+		);
+		if (byEmail) return byEmail;
 	}
-	if (isAgentCommand(text, trigger)) {
-		return `${name} (to ${botName}): ${stripTrigger(text, trigger)}`.slice(
+	const name = participant.name?.trim().toLowerCase();
+	if (!name) return null;
+	return (
+		members.find(
+			(member) => (member.name ?? "").trim().toLowerCase() === name,
+		) ?? null
+	);
+}
+
+function formatHumanChatContent({
+	text,
+	displayName,
+	matched,
+	botName,
+	trigger,
+}: {
+	text: string;
+	displayName: string;
+	matched: boolean;
+	botName: string;
+	trigger: string;
+}): string {
+	const body = text.trim();
+	if (isAgentCommand(body, trigger)) {
+		const stripped = stripTrigger(body, trigger);
+		if (matched) {
+			return `(to ${botName}) ${stripped}`.slice(0, MAX_COMMENT_CONTENT);
+		}
+		return `${displayName} (to ${botName}): ${stripped}`.slice(
 			0,
 			MAX_COMMENT_CONTENT,
 		);
 	}
-	return `${name}: ${text}`.slice(0, MAX_COMMENT_CONTENT);
+	if (matched) {
+		return body.slice(0, MAX_COMMENT_CONTENT);
+	}
+	return `${displayName}: ${body}`.slice(0, MAX_COMMENT_CONTENT);
 }
 
 function isChatEvent(
@@ -159,6 +202,28 @@ export async function importMeetingChatComments(
 		const config = getRecallConfig();
 		const botName = deps.botName ?? config?.botName ?? DEFAULT_BOT_NAME;
 		const agentTrigger = deps.agentTrigger ?? config?.agentTrigger ?? "/nt";
+		const [notetaker, external, orgMembers] = await Promise.all([
+			getOrCreateSystemUser({ orgId: row.orgId, kind: "notetaker" }),
+			getOrCreateSystemUser({ orgId: row.orgId, kind: "external" }),
+			db()
+				.select({
+					id: users.id,
+					name: users.name,
+					email: users.email,
+				})
+				.from(users)
+				.innerJoin(
+					organizationMembers,
+					eq(organizationMembers.userId, users.id),
+				)
+				.where(
+					and(
+						eq(organizationMembers.organizationId, row.orgId),
+						isNull(users.systemKind),
+					),
+				)
+				.limit(500),
+		]);
 		const chatEvents = (Array.isArray(events) ? events : []).filter((event) =>
 			isChatEvent(event, botName, agentTrigger),
 		);
@@ -184,18 +249,36 @@ export async function importMeetingChatComments(
 		});
 
 		const ordered = [
-			...chatEvents.map((event) => ({
-				content: formatChatContent(event, botName, agentTrigger),
-				timestamp: roundedTimestamp(event.timestamp.relative),
-				fromBot: false,
-			})),
+			...chatEvents.map((event) => {
+				const text = event.data.text.trim();
+				if (event.participant.name === botName) {
+					return {
+						content: text.slice(0, MAX_COMMENT_CONTENT),
+						timestamp: roundedTimestamp(event.timestamp.relative),
+						fromBot: false,
+						authorId: notetaker.id,
+					};
+				}
+				const member = matchOrgMember(event.participant, orgMembers);
+				const displayName = event.participant.name?.trim() || "Participant";
+				return {
+					content: formatHumanChatContent({
+						text,
+						displayName,
+						matched: member !== null,
+						botName,
+						trigger: agentTrigger,
+					}),
+					timestamp: roundedTimestamp(event.timestamp.relative),
+					fromBot: false,
+					authorId: member?.id ?? external.id,
+				};
+			}),
 			...liveBotReplies.map((entry) => ({
-				content: `${botName}: ${entry.text.trim()}`.slice(
-					0,
-					MAX_COMMENT_CONTENT,
-				),
+				content: entry.text.trim().slice(0, MAX_COMMENT_CONTENT),
 				timestamp: roundedTimestamp(entry.t),
 				fromBot: true,
+				authorId: notetaker.id,
 			})),
 		].sort(
 			(left, right) =>
@@ -208,7 +291,7 @@ export async function importMeetingChatComments(
 			type: "text" as const,
 			content: entry.content,
 			timestamp: entry.timestamp,
-			authorId: row.ownerId,
+			authorId: entry.authorId,
 			videoId,
 			createdAt: new Date(
 				base + Math.floor(entry.timestamp) * 1000 + index * 1000,

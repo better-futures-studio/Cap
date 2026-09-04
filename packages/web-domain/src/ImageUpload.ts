@@ -20,6 +20,7 @@ export const extractFileKey = (
 		const { pathname, origin } = new URL(iconKeyOrURL);
 
 		if (origin === "https://lh3.googleusercontent.com") return Option.none();
+		if (pathname.startsWith("/api/")) return Option.none();
 
 		let key = pathname.slice(1);
 

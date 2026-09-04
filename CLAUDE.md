@@ -131,6 +131,9 @@ Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
   registered at user scope; use it for bot logs and webhook deliveries.
 - Add `recall-reconcile` to the `cron` service loop in Railway when changing
   its start command.
+- Each org has two system users — notetaker (bot name + org logo) and
+  external participant — used as comment authors for imported meeting chat.
+  Users are disabled (`users.disabledAt`), never deleted.
 - Slack Huddles:
   - Add the bot subdomain in the Recall dashboard under the Slack bot setup.
   - Add the generated MX/TXT records.

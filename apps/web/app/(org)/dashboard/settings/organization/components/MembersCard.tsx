@@ -23,6 +23,7 @@ import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { setMemberDisabled } from "@/actions/organization/members";
 import { removeOrganizationInvite } from "@/actions/organization/remove-invite";
 import { removeOrganizationMember } from "@/actions/organization/remove-member";
 import { toggleProSeat } from "@/actions/organization/toggle-pro-seat";
@@ -75,8 +76,12 @@ export const MembersCard = ({ setIsInviteDialogOpen }: MembersCardProps) => {
 	const canManageProSeats = canManageOrganizationProSeats(currentRole);
 
 	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [pendingAction, setPendingAction] = useState<
+		"remove" | "disable" | "enable"
+	>("remove");
 	const [pendingMember, setPendingMember] = useState<{
 		id: string;
+		userId: string;
 		name: string;
 		email: string;
 	} | null>(null);
@@ -132,6 +137,38 @@ export const MembersCard = ({ setIsInviteDialogOpen }: MembersCardProps) => {
 				error instanceof Error
 					? error.message
 					: "An error occurred while removing member",
+			);
+		},
+	});
+
+	const setDisabledMutation = useMutation({
+		mutationFn: ({
+			userId,
+			disabled,
+		}: {
+			userId: string;
+			disabled: boolean;
+		}) => {
+			if (!activeOrganization?.organization.id) {
+				throw new Error("Organization not found");
+			}
+			return setMemberDisabled({
+				orgId: activeOrganization.organization.id,
+				userId,
+				disabled,
+			});
+		},
+		onSuccess: (_data, { disabled }) => {
+			toast.success(disabled ? "Member disabled" : "Member enabled");
+			setConfirmOpen(false);
+			setPendingMember(null);
+			router.refresh();
+		},
+		onError: (error) => {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "An error occurred while updating member",
 			);
 		},
 	});
@@ -194,10 +231,26 @@ export const MembersCard = ({ setIsInviteDialogOpen }: MembersCardProps) => {
 
 	const handleRemoveMember = (member: {
 		id: string;
-		user: { name: string; email: string };
+		user: { id: string; name: string; email: string };
 	}) => {
+		setPendingAction("remove");
 		setPendingMember({
 			id: member.id,
+			userId: member.user.id,
+			name: member.user.name,
+			email: member.user.email,
+		});
+		setConfirmOpen(true);
+	};
+
+	const handleToggleDisabled = (
+		member: { id: string; user: { id: string; name: string; email: string } },
+		disabled: boolean,
+	) => {
+		setPendingAction(disabled ? "disable" : "enable");
+		setPendingMember({
+			id: member.id,
+			userId: member.user.id,
 			name: member.user.name,
 			email: member.user.email,
 		});
@@ -213,18 +266,50 @@ export const MembersCard = ({ setIsInviteDialogOpen }: MembersCardProps) => {
 			<ConfirmationDialog
 				open={confirmOpen}
 				icon={<FontAwesomeIcon icon={faUser} />}
-				title="Remove member"
+				title={
+					pendingAction === "remove"
+						? "Remove member"
+						: pendingAction === "disable"
+							? "Disable member"
+							: "Enable member"
+				}
 				description={
 					pendingMember
-						? `Are you sure you want to remove ${pendingMember.name} from your organization? This action cannot be undone.`
+						? pendingAction === "remove"
+							? `Are you sure you want to remove ${pendingMember.name} from your organization? This action cannot be undone.`
+							: pendingAction === "disable"
+								? "Disabling keeps the account and its recordings but blocks sign-in. You can enable it again later."
+								: `Are you sure you want to enable ${pendingMember.name}? They will be able to sign in again.`
 						: ""
 				}
-				confirmLabel={removeMemberMutation.isPending ? "Removing..." : "Remove"}
+				confirmLabel={
+					pendingAction === "remove"
+						? removeMemberMutation.isPending
+							? "Removing..."
+							: "Remove"
+						: pendingAction === "disable"
+							? setDisabledMutation.isPending
+								? "Disabling..."
+								: "Disable"
+							: setDisabledMutation.isPending
+								? "Enabling..."
+								: "Enable"
+				}
 				cancelLabel="Cancel"
-				loading={removeMemberMutation.isPending}
+				loading={
+					pendingAction === "remove"
+						? removeMemberMutation.isPending
+						: setDisabledMutation.isPending
+				}
 				onConfirm={() => {
-					if (pendingMember) {
+					if (!pendingMember) return;
+					if (pendingAction === "remove") {
 						removeMemberMutation.mutate(pendingMember.id);
+					} else {
+						setDisabledMutation.mutate({
+							userId: pendingMember.userId,
+							disabled: pendingAction === "disable",
+						});
 					}
 				}}
 				onCancel={() => {
@@ -269,6 +354,8 @@ export const MembersCard = ({ setIsInviteDialogOpen }: MembersCardProps) => {
 					</TableHeader>
 					<TableBody>
 						{activeOrganization?.members?.map((member) => {
+							const isSystemMember = Boolean(member.systemKind);
+							const isSelf = member.user.id === user.id;
 							const memberIsOwner = isMemberOwner(member.user.id);
 							const memberRole = getEffectiveOrganizationRole({
 								userId: member.user.id,
@@ -297,10 +384,26 @@ export const MembersCard = ({ setIsInviteDialogOpen }: MembersCardProps) => {
 								updateRoleMutation.variables?.memberId === member.id;
 							return (
 								<TableRow key={member.id}>
-									<TableCell>{member.user.name}</TableCell>
+									<TableCell>
+										<div className="flex gap-2 items-center">
+											<span>{member.user.name}</span>
+											{member.disabledAt && (
+												<span className="rounded-full bg-gray-3 px-2.5 py-1 text-xs font-medium text-gray-11">
+													Disabled
+												</span>
+											)}
+											{isSystemMember && (
+												<span className="rounded-full bg-gray-3 px-2.5 py-1 text-xs font-medium text-gray-11">
+													System
+												</span>
+											)}
+										</div>
+									</TableCell>
 									<TableCell>{member.user.email}</TableCell>
 									<TableCell>
-										{memberIsOwner || memberRole === "owner" ? (
+										{isSystemMember ? (
+											"-"
+										) : memberIsOwner || memberRole === "owner" ? (
 											"Owner"
 										) : (
 											<Select
@@ -324,7 +427,9 @@ export const MembersCard = ({ setIsInviteDialogOpen }: MembersCardProps) => {
 									</TableCell>
 									{buildEnv.NEXT_PUBLIC_IS_CAP && (
 										<TableCell>
-											{memberIsOwner ? (
+											{isSystemMember ? (
+												"-"
+											) : memberIsOwner ? (
 												<span className="text-xs text-gray-10">
 													{activeOrganization.ownerIsPro ? "Included" : "Free"}
 												</span>
@@ -365,29 +470,64 @@ export const MembersCard = ({ setIsInviteDialogOpen }: MembersCardProps) => {
 											: "Active"}
 									</TableCell>
 									<TableCell>
-										{!memberIsOwner ? (
-											<Button
-												type="button"
-												size="xs"
-												variant="destructive"
-												className="min-w-[unset] h-[28px]"
-												onClick={() => {
-													if (canRemoveMember) {
-														handleRemoveMember({
-															id: member.id,
-															user: {
-																name: member.user.name ?? "(No Name)",
-																email: member.user.email ?? "(No Email)",
-															},
-														});
-													} else {
-														showMemberManagerToast();
-													}
-												}}
-												disabled={!canRemoveMember}
-											>
-												Remove
-											</Button>
+										{isSystemMember ? (
+											<span className="text-xs text-gray-10">
+												Managed by Cap
+											</span>
+										) : !memberIsOwner ? (
+											<div className="flex gap-2 items-center">
+												{!isSelf && (
+													<Button
+														type="button"
+														size="xs"
+														variant="gray"
+														className="min-w-[unset] h-[28px]"
+														onClick={() => {
+															if (canRemoveMember) {
+																handleToggleDisabled(
+																	{
+																		id: member.id,
+																		user: {
+																			id: member.user.id,
+																			name: member.user.name ?? "(No Name)",
+																			email: member.user.email ?? "(No Email)",
+																		},
+																	},
+																	!member.disabledAt,
+																);
+															} else {
+																showMemberManagerToast();
+															}
+														}}
+														disabled={!canRemoveMember}
+													>
+														{member.disabledAt ? "Enable" : "Disable"}
+													</Button>
+												)}
+												<Button
+													type="button"
+													size="xs"
+													variant="destructive"
+													className="min-w-[unset] h-[28px]"
+													onClick={() => {
+														if (canRemoveMember) {
+															handleRemoveMember({
+																id: member.id,
+																user: {
+																	id: member.user.id,
+																	name: member.user.name ?? "(No Name)",
+																	email: member.user.email ?? "(No Email)",
+																},
+															});
+														} else {
+															showMemberManagerToast();
+														}
+													}}
+													disabled={!canRemoveMember}
+												>
+													Remove
+												</Button>
+											</div>
 										) : (
 											"-"
 										)}

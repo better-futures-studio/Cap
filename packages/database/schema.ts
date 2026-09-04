@@ -129,6 +129,13 @@ export const users = mysqlTable(
 		defaultOrgId:
 			nanoIdNullable("defaultOrgId").$type<Organisation.OrganisationId>(),
 		authSessionVersion: int("authSessionVersion").notNull().default(0),
+		systemKind: varchar("systemKind", { length: 16 }).$type<
+			"notetaker" | "external"
+		>(),
+		systemOrganizationId: nanoIdNullable(
+			"systemOrganizationId",
+		).$type<Organisation.OrganisationId>(),
+		disabledAt: timestamp("disabledAt"),
 	},
 	(table) => ({
 		emailIndex: uniqueIndex("email_idx").on(table.email),

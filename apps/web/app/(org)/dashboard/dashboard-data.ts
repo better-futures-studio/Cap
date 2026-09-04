@@ -36,9 +36,11 @@ export type Organization = {
 		shareableLinkIconUrl: ImageUpload.ImageUrl | null;
 	};
 	members: (typeof organizationMembers.$inferSelect & {
+		disabledAt: (typeof users.$inferSelect)["disabledAt"];
+		systemKind: (typeof users.$inferSelect)["systemKind"];
 		user: Pick<
 			typeof users.$inferSelect,
-			"id" | "name" | "email" | "lastName"
+			"id" | "name" | "email" | "lastName" | "disabledAt" | "systemKind"
 		> & { image?: ImageUpload.ImageUrl | null };
 	})[];
 	invites: (typeof organizationInvites.$inferSelect)[];
@@ -347,6 +349,8 @@ export async function getDashboardData(user: typeof userSelectProps) {
 									lastName: users.lastName,
 									email: users.email,
 									image: users.image,
+									disabledAt: users.disabledAt,
+									systemKind: users.systemKind,
 								},
 							})
 							.from(organizationMembers)
@@ -448,6 +452,8 @@ export async function getDashboardData(user: typeof userSelectProps) {
 									}
 									return {
 										...m.member,
+										disabledAt: m.user.disabledAt,
+										systemKind: m.user.systemKind,
 										user: {
 											...m.user,
 											image: m.user.image

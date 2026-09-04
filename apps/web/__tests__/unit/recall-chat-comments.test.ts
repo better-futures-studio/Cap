@@ -29,8 +29,14 @@ function botParticipant() {
 	};
 }
 
-const mocks = vi.hoisted(() => ({ db: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+	db: vi.fn(),
+	getOrCreateSystemUser: vi.fn(),
+}));
 vi.mock("@cap/database", () => ({ db: mocks.db }));
+vi.mock("@/lib/system-users", () => ({
+	getOrCreateSystemUser: mocks.getOrCreateSystemUser,
+}));
 vi.mock("@cap/database/schema", () => {
 	const table = (name: string, fields: string[]) =>
 		Object.fromEntries([
@@ -71,6 +77,22 @@ vi.mock("@cap/database/schema", () => {
 			"createdAt",
 			"updatedAt",
 		]),
+		users: table("users", [
+			"id",
+			"name",
+			"email",
+			"lastName",
+			"image",
+			"systemKind",
+			"systemOrganizationId",
+			"disabledAt",
+		]),
+		organizationMembers: table("organization_members", [
+			"id",
+			"userId",
+			"organizationId",
+			"role",
+		]),
 	};
 });
 vi.mock("drizzle-orm", () => ({
@@ -104,6 +126,10 @@ type Condition = {
 };
 
 const ownerId = "user_1" as User.UserId;
+const notetakerId = "user_notetaker" as User.UserId;
+const externalId = "user_external" as User.UserId;
+const aliceId = "user_alice" as User.UserId;
+const orgId = "org_1";
 const videoId = "vid_1" as Video.VideoId;
 const now = new Date("2026-09-03T16:00:00.000Z");
 
@@ -140,12 +166,28 @@ function createClient() {
 	const client = {
 		select() {
 			let table = "";
+			let joinTable = "";
 			let condition: Condition | undefined;
-			const run = () =>
-				(rows[table] ?? []).filter((row) => matches(row, condition));
+			const run = () => {
+				if (joinTable === "organization_members" && table === "users") {
+					const members = (rows.organization_members ?? []).filter((row) =>
+						matches(row, condition),
+					);
+					const userIds = new Set(members.map((member) => member.userId));
+					return (rows.users ?? []).filter((row) => {
+						if (!userIds.has(row.id)) return false;
+						return row.systemKind == null;
+					});
+				}
+				return (rows[table] ?? []).filter((row) => matches(row, condition));
+			};
 			const query = {
 				from(value: Table) {
 					table = value.table;
+					return query;
+				},
+				innerJoin(value: Table) {
+					joinTable = value.table;
 					return query;
 				},
 				where(value: Condition) {
@@ -227,12 +269,32 @@ function seedBot(overrides: Row = {}) {
 	rows.meeting_bots = [
 		{
 			id: "mb_1",
+			orgId,
 			ownerId,
 			videoId,
 			recallRecordingId: "rec_1",
 			chatSyncedAt: null,
 			status: "transcribing",
 			...overrides,
+		},
+	];
+}
+
+function seedMember(overrides: Row = {}) {
+	const user = {
+		id: aliceId,
+		name: "Alice",
+		email: "alice@example.com",
+		systemKind: null,
+		...overrides,
+	};
+	rows.users = [...(rows.users ?? []), user];
+	rows.organization_members = [
+		...(rows.organization_members ?? []),
+		{
+			id: `om_${user.id}`,
+			userId: user.id,
+			organizationId: orgId,
 		},
 	];
 }
@@ -261,8 +323,20 @@ function mockClient(
 }
 
 beforeEach(() => {
-	rows = { meeting_bots: [], comments: [] };
+	rows = {
+		meeting_bots: [],
+		comments: [],
+		users: [],
+		organization_members: [],
+	};
 	mocks.db.mockReturnValue(createClient());
+	mocks.getOrCreateSystemUser.mockImplementation(
+		async ({ kind }: { kind: "notetaker" | "external" }) => ({
+			id: kind === "notetaker" ? notetakerId : externalId,
+			name: kind === "notetaker" ? botName : "External participant",
+			systemKind: kind,
+		}),
+	);
 });
 
 describe("importMeetingChatComments", () => {
@@ -346,21 +420,21 @@ describe("importMeetingChatComments", () => {
 				type: "text",
 				content: "Alice: hello team",
 				timestamp: 12.346,
-				authorId: ownerId,
+				authorId: externalId,
 				videoId,
 			}),
 			expect.objectContaining({
 				type: "text",
-				content: `${botName}: The launch is Friday.`,
+				content: "The launch is Friday.",
 				timestamp: 30,
-				authorId: ownerId,
+				authorId: notetakerId,
 				videoId,
 			}),
 			expect.objectContaining({
 				type: "text",
 				content: "Participant: on my way",
 				timestamp: 45,
-				authorId: ownerId,
+				authorId: externalId,
 				videoId,
 			}),
 		]);
@@ -412,14 +486,83 @@ describe("importMeetingChatComments", () => {
 				type: "text",
 				content: `Alice (to ${botName}): what did we decide?`,
 				timestamp: 10,
-				authorId: ownerId,
+				authorId: externalId,
 				videoId,
 			}),
 			expect.objectContaining({
 				type: "text",
 				content: "Alice: shipping tomorrow",
 				timestamp: 20,
-				authorId: ownerId,
+				authorId: externalId,
+				videoId,
+			}),
+		]);
+	});
+
+	it("attributes a matched org member by name and email, and keeps the bot-question prefix", async () => {
+		seedBot();
+		seedMember();
+		const events: RecallParticipantEvent[] = [
+			participantEvent({
+				id: "command",
+				action: "chat_message",
+				data: { text: "  /NT what did we decide?  ", to: "everyone" },
+			}),
+			participantEvent({
+				id: "plain",
+				action: "chat_message",
+				timestamp: { absolute: "2026-09-03T16:00:20.000Z", relative: 20 },
+				participant: {
+					id: 3,
+					name: "alice",
+					is_host: false,
+					email: null,
+				},
+				data: { text: "shipping tomorrow", to: "everyone" },
+			}),
+			participantEvent({
+				id: "guest",
+				action: "chat_message",
+				timestamp: { absolute: "2026-09-03T16:00:25.000Z", relative: 25 },
+				participant: {
+					id: 4,
+					name: "Guest",
+					is_host: false,
+					email: null,
+				},
+				data: { text: "joining late", to: "everyone" },
+			}),
+		];
+		const client = mockClient({
+			downloadJson: vi.fn(async () => events) as RecallClient["downloadJson"],
+		});
+
+		const result = await importMeetingChatComments(
+			{ meetingBotId: "mb_1" },
+			{ client },
+		);
+
+		expect(result).toEqual({ imported: 3, skipped: false });
+		expect(commentRows()).toEqual([
+			expect.objectContaining({
+				type: "text",
+				content: `(to ${botName}) what did we decide?`,
+				timestamp: 10,
+				authorId: aliceId,
+				videoId,
+			}),
+			expect.objectContaining({
+				type: "text",
+				content: "shipping tomorrow",
+				timestamp: 20,
+				authorId: aliceId,
+				videoId,
+			}),
+			expect.objectContaining({
+				type: "text",
+				content: "Guest: joining late",
+				timestamp: 25,
+				authorId: externalId,
 				videoId,
 			}),
 		]);
@@ -482,9 +625,9 @@ describe("importMeetingChatComments", () => {
 		expect(commentRows()).toEqual([
 			expect.objectContaining({
 				type: "text",
-				content: `${botName}: The launch is Friday.`,
+				content: "The launch is Friday.",
 				timestamp: 42.346,
-				authorId: ownerId,
+				authorId: notetakerId,
 				videoId,
 			}),
 		]);
@@ -552,9 +695,9 @@ describe("importMeetingChatComments", () => {
 		expect(commentRows()).toEqual([
 			expect.objectContaining({
 				type: "text",
-				content: `${botName}: The launch is Friday.`,
+				content: "The launch is Friday.",
 				timestamp: 30,
-				authorId: ownerId,
+				authorId: notetakerId,
 				videoId,
 			}),
 		]);

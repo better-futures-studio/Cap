@@ -55,6 +55,9 @@ from a pasted link to a recap email.
 - **Chat and notes as timeline comments.** In-meeting chat messages, and
   any `/nt` notes or action items captured during the call, are imported as
   timeline comments on the recording after it processes.
+- **System users, never deleted.** Each org has a notetaker and an
+  external-participant system user for imported meeting chat; users are
+  disabled, never deleted.
 - **Recap email.** Each user sets a recap preference — off, to themselves
   only, or to all attendees — and Cap emails a summary once the recording
   and transcript are ready.

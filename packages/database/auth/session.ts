@@ -23,7 +23,11 @@ export const getCurrentUser = cache(
 			.from(users)
 			.where(eq(users.id, User.UserId.make(session.user.id)));
 
-		return currentUser ?? null;
+		if (!currentUser || currentUser.disabledAt || currentUser.systemKind) {
+			return null;
+		}
+
+		return currentUser;
 	},
 );
 

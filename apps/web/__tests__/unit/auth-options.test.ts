@@ -17,6 +17,8 @@ type AuthUser = {
 	email: string;
 	image: string | null;
 	authSessionVersion: number;
+	systemKind?: "notetaker" | "external" | null;
+	disabledAt?: Date | null;
 };
 
 const mocks = vi.hoisted(() => ({
@@ -298,6 +300,7 @@ describe("authOptions", () => {
 					release = resolve;
 				}),
 		);
+		mocks.select.mockClear();
 
 		const pending = callbacks.jwt({
 			token: { id: "old-user", email: PROFILE.email },
@@ -322,6 +325,7 @@ describe("authOptions", () => {
 			profile: PROFILE,
 		});
 		mocks.provision.mockRejectedValueOnce(new Error("SSO billing revoked"));
+		mocks.select.mockClear();
 
 		await expect(
 			callbacks.jwt({
@@ -331,6 +335,49 @@ describe("authOptions", () => {
 			}),
 		).rejects.toThrow("SSO billing revoked");
 		expect(mocks.select).not.toHaveBeenCalled();
+	});
+
+	it("refuses sign-in for system users and disabled users", async () => {
+		const callbacks = callbacksFor(authOptions());
+		mocks.users = [
+			{
+				id: "sys_1",
+				name: "Meeting Notetaker",
+				lastName: null,
+				email: "notetaker+org@system.invalid",
+				image: null,
+				authSessionVersion: 0,
+				systemKind: "notetaker",
+				disabledAt: null,
+			},
+			{
+				id: "disabled_1",
+				name: "Ada",
+				lastName: null,
+				email: "ada@example.com",
+				image: null,
+				authSessionVersion: 1,
+				systemKind: null,
+				disabledAt: new Date("2026-09-01T00:00:00.000Z"),
+			},
+		];
+
+		await expect(
+			callbacks.signIn({
+				user: {
+					id: "sys_1",
+					email: "notetaker+org@system.invalid",
+				},
+				account: { provider: "google", type: "oauth", providerAccountId: "g1" },
+			}),
+		).resolves.toBe(false);
+
+		await expect(
+			callbacks.signIn({
+				user: { id: "disabled_1", email: "ada@example.com" },
+				account: { provider: "google", type: "oauth", providerAccountId: "g2" },
+			}),
+		).resolves.toBe(false);
 	});
 
 	it.each(["workos", "google", "apple"])(

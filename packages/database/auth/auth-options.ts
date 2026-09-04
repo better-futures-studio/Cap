@@ -38,12 +38,16 @@ export async function decodeSessionToken(
 	if (!userId) return token;
 
 	const [user] = await db()
-		.select({ authSessionVersion: users.authSessionVersion })
+		.select({
+			authSessionVersion: users.authSessionVersion,
+			disabledAt: users.disabledAt,
+			systemKind: users.systemKind,
+		})
 		.from(users)
 		.where(eq(users.id, User.UserId.make(userId)))
 		.limit(1);
 
-	if (!user) return null;
+	if (!user || user.disabledAt || user.systemKind) return null;
 
 	const sessionVersion =
 		typeof token.sessionVersion === "number" ? token.sessionVersion : 0;
@@ -226,9 +230,6 @@ export const authOptions = (ssoContext?: SsoAuthContext): NextAuthOptions => {
 						);
 					}
 				}
-				const allowedDomains = serverEnv().CAP_ALLOWED_SIGNUP_DOMAINS;
-				if (!allowedDomains) return true;
-
 				const rawEmail =
 					user?.email ||
 					(typeof email === "string"
@@ -240,13 +241,22 @@ export const authOptions = (ssoContext?: SsoAuthContext): NextAuthOptions => {
 				const userEmail = rawEmail.toLowerCase();
 
 				const [existingUser] = await db()
-					.select()
+					.select({
+						id: users.id,
+						systemKind: users.systemKind,
+						disabledAt: users.disabledAt,
+					})
 					.from(users)
 					.where(eq(users.email, userEmail))
 					.limit(1);
 
-				// Only apply domain restrictions for new users, existing ones can always sign in
+				if (existingUser?.systemKind || existingUser?.disabledAt) {
+					return false;
+				}
+
+				const allowedDomains = serverEnv().CAP_ALLOWED_SIGNUP_DOMAINS;
 				if (
+					allowedDomains &&
 					!existingUser &&
 					!isEmailAllowedForSignup(userEmail, allowedDomains)
 				) {
