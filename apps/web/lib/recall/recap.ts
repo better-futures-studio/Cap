@@ -12,11 +12,8 @@ import {
 } from "@cap/database/schema";
 import type { MeetingActionItem, VideoMetadata } from "@cap/database/types";
 import { serverEnv } from "@cap/env";
-import { ImageUploads } from "@cap/web-backend";
-import type { ImageUpload, Organisation, User } from "@cap/web-domain";
+import type { Organisation, User } from "@cap/web-domain";
 import { and, eq, isNull } from "drizzle-orm";
-import { Effect } from "effect";
-import { runPromise } from "@/lib/server";
 import { parseMeetingActionItems } from "./action-items";
 import type {
 	RecallCalendarEvent,
@@ -31,8 +28,6 @@ import { shareMeetingRecordingWithAttendees } from "./visibility";
 export type { MeetingRecapMode };
 
 export const RECAP_FROM_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const RECAP_LOGO_URL_EXPIRES_SECONDS = 7 * 24 * 60 * 60;
-
 export function parseRecapFromAddress(value: string): string | null {
 	const address = value.trim().toLowerCase();
 	if (!RECAP_FROM_ADDRESS_PATTERN.test(address)) return null;
@@ -80,21 +75,10 @@ export function resolveRecapSender({
 	return { from: `${name} <${address}>`, name, address };
 }
 
-async function resolveOrganizationLogoUrl(
-	iconUrl: string,
-): Promise<string | null> {
+export function organizationLogoUrl(orgId: string, iconUrl: string): string {
 	if (/^https?:\/\//i.test(iconUrl)) return iconUrl;
-	try {
-		return await Effect.gen(function* () {
-			const imageUploads = yield* ImageUploads;
-			return yield* imageUploads.resolveImageUrl(
-				iconUrl as ImageUpload.ImageUrlOrKey,
-				{ expiresIn: RECAP_LOGO_URL_EXPIRES_SECONDS },
-			);
-		}).pipe(runPromise);
-	} catch {
-		return null;
-	}
+	const base = serverEnv().WEB_URL.replace(/\/$/, "");
+	return `${base}/api/meeting-bot/logo?orgId=${encodeURIComponent(orgId)}`;
 }
 
 const LEGACY_AI_SUMMARY_FALLBACK =
@@ -361,7 +345,11 @@ export async function sendMeetingRecap(
 		allowedDomain: recapAllowedFromDomain(),
 	});
 	const logoUrl = org?.iconUrl
-		? await (deps.resolveLogoUrl ?? resolveOrganizationLogoUrl)(org.iconUrl)
+		? await (
+				deps.resolveLogoUrl ??
+				((iconUrl: string) =>
+					Promise.resolve(organizationLogoUrl(row.orgId, iconUrl)))
+			)(org.iconUrl)
 		: null;
 	const attendeeEmails =
 		mode === "attendees"

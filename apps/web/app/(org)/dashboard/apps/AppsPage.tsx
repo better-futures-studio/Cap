@@ -72,17 +72,10 @@ export function AppsPage({ webUrl }: { webUrl: string }) {
 				</CardHeader>
 				<div className="flex flex-col gap-3 mt-3 text-sm text-gray-11">
 					<p>
-						The Cap app on the App Store is built to talk only to cap.so, so it
-						cannot connect to this instance. To use it here, an organization
-						admin builds a custom iOS app with EAS, pointed at this instance's
-						URL:
-					</p>
-					<pre className="overflow-x-auto px-3 py-2 text-xs rounded-lg bg-gray-3 text-gray-11 font-mono">
-						{`cd apps/mobile\npnpm dlx eas-cli@21.0.2 env:create production --name EXPO_PUBLIC_CAP_WEB_URL --value ${webUrl} --visibility plaintext\npnpm build:production`}
-					</pre>
-					<p>
-						Once the build finishes, install it through TestFlight or internal
-						distribution and sign in with Google.
+						Mobile is not supported right now. The Cap app on the App Store does
+						not allow the server URL to be changed, so it cannot connect to this
+						instance. If there is a need for it, we can build the app ourselves
+						and distribute it internally, but as of now we are not doing that.
 					</p>
 				</div>
 			</Card>

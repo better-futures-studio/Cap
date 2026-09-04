@@ -266,20 +266,11 @@ installing, open Settings → General, and in the Self-host section set the
 Cap Server URL to your instance's URL. Confirming the change signs you out;
 sign in again with Google.
 
-**Mobile (iOS)**: the App Store build only talks to cap.so — its API base
-URL is baked in at build time (`EXPO_PUBLIC_CAP_WEB_URL` in
-`apps/mobile/src/auth/AuthContext.tsx`, see `apps/mobile/README.md`). To use
-Cap Mobile with a self-hosted instance, an admin builds a custom app with
-EAS, pointed at your instance:
-
-```bash
-cd apps/mobile
-pnpm dlx eas-cli@21.0.2 env:create production --name EXPO_PUBLIC_CAP_WEB_URL --value https://<your-domain> --visibility plaintext
-pnpm build:production
-```
-
-Once the build finishes, install it through TestFlight or internal
-distribution and sign in with Google.
+**Mobile (iOS)**: not supported. The App Store build only talks to cap.so
+and offers no way to change the server URL. If an organization needs it,
+it can build its own app with EAS (set `EXPO_PUBLIC_CAP_WEB_URL` in the EAS
+production environment, see `apps/mobile/README.md`) and distribute it
+internally through TestFlight.
 
 **Browser extension**: the extension's options page has a "Cap URL" field
 under Connection — set it to your instance's URL and sign in with Google.

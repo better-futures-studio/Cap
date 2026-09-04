@@ -167,7 +167,7 @@ async function loadIconFromStorage(
 	}
 }
 
-async function resolveCardIcon(
+export async function resolveCardIcon(
 	orgId: string | null,
 	iconUrl: string | null,
 ): Promise<Buffer | null> {
