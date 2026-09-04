@@ -213,6 +213,32 @@ function createServerEnv() {
 				.describe(
 					"Post-meeting and live transcription provider used through Recall; 'assemblyai' requires the AssemblyAI key to be configured in the Recall dashboard and supports Arabic/English code-switching",
 				),
+			RECALL_MEDIA_RETENTION_HOURS: z
+				.string()
+				.optional()
+				.default("168")
+				.transform((value) => {
+					const hours = Number(value);
+					return Number.isFinite(hours) && hours > 0 ? Math.floor(hours) : 168;
+				})
+				.pipe(z.number().int().positive())
+				.describe(
+					"Hours Recall keeps bot media before deleting it (default 168)",
+				),
+			RECALL_DELETE_MEDIA_AFTER_IMPORT: boolString(true).describe(
+				"Delete Recall-stored media after Cap has imported the recording and transcript",
+			),
+
+			/// Sentry
+			SENTRY_DSN: z.string().optional(),
+			SENTRY_ENVIRONMENT: z.string().optional().default("production"),
+			SENTRY_TRACES_SAMPLE_RATE: z
+				.string()
+				.optional()
+				.transform((value) =>
+					value === undefined || value === "" ? 0.1 : Number(value),
+				)
+				.pipe(z.number().min(0).max(1)),
 
 			/// Tinybird analytics
 			TINYBIRD_HOST: z.string().optional(),

@@ -2,6 +2,7 @@ import { db } from "@cap/database";
 import { recallWebhookEvents } from "@cap/database/schema";
 import { eq } from "drizzle-orm";
 import { after, type NextRequest, NextResponse } from "next/server";
+import { captureError } from "@/lib/monitoring";
 import { getRecallConfig } from "@/lib/recall/config";
 import { handleRealtimeEvent } from "@/lib/recall/realtime";
 import { verifyRecallSignature } from "@/lib/recall/verify";
@@ -23,8 +24,8 @@ function affectedRows(result: unknown): number {
 }
 
 function deferChatWork(work: () => Promise<unknown>, event: string) {
-	const task = work().catch(() => {
-		console.error("[recall-realtime] chat handling failed", { event });
+	const task = work().catch((error) => {
+		captureError(error, { event, source: "chat" });
 	});
 	try {
 		after(task);
@@ -79,14 +80,14 @@ export async function POST(request: NextRequest) {
 			},
 		);
 		return NextResponse.json({ accepted: true });
-	} catch {
+	} catch (error) {
 		if (webhookId) {
 			await db()
 				.delete(recallWebhookEvents)
 				.where(eq(recallWebhookEvents.id, webhookId))
 				.catch(() => undefined);
 		}
-		console.error("[recall-realtime] event handling failed", { event });
+		captureError(error, { event });
 		return NextResponse.json({ accepted: false });
 	}
 }

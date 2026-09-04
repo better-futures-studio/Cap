@@ -11,6 +11,7 @@ const create = () =>
 			NEXT_PUBLIC_IS_CAP: z.string().optional(),
 			NEXT_PUBLIC_OPENPANEL_CLIENT_ID: z.string().optional(),
 			NEXT_PUBLIC_OPENPANEL_API_URL: z.string().optional(),
+			NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
 			NEXT_PUBLIC_WEB_URL: z.string(),
 			NEXT_PUBLIC_DOCKER_BUILD: z.string().optional(),
 		},
@@ -19,6 +20,7 @@ const create = () =>
 			NEXT_PUBLIC_OPENPANEL_CLIENT_ID:
 				process.env.NEXT_PUBLIC_OPENPANEL_CLIENT_ID,
 			NEXT_PUBLIC_OPENPANEL_API_URL: process.env.NEXT_PUBLIC_OPENPANEL_API_URL,
+			NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
 			NEXT_PUBLIC_WEB_URL:
 				process.env.WEB_URL ?? process.env.NEXT_PUBLIC_WEB_URL,
 			NEXT_PUBLIC_DOCKER_BUILD: process.env.NEXT_PUBLIC_DOCKER_BUILD,

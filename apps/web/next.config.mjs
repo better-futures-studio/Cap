@@ -2,6 +2,7 @@ import("dotenv").then(({ config }) => config({ path: "../../.env" }));
 
 import fs from "node:fs";
 import path from "node:path";
+import { withSentryConfig } from "@sentry/nextjs/config";
 import workflowNext from "workflow/next";
 
 const { withWorkflow } = workflowNext;
@@ -147,4 +148,18 @@ const nextConfig = {
 		process.env.NEXT_PUBLIC_DOCKER_BUILD === "true" ? "standalone" : undefined,
 };
 
-export default withWorkflow(nextConfig);
+const composed = withWorkflow(nextConfig);
+
+export default process.env.SENTRY_DSN
+	? withSentryConfig(composed, {
+			silent: true,
+			widenClientFileUpload: true,
+			disableLogger: true,
+			org: process.env.SENTRY_ORG,
+			project: process.env.SENTRY_PROJECT,
+			authToken: process.env.SENTRY_AUTH_TOKEN,
+			sourcemaps: {
+				disable: !process.env.SENTRY_AUTH_TOKEN,
+			},
+		})
+	: composed;

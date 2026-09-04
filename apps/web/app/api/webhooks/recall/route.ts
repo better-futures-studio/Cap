@@ -1,6 +1,7 @@
 import { db } from "@cap/database";
 import { recallWebhookEvents } from "@cap/database/schema";
 import { type NextRequest, NextResponse } from "next/server";
+import { captureError } from "@/lib/monitoring";
 import { getRecallConfig } from "@/lib/recall/config";
 import { verifyRecallSignature } from "@/lib/recall/verify";
 import { dispatchRecallWebhook } from "@/lib/recall/webhooks";
@@ -70,8 +71,8 @@ export async function POST(request: NextRequest) {
 	try {
 		await dispatchRecallWebhook(payload);
 		return NextResponse.json({ accepted: true });
-	} catch {
-		console.error("[recall-webhook] dispatch failed", {
+	} catch (error) {
+		captureError(error, {
 			event: payload.event,
 			id: webhookId,
 		});

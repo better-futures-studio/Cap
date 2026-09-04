@@ -9,7 +9,9 @@ RUN corepack enable pnpm
 RUN --mount=type=cache,id=s/4eb09acd-47d5-4f5b-9028-dfd7185f94ad-pnpm,target=/root/.local/share/pnpm/store pnpm i --frozen-lockfile
 
 ARG NEXT_PUBLIC_DOCKER_BUILD=true
+ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_WEB_URL=http://localhost:3000
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 
 RUN pnpm run build:web
 

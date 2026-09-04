@@ -30,6 +30,7 @@ Push to `main`. Both app services build from GitHub via the Railway app.
 Cap Web builds in ~3 minutes (pnpm store cached via a Railway cache mount id).
 Do not add `pnpm-lock.yaml` or `bun.lock` back to `.gitignore`; `railway up`
 honours it and the build breaks.
+Optional Sentry: set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` on Cap Web (plus `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` to upload source maps).
 
 ### Checking and operating (Railway CLI, logged in as pro@boca.pro)
 

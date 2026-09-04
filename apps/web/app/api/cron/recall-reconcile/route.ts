@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { captureError } from "@/lib/monitoring";
 import { reconcileRecallMeetingBots } from "@/lib/recall/reconcile";
 
 export const dynamic = "force-dynamic";
@@ -23,13 +24,21 @@ export async function GET(request: Request) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
-	const result = await reconcileRecallMeetingBots();
-	if (!result) {
+	try {
+		const result = await reconcileRecallMeetingBots();
+		if (!result) {
+			return NextResponse.json(
+				{ error: "Recall is not configured" },
+				{ status: 503 },
+			);
+		}
+
+		return NextResponse.json({ success: true, ...result });
+	} catch (error) {
+		captureError(error, { route: "recall-reconcile" });
 		return NextResponse.json(
-			{ error: "Recall is not configured" },
-			{ status: 503 },
+			{ error: "Reconciliation failed" },
+			{ status: 500 },
 		);
 	}
-
-	return NextResponse.json({ success: true, ...result });
 }

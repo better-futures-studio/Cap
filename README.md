@@ -176,6 +176,18 @@ database, and general Cap AI provider variables not listed here.
 | `RECALL_CALENDAR_GOOGLE_CLIENT_SECRET` | required for calendar sync | Matching client secret. |
 | `RECALL_CALENDAR_SETUP_CALLBACK_URI` | optional | Recall regional callback URL the hosted calendar setup forwarder redirects to. Derived from `RECALL_REGION` when unset. |
 
+**Monitoring (optional)**
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `SENTRY_DSN` | optional | Enables server and edge Sentry. Leave unset to keep monitoring off. |
+| `NEXT_PUBLIC_SENTRY_DSN` | optional | Enables browser Sentry. Must be present at build time so the client bundle can include it. |
+| `SENTRY_ENVIRONMENT` | optional | Sentry environment tag. Defaults to `production`. |
+| `SENTRY_TRACES_SAMPLE_RATE` | optional | Trace sample rate from 0 to 1. Defaults to `0.1`. |
+| `SENTRY_AUTH_TOKEN` | optional | Auth token for uploading source maps during `next build`. Upload is skipped when unset. |
+| `SENTRY_ORG` | optional | Sentry org slug, used with the auth token for source map upload. |
+| `SENTRY_PROJECT` | optional | Sentry project slug, used with the auth token for source map upload. |
+
 Everything else meeting-related — Cap's own transcription fallback
 (`ASSEMBLY_API_KEY`), general AI provider selection (`AI_PROVIDER`,
 `AI_MODEL`, and related keys) — is documented in `packages/env/server.ts`
