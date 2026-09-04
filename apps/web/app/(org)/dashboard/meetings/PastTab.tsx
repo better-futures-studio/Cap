@@ -1,12 +1,37 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { toast } from "sonner";
+import { deleteMeeting } from "@/actions/meetings";
 import {
 	meetingPlatformLabel,
 	meetingUrlLabel,
 } from "@/lib/recall/meetings-view";
+import { ConfirmationDialog } from "../_components/ConfirmationDialog";
 import { formatPastDate, type MeetingBotRow } from "./meetings-shared";
 
-function PastRow({ bot }: { bot: MeetingBotRow }) {
+function PastRow({ bot, userId }: { bot: MeetingBotRow; userId: string }) {
+	const router = useRouter();
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [isDeleting, setIsDeleting] = useState(false);
+
+	const remove = async () => {
+		setIsDeleting(true);
+		try {
+			await deleteMeeting({ meetingBotId: bot.id });
+			toast.success("Meeting deleted");
+			setConfirmOpen(false);
+			router.refresh();
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Failed to delete meeting",
+			);
+		} finally {
+			setIsDeleting(false);
+		}
+	};
+
 	const platform = meetingPlatformLabel(bot.meetingUrl, bot.source);
 	const title = bot.title ?? meetingUrlLabel(bot.meetingUrl);
 
@@ -56,12 +81,39 @@ function PastRow({ bot }: { bot: MeetingBotRow }) {
 						<p className="text-xs text-red-600">{bot.errorMessage}</p>
 					)}
 			</div>
-			<div className="shrink-0">{result}</div>
+			<div className="flex shrink-0 items-center gap-2">
+				{result}
+				{bot.ownerId === userId && (
+					<button
+						type="button"
+						className="text-xs text-red-600 hover:underline disabled:opacity-50"
+						onClick={() => setConfirmOpen(true)}
+					>
+						Delete
+					</button>
+				)}
+			</div>
+			<ConfirmationDialog
+				open={confirmOpen}
+				title="Delete meeting"
+				description="This permanently deletes the recording, transcript, and summary for everyone it was shared with. This cannot be undone."
+				confirmLabel="Delete"
+				confirmVariant="destructive"
+				loading={isDeleting}
+				onConfirm={remove}
+				onCancel={() => setConfirmOpen(false)}
+			/>
 		</div>
 	);
 }
 
-export function PastTab({ bots }: { bots: MeetingBotRow[] }) {
+export function PastTab({
+	bots,
+	userId,
+}: {
+	bots: MeetingBotRow[];
+	userId: string;
+}) {
 	if (bots.length === 0) {
 		return <p className="text-sm text-gray-10">No recordings yet.</p>;
 	}
@@ -69,7 +121,7 @@ export function PastTab({ bots }: { bots: MeetingBotRow[] }) {
 	return (
 		<div className="divide-y divide-gray-3">
 			{bots.map((bot) => (
-				<PastRow key={bot.id} bot={bot} />
+				<PastRow key={bot.id} bot={bot} userId={userId} />
 			))}
 		</div>
 	);

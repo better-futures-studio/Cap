@@ -55,8 +55,22 @@ from a pasted link to a recap email.
   only, or to all attendees — and Cap emails a summary once the recording
   and transcript are ready.
 - **Attendee-only visibility.** When a recap goes to attendees, the
-  recording is shared with them through a private Space scoped to that
-  meeting, instead of being made org-wide public.
+  recording is shared with them directly (a `video_shares` row per person)
+  instead of being made org-wide public. "Me + attendees" recap emails only
+  go to attendees who are members of the organization.
+- **Meeting visibility.** The Meetings page and the live meeting view only
+  show meetings a user owns, attended, or was given access to. Org
+  owners/admins still see every meeting.
+- **Per-person sharing.** The share dialog lists the owner and everyone a
+  recording is shared with, and lets the owner add org members or remove
+  someone's access.
+- **Recall media retention.** Bots are created with timed Recall retention
+  (`RECALL_MEDIA_RETENTION_HOURS`, default 168 hours) and, once Cap has
+  imported the recording and transcript, the Recall-stored media is deleted
+  (`RECALL_DELETE_MEDIA_AFTER_IMPORT`, default on).
+- **Meeting deletion.** A meeting's owner can delete it — the meeting row,
+  its recording, transcript, and summary go away for everyone it was shared
+  with, and any pending Recall bot is cancelled first.
 
 ### In-call assistant (off by default)
 

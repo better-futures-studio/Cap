@@ -86,6 +86,7 @@ Added in `packages/database/schema.ts`, alongside upstream's `videos`,
 | `meeting_calendar_series_rules` | Per-recurring-series record/skip decisions. |
 | `recall_webhook_events` | Dedup log of processed webhook deliveries, keyed by `webhook-id`. |
 | `slack_huddle_teams` | Slack workspaces that have invited the Huddles bot, and its activation status. |
+| `video_shares` | Per-person access to a video: who it's shared with, who shared it, and how (owner, meeting attendee, or manually added). Drives meeting visibility and the share dialog's "People with access" list; replaced the earlier per-meeting Space approach. |
 
 ## Realtime endpoint
 
@@ -111,6 +112,15 @@ apps/web/app/(org)/dashboard/meetings/       Meetings list + live/detail page
 packages/database/schema.ts                  meeting_* and recall_* tables
 packages/env/server.ts                       RECALL_* environment schema
 ```
+
+## Monitoring
+
+Sentry is opt-in: the server, edge, and browser SDKs only initialise when
+`SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` are set, so a deployment that
+doesn't configure them runs with no Sentry SDK active at all. Where it's on,
+`apps/web/lib/monitoring.ts` exposes a `captureError` helper that the Recall
+webhook and reconcile routes call on failure, and `apps/web/app/global-error.tsx`
+is a global error boundary that reports uncaught client crashes.
 
 ## Deployment specifics
 

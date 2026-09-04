@@ -3,10 +3,11 @@
 import { Button, Switch } from "@cap/ui";
 import type { Organisation } from "@cap/web-domain";
 import { useRouter } from "next/navigation";
-import { useId, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
 	cancelMeetingBotAction,
+	deleteMeeting,
 	setCalendarSeriesRuleAction,
 	toggleCalendarEventRecordingAction,
 } from "@/actions/meetings";
@@ -15,6 +16,7 @@ import {
 	meetingPlatformLabel,
 	meetingUrlLabel,
 } from "@/lib/recall/meetings-view";
+import { ConfirmationDialog } from "../_components/ConfirmationDialog";
 import {
 	botStatusLabel,
 	CANCELLABLE_STATUSES,
@@ -128,13 +130,17 @@ function UpcomingCalendarRow({
 
 function UpcomingBotRow({
 	orgId,
+	userId,
 	bot,
 }: {
 	orgId: Organisation.OrganisationId;
+	userId: string;
 	bot: MeetingBotRow;
 }) {
 	const router = useRouter();
 	const [isPending, startTransition] = useTransition();
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [isDeleting, setIsDeleting] = useState(false);
 
 	const cancel = () => {
 		startTransition(async () => {
@@ -148,6 +154,22 @@ function UpcomingBotRow({
 				);
 			}
 		});
+	};
+
+	const remove = async () => {
+		setIsDeleting(true);
+		try {
+			await deleteMeeting({ meetingBotId: bot.id });
+			toast.success("Meeting deleted");
+			setConfirmOpen(false);
+			router.refresh();
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Failed to delete meeting",
+			);
+		} finally {
+			setIsDeleting(false);
+		}
 	};
 
 	return (
@@ -187,17 +209,38 @@ function UpcomingBotRow({
 						Cancel
 					</button>
 				)}
+				{bot.ownerId === userId && (
+					<button
+						type="button"
+						className="text-xs text-red-600 hover:underline disabled:opacity-50"
+						onClick={() => setConfirmOpen(true)}
+					>
+						Delete
+					</button>
+				)}
 			</div>
+			<ConfirmationDialog
+				open={confirmOpen}
+				title="Delete meeting"
+				description="This permanently deletes the recording, transcript, and summary for everyone it was shared with. This cannot be undone."
+				confirmLabel="Delete"
+				confirmVariant="destructive"
+				loading={isDeleting}
+				onConfirm={remove}
+				onCancel={() => setConfirmOpen(false)}
+			/>
 		</div>
 	);
 }
 
 export function UpcomingTab({
 	orgId,
+	userId,
 	items,
 	settings,
 }: {
 	orgId: Organisation.OrganisationId;
+	userId: string;
 	items: UpcomingItem[];
 	settings: CalendarSettings;
 }) {
@@ -233,7 +276,12 @@ export function UpcomingTab({
 									event={item.event}
 								/>
 							) : (
-								<UpcomingBotRow key={item.key} orgId={orgId} bot={item.bot} />
+								<UpcomingBotRow
+									key={item.key}
+									orgId={orgId}
+									userId={userId}
+									bot={item.bot}
+								/>
 							),
 						)}
 					</div>

@@ -93,6 +93,7 @@ function readTab(value: string | null): TabKey {
 
 export function MeetingsPage({
 	orgId,
+	userId,
 	botName,
 	initialUpcomingBots,
 	initialPastBots,
@@ -103,6 +104,7 @@ export function MeetingsPage({
 	result,
 }: {
 	orgId: Organisation.OrganisationId;
+	userId: string;
 	botName: string;
 	initialUpcomingBots: MeetingBotRow[];
 	initialPastBots: MeetingBotRow[];
@@ -186,11 +188,12 @@ export function MeetingsPage({
 				{activeTab === "upcoming" && (
 					<UpcomingTab
 						orgId={orgId}
+						userId={userId}
 						items={upcomingItems}
 						settings={calendarSettings}
 					/>
 				)}
-				{activeTab === "past" && <PastTab bots={pastBots} />}
+				{activeTab === "past" && <PastTab userId={userId} bots={pastBots} />}
 				{activeTab === "settings" && (
 					<SettingsTab
 						orgId={orgId}

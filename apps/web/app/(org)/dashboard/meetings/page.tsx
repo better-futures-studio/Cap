@@ -48,6 +48,7 @@ export default async function Page({
 	return (
 		<MeetingsPage
 			orgId={user.activeOrganizationId}
+			userId={user.id}
 			botName={getRecallConfig()?.botName ?? DEFAULT_BOT_NAME}
 			initialUpcomingBots={bots.upcoming}
 			initialPastBots={bots.past}
