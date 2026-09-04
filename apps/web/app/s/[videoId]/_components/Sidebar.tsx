@@ -4,7 +4,8 @@ import type { ImageUpload, Video } from "@cap/web-domain";
 import clsx from "clsx";
 import { AnimatePresence, motion } from "motion/react";
 import dynamic from "next/dynamic";
-import { forwardRef, Suspense, useState } from "react";
+import { forwardRef, Suspense, useEffect, useState } from "react";
+import { getAskVideoAvailability } from "@/actions/videos/ask";
 import type { OrganizationSettings } from "@/app/(org)/dashboard/dashboard-data";
 import { useCurrentUser } from "@/app/Layout/AuthContext";
 import type { VideoData } from "../types";
@@ -16,8 +17,10 @@ import { Activity } from "./tabs/Activity";
 // server-side and preloads its own chunk. Hovering a tab button warms its
 // chunk so the click still feels instant.
 const importSummary = () => import("./tabs/Summary");
+const importAsk = () => import("./tabs/Ask");
 const importTranscript = () => import("./tabs/Transcript");
 const Summary = dynamic(() => importSummary().then((m) => m.Summary));
+const Ask = dynamic(() => importAsk().then((m) => m.Ask));
 const Transcript = dynamic(() => importTranscript().then((m) => m.Transcript));
 const Settings = dynamic(() =>
 	import("./tabs/Settings").then((m) => m.Settings),
@@ -25,10 +28,11 @@ const Settings = dynamic(() =>
 
 const prefetchTab = (tabId: string) => {
 	if (tabId === "summary") void importSummary();
+	else if (tabId === "ask") void importAsk();
 	else if (tabId === "transcript") void importTranscript();
 };
 
-type TabType = "activity" | "transcript" | "summary" | "settings";
+type TabType = "activity" | "transcript" | "summary" | "ask" | "settings";
 
 type CommentType = typeof commentsSchema.$inferSelect & {
 	authorName?: string | null;
@@ -145,6 +149,22 @@ export const Sidebar = forwardRef<{ scrollToBottom: () => void }, SidebarProps>(
 
 		const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
 		const [[page, direction], setPage] = useState([0, 0]);
+		const [askAvailable, setAskAvailable] = useState(false);
+
+		useEffect(() => {
+			if (isScreenshot) return;
+			let cancelled = false;
+			getAskVideoAvailability({ videoId: data.id })
+				.then((result) => {
+					if (!cancelled) setAskAvailable(result.available);
+				})
+				.catch(() => {
+					if (!cancelled) setAskAvailable(false);
+				});
+			return () => {
+				cancelled = true;
+			};
+		}, [data.id, isScreenshot]);
 
 		const tabs = [
 			{
@@ -162,6 +182,11 @@ export const Sidebar = forwardRef<{ scrollToBottom: () => void }, SidebarProps>(
 							disabled:
 								videoSettings?.disableSummary ??
 								data.orgSettings?.disableSummary,
+						},
+						{
+							id: "ask",
+							label: "Ask",
+							disabled: !askAvailable,
 						},
 						{
 							id: "transcript",
@@ -224,6 +249,8 @@ export const Sidebar = forwardRef<{ scrollToBottom: () => void }, SidebarProps>(
 							speakerStats={data.metadata?.meetingSpeakerStats}
 						/>
 					);
+				case "ask":
+					return <Ask videoId={data.id} onSeek={onSeek} />;
 				case "transcript":
 					return <Transcript data={data} onSeek={onSeek} />;
 				case "settings":

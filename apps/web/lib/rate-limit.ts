@@ -97,4 +97,6 @@ export const RATE_LIMIT_IDS = {
 	DESKTOP_LOGS: "rl_desktop_logs",
 	/** Unauthed docs Ask AI questions (Anthropic cost). Suggested: 10 / 1m per IP. */
 	DOCS_ASK: "rl_docs_ask",
+	/** Share-page Ask questions about a recording (AI cost). Suggested: 30 / 10m per user or IP. */
+	ASK_VIDEO: "rl_ask_video",
 } as const;

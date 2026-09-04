@@ -46,6 +46,10 @@ from a pasted link to a recap email.
   pipeline automatically.
 - **AI summary and action items.** Cap's AI pipeline runs against the
   transcript and produces a summary plus a structured action item list.
+- **Ask about a recording.** An Ask tab on every share page answers
+  questions from the final transcript, summary, chapters, action items, and
+  meeting chat, citing moments as clickable timestamps. Works for meetings
+  and screen recordings; same access rules as viewing the video.
 - **Speaker analytics.** Per-speaker talk time and turn counts are computed
   from the transcript.
 - **Chat and notes as timeline comments.** In-meeting chat messages, and
