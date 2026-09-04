@@ -46,7 +46,10 @@ const AnswerText = ({
 		<div className="space-y-2">
 			{paragraphs.map((paragraph, pIndex) => (
 				// biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are static once rendered
-				<p key={pIndex} className="text-sm leading-relaxed text-gray-12">
+				<p
+					key={pIndex}
+					className="text-sm leading-relaxed whitespace-pre-wrap text-gray-12"
+				>
 					{paragraph.split(TIME_MARKER).map((part, index) => {
 						// split() on a single-capture-group regex puts each match at an
 						// odd index; only those parts are candidate `[mm:ss]` markers.
