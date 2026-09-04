@@ -79,6 +79,7 @@ const Top = () => {
 		"/dashboard/developers/apps": "Developer Apps",
 		"/dashboard/developers/usage": "Developer Usage",
 		"/dashboard/developers/credits": "Developer Credits",
+		"/dashboard/apps": "Get the apps",
 	};
 
 	const title = activeSpace ? activeSpace.name : titles[pathname] || "";
@@ -222,9 +223,10 @@ const User = () => {
 				showCondition: buildEnv.NEXT_PUBLIC_IS_CAP,
 			},
 			{
-				name: "Download App",
+				name: "Get the apps",
 				icon: <DownloadIcon />,
-				onClick: () => window.open("https://cap.so/download", "_blank"),
+				href: "/dashboard/apps",
+				onClick: () => setMenuOpen(false),
 				iconClassName: "text-gray-11 group-hover:text-gray-12",
 				showCondition: true,
 			},

@@ -255,6 +255,35 @@ hosted setup flow asks for during the OAuth consent screen.
 4. Send a test webhook event from the Recall dashboard and confirm your
    `/api/webhooks/recall` endpoint returns success.
 
+### Using the desktop and mobile apps with your instance
+
+The dashboard has a "Get the apps" page (linked from the user menu) with the
+same instructions.
+
+**Desktop (macOS/Windows)**: the public download at https://cap.so/download
+works with a self-hosted instance — it isn't tied to cap.so. After
+installing, open Settings → General, and in the Self-host section set the
+Cap Server URL to your instance's URL. Confirming the change signs you out;
+sign in again with Google.
+
+**Mobile (iOS)**: the App Store build only talks to cap.so — its API base
+URL is baked in at build time (`EXPO_PUBLIC_CAP_WEB_URL` in
+`apps/mobile/src/auth/AuthContext.tsx`, see `apps/mobile/README.md`). To use
+Cap Mobile with a self-hosted instance, an admin builds a custom app with
+EAS, pointed at your instance:
+
+```bash
+cd apps/mobile
+pnpm dlx eas-cli@21.0.2 env:create production --name EXPO_PUBLIC_CAP_WEB_URL --value https://<your-domain> --visibility plaintext
+pnpm build:production
+```
+
+Once the build finishes, install it through TestFlight or internal
+distribution and sign in with Google.
+
+**Browser extension**: the extension's options page has a "Cap URL" field
+under Connection — set it to your instance's URL and sign in with Google.
+
 ### Branding
 
 The bot's display name comes from `RECALL_BOT_NAME`. Its camera card — the
