@@ -172,7 +172,9 @@ function databaseFixture(video = recording()) {
 				? rows
 				: table === Db.videoProcessingJobs
 					? jobs
-					: null;
+					: table === Db.meetingBots
+						? new Map()
+						: null;
 		if (!source) throw new Error("Unexpected table read");
 		const row = source.get(idFrom(condition));
 		return row ? [structuredClone(row)] : [];
@@ -181,9 +183,10 @@ function databaseFixture(video = recording()) {
 		return {
 			select: () => ({
 				from: (table: unknown) => ({
-					where: (condition: SQL) => ({
-						for: async () => read(table, condition),
-					}),
+					where: (condition: SQL) =>
+						Object.assign(Promise.resolve(read(table, condition)), {
+							for: async () => read(table, condition),
+						}),
 				}),
 			}),
 			delete: (table: unknown) => ({

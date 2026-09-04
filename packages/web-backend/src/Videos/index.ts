@@ -47,6 +47,7 @@ type ScreenshotCandidate = {
 	lastModified: number | null;
 };
 async function deleteRecallMediaBestEffort(recallBotIds: string[]) {
+	if (recallBotIds.length === 0) return;
 	const env = serverEnv();
 	if (!env.RECALL_API_KEY || env.RECALL_DELETE_MEDIA_AFTER_IMPORT === false) {
 		return;
