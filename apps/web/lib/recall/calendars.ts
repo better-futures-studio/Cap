@@ -8,6 +8,7 @@ import {
 } from "@cap/database/schema";
 import type { Organisation, User } from "@cap/web-domain";
 import { and, desc, eq, notInArray } from "drizzle-orm";
+import { BOT_AUTOMATIC_LEAVE } from "./automatic-leave";
 import { buildJoinChatMessage } from "./bot-chat";
 import { loadBotVideoOutput } from "./bot-image";
 import {
@@ -186,6 +187,7 @@ export async function scheduleCalendarEventBotForRow({
 			deduplicationKey: `${event.start_time}-${event.meeting_url}`,
 			botConfig: {
 				bot_name: config.botName,
+				automatic_leave: BOT_AUTOMATIC_LEAVE,
 				chat: {
 					on_bot_join: {
 						send_to: "everyone",

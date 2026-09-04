@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { BOT_AUTOMATIC_LEAVE } from "@/lib/recall/automatic-leave";
 import { createRecallClient, RecallApiError } from "@/lib/recall/client";
 import type { RecallConfig } from "@/lib/recall/config";
 
@@ -67,6 +68,7 @@ describe("createRecallClient", () => {
 			join_at: "2026-01-01T00:00:00.000Z",
 			bot_name: "Meeting Notetaker",
 			metadata: { cap_meeting_bot_id: "mb_1" },
+			automatic_leave: BOT_AUTOMATIC_LEAVE,
 			chat: {
 				on_bot_join: {
 					send_to: "everyone",

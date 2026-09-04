@@ -1,3 +1,4 @@
+import { BOT_AUTOMATIC_LEAVE } from "./automatic-leave";
 import type { RecallConfig, RecallTranscriptionProvider } from "./config";
 
 const DEFAULT_MEDIA_RETENTION_HOURS = 168;
@@ -145,6 +146,7 @@ export type RecallBotConfig = {
 	};
 	metadata?: Record<string, unknown>;
 	automatic_video_output?: RecallAutomaticVideoOutput;
+	automatic_leave?: typeof BOT_AUTOMATIC_LEAVE;
 	recording_config?: RecordingConfig;
 };
 
@@ -299,6 +301,7 @@ export function createRecallClient(
 				join_at: params.joinAt,
 				bot_name: params.botName,
 				metadata: params.metadata,
+				automatic_leave: BOT_AUTOMATIC_LEAVE,
 				chat: {
 					on_bot_join: {
 						send_to: "everyone",
