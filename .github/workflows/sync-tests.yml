@@ -13,24 +13,6 @@ name: A/V Sync Tests
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 5 * * *"
-  pull_request:
-    paths:
-      - "crates/recording/**"
-      - "crates/enc-ffmpeg/**"
-      - "crates/enc-avfoundation/**"
-      - "crates/enc-mediafoundation/**"
-      - "crates/timestamp/**"
-      - "crates/rendering/**"
-      - "crates/editor/**"
-      - "crates/audio/**"
-      - "crates/media-info/**"
-      - "crates/project/**"
-      - "scripts/recording-reliability.py"
-      - "scripts/recording-reliability-owned-process.cs"
-      - "scripts/test-recording-reliability.py"
-      - ".github/workflows/sync-tests.yml"
 
 concurrency:
   group: sync-tests-${{ github.head_ref || github.ref_name }}

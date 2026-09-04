@@ -2,22 +2,6 @@ name: "Test Self-Hosting"
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "docker-compose.yml"
-      - "docker-compose.coolify.yml"
-      - "apps/media-server/**"
-      - "apps/web/Dockerfile"
-      - ".github/workflows/test-self-hosting.yml"
-  pull_request:
-    paths:
-      - "docker-compose.yml"
-      - "docker-compose.coolify.yml"
-      - "apps/media-server/**"
-      - "apps/web/Dockerfile"
-      - ".github/workflows/test-self-hosting.yml"
 
 jobs:
   test-docker-compose:

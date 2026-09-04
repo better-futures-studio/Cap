@@ -8,11 +8,6 @@ on:
         required: false
         default: "latest"
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/media-server/**"
 
 jobs:
   build:

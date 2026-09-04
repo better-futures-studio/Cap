@@ -16,11 +16,13 @@ env:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       desktop: ${{ steps.filter.outputs.desktop }}
       rust: ${{ steps.filter.outputs.rust }}
       tauri-plugins: ${{ steps.filter.outputs.tauri-plugins }}
+      web: ${{ steps.filter.outputs.web }}
+      mobile: ${{ steps.filter.outputs.mobile }}
       branch: ${{ steps.branch.outputs.branch }}
     steps:
       - name: Checkout
@@ -65,6 +67,14 @@ jobs:
             tauri-plugins:
               - 'Cargo.lock'
               - 'pnpm-lock.yaml'
+            web:
+              - 'apps/web/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - '.github/workflows/ci.yml'
+            mobile:
+              - 'apps/mobile/**'
 
       - name: Output branch name
         id: branch
@@ -73,7 +83,9 @@ jobs:
 
   typecheck:
     name: Typecheck
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,7 +99,9 @@ jobs:
 
   web-unit-tests:
     name: Web unit tests
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -101,7 +115,9 @@ jobs:
 
   web-build:
     name: Web build
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     env:
       NEXT_PUBLIC_DOCKER_BUILD: "true"
       NEXT_PUBLIC_WEB_URL: http://localhost:3000
@@ -124,7 +140,9 @@ jobs:
 
   mobile:
     name: Mobile
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -150,7 +168,9 @@ jobs:
 
   format-biome:
     name: Format (Biome)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -167,7 +187,9 @@ jobs:
 
   format-rust:
     name: Format (Cargo)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -237,7 +259,9 @@ jobs:
 
   lint-biome:
     name: Lint (Biome)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -361,7 +385,7 @@ jobs:
 
   tauri-plugins:
     name: Verify Tauri plugin versions
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: changes
     if: needs.changes.outputs.tauri-plugins == 'true'
     steps:
@@ -380,7 +404,7 @@ jobs:
   rust-cache:
     name: Rust cache
     needs: changes
-    if: needs.changes.outputs.branch == 'main'
+    if: needs.changes.outputs.branch == 'main' && needs.changes.outputs.rust == 'true'
     strategy:
       fail-fast: false
       matrix:

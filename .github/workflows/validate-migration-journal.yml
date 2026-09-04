@@ -4,10 +4,13 @@ on:
   pull_request:
     paths:
       - "packages/database/migrations/**"
+  push:
+    branches:
+      - main
 
 jobs:
   validate-journal:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
