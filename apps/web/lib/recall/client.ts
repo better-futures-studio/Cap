@@ -50,7 +50,11 @@ export type RecallRecording = {
 	status: { code: string };
 	media_shortcuts: {
 		video_mixed?: { data?: { download_url?: string } };
-		transcript?: { id: string; data?: { download_url?: string } };
+		transcript?: {
+			id: string;
+			status?: { code: string; sub_code?: string | null };
+			data?: { download_url?: string };
+		};
 		participant_events?: {
 			data?: { participant_events_download_url?: string };
 		};

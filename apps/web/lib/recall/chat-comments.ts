@@ -22,21 +22,29 @@ function getAffectedRows(result: unknown): number {
 	return (result as { affectedRows?: number } | undefined)?.affectedRows ?? 0;
 }
 
+function isAgentCommand(text: string, trigger: string): boolean {
+	const normalizedTrigger = trigger.trim().toLowerCase();
+	if (!normalizedTrigger) return false;
+	return text.trim().toLowerCase().startsWith(normalizedTrigger);
+}
+
 function isChatEvent(
 	event: RecallParticipantEvent,
 	botName: string,
+	trigger: string,
 ): event is RecallParticipantEvent & { data: { text: string; to: string } } {
 	if (event.action !== "chat_message") return false;
 	const text = event.data?.text?.trim();
 	if (!text) return false;
 	const relative = event.timestamp?.relative;
 	if (!Number.isFinite(relative) || relative < 0) return false;
-	return event.participant?.name !== botName;
+	if (event.participant?.name === botName) return false;
+	return !isAgentCommand(text, trigger);
 }
 
 export async function importMeetingChatComments(
 	{ meetingBotId }: { meetingBotId: string },
-	deps: { client?: RecallClient; botName?: string } = {},
+	deps: { client?: RecallClient; botName?: string; agentTrigger?: string } = {},
 ): Promise<{ imported: number; skipped: boolean }> {
 	const [row] = await db()
 		.select()
@@ -73,10 +81,11 @@ export async function importMeetingChatComments(
 
 		const events =
 			await client.downloadJson<RecallParticipantEvent[]>(downloadUrl);
-		const botName =
-			deps.botName ?? getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
+		const config = getRecallConfig();
+		const botName = deps.botName ?? config?.botName ?? DEFAULT_BOT_NAME;
+		const agentTrigger = deps.agentTrigger ?? config?.agentTrigger ?? "/nt";
 		const chatEvents = (Array.isArray(events) ? events : []).filter((event) =>
-			isChatEvent(event, botName),
+			isChatEvent(event, botName, agentTrigger),
 		);
 
 		if (chatEvents.length === 0) {

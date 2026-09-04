@@ -323,6 +323,42 @@ describe("importMeetingChatComments", () => {
 		);
 	});
 
+	it("skips agent commands and keeps a plain chat message", async () => {
+		seedBot();
+		const events: RecallParticipantEvent[] = [
+			participantEvent({
+				id: "command",
+				action: "chat_message",
+				data: { text: "  /NT what did we decide?  ", to: "everyone" },
+			}),
+			participantEvent({
+				id: "plain",
+				action: "chat_message",
+				timestamp: { absolute: "2026-09-03T16:00:20.000Z", relative: 20 },
+				data: { text: "shipping tomorrow", to: "everyone" },
+			}),
+		];
+		const client = mockClient({
+			downloadJson: vi.fn(async () => events) as RecallClient["downloadJson"],
+		});
+
+		const result = await importMeetingChatComments(
+			{ meetingBotId: "mb_1" },
+			{ client },
+		);
+
+		expect(result).toEqual({ imported: 1, skipped: false });
+		expect(commentRows()).toEqual([
+			expect.objectContaining({
+				type: "text",
+				content: "Alice: shipping tomorrow",
+				timestamp: 20,
+				authorId: ownerId,
+				videoId,
+			}),
+		]);
+	});
+
 	it("skips a second call once chatSyncedAt is set", async () => {
 		seedBot();
 		const client = mockClient({

@@ -13,11 +13,14 @@ import { Comment, Video } from "@cap/web-domain";
 import { eq } from "drizzle-orm";
 import { Option } from "effect";
 import { FatalError } from "workflow";
+import { start } from "workflow/api";
 import { startAiGeneration } from "@/lib/generate-ai";
-import { queueVideoTranscription } from "@/lib/queue-video-transcription";
 import { importMeetingChatComments } from "@/lib/recall/chat-comments";
 import { RecallApiError } from "@/lib/recall/client";
-import { getRecallConfig } from "@/lib/recall/config";
+import {
+	applyCapTranscriptionFallback,
+	createMeetingTranscript,
+} from "@/lib/recall/create-transcript";
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
 import { readLiveTranscript } from "@/lib/recall/live-transcript";
 import { computeSpeakerStats } from "@/lib/recall/speaker-stats";
@@ -29,10 +32,6 @@ import {
 	meetingVideoIsPublic,
 	shareMeetingRecordingWithAttendees,
 } from "@/lib/recall/visibility";
-import {
-	listMeetingVocabularyTerms,
-	toRecallTranscriptVocabulary,
-} from "@/lib/recall/vocabulary";
 import { startVideoProcessingWorkflow } from "@/lib/video-processing";
 import { decodeStorageVideo } from "@/lib/video-storage";
 import { runWorkflowPromise } from "@/lib/workflow-runtime";
@@ -53,26 +52,6 @@ function meetingTitle(title: string | null, date: Date): string {
 		month: "long",
 	})} ${date.getFullYear()}`;
 	return `Meeting - ${formattedDate}`;
-}
-
-async function applyCapTranscriptionFallback(
-	meetingBotId: string,
-	videoId: Video.VideoId | null,
-): Promise<void> {
-	if (videoId) {
-		await db()
-			.update(videos)
-			.set({ transcriptionStatus: null })
-			.where(eq(videos.id, videoId));
-		await queueVideoTranscription(videoId);
-	}
-	await db()
-		.update(meetingBots)
-		.set({
-			status: "transcribing",
-			statusSubCode: "cap_fallback",
-		})
-		.where(eq(meetingBots.id, meetingBotId));
 }
 
 async function completeSharedRows(
@@ -367,59 +346,15 @@ async function createTranscript({
 }): Promise<void> {
 	"use step";
 
-	const [row] = await db()
-		.select({
-			orgId: meetingBots.orgId,
-			recallTranscriptId: meetingBots.recallTranscriptId,
-		})
-		.from(meetingBots)
-		.where(eq(meetingBots.id, meetingBotId))
-		.limit(1);
-	if (row?.recallTranscriptId) {
-		await db()
-			.update(meetingBots)
-			.set({ status: "transcribing" })
-			.where(eq(meetingBots.id, meetingBotId));
-		return;
-	}
-
-	const client = getDefaultRecallClient();
-	try {
-		let keyTerms: string[] = [];
-		let spelling: { find: string[]; replace: string }[] = [];
-		if (row) {
-			try {
-				const vocabulary = toRecallTranscriptVocabulary(
-					await listMeetingVocabularyTerms(row.orgId),
-				);
-				keyTerms = vocabulary.keyTerms;
-				spelling = vocabulary.spelling;
-			} catch (error) {
-				console.error("[recall] load vocabulary failed", {
-					meetingBotId,
-					error: error instanceof Error ? error.message : "unknown",
-				});
-			}
-		}
-		const transcript = await client.createAsyncTranscript(recordingId, {
-			provider: getRecallConfig()?.transcriptionProvider,
-			keyTerms,
-			spelling,
-		});
-		await db()
-			.update(meetingBots)
-			.set({
-				recallTranscriptId: transcript.id,
-				status: "transcribing",
-			})
-			.where(eq(meetingBots.id, meetingBotId));
-	} catch (error) {
-		console.error("[recall] create transcript failed", {
-			meetingBotId,
-			recordingId,
-			status: error instanceof RecallApiError ? error.status : undefined,
-		});
-		await applyCapTranscriptionFallback(meetingBotId, videoId);
+	const result = await createMeetingTranscript({
+		meetingBotId,
+		recordingId,
+		videoId,
+	});
+	if (result.startCompletion && result.transcriptId) {
+		await start(completeRecallTranscriptWorkflow, [
+			{ meetingBotId, transcriptId: result.transcriptId },
+		]);
 	}
 }
 

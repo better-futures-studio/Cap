@@ -20,6 +20,7 @@ import {
 import { applyBotStatusEvent } from "./bots";
 import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
+import { shouldStartTranscriptCompletion } from "./transcript-reuse";
 
 const TERMINAL_STATUSES: MeetingBotStatus[] = [
 	"fatal",
@@ -184,6 +185,53 @@ async function handleRecordingFailed(data: unknown): Promise<void> {
 	}
 }
 
+function transcriptStatusCode(data: unknown): string | undefined {
+	const status = asRecord(data, "data");
+	const fromEvent = asString(status?.code);
+	if (fromEvent) return fromEvent;
+	const transcript = asRecord(data, "transcript");
+	return asString(asRecord(transcript, "status")?.code);
+}
+
+async function findMeetingBotForTranscript(
+	data: unknown,
+	transcriptId: string,
+) {
+	const [byTranscript] = await db()
+		.select()
+		.from(meetingBots)
+		.where(eq(meetingBots.recallTranscriptId, transcriptId))
+		.limit(1);
+	if (byTranscript) return byTranscript;
+
+	const recordingId = asString(asRecord(data, "recording")?.id);
+	if (recordingId) {
+		const [byRecording] = await db()
+			.select()
+			.from(meetingBots)
+			.where(eq(meetingBots.recallRecordingId, recordingId))
+			.limit(1);
+		if (byRecording) return byRecording;
+	}
+
+	const botId = asString(asRecord(data, "bot")?.id);
+	if (!botId) return undefined;
+	const rows = await db()
+		.select()
+		.from(meetingBots)
+		.where(eq(meetingBots.recallBotId, botId))
+		.limit(20);
+	return (
+		rows.find(
+			(row) =>
+				IMPORT_STARTED_STATUSES.includes(row.status) &&
+				row.status !== "complete",
+		) ??
+		rows.find((row) => !TERMINAL_STATUSES.includes(row.status)) ??
+		rows[0]
+	);
+}
+
 async function handleTranscriptDone(data: unknown): Promise<void> {
 	const transcript = asRecord(data, "transcript");
 	const transcriptId = asString(transcript?.id);
@@ -194,16 +242,45 @@ async function handleTranscriptDone(data: unknown): Promise<void> {
 		return;
 	}
 
-	const [row] = await db()
-		.select()
-		.from(meetingBots)
-		.where(eq(meetingBots.recallTranscriptId, transcriptId))
-		.limit(1);
+	const row = await findMeetingBotForTranscript(data, transcriptId);
 	if (!row) {
 		console.info("[recall-webhook] transcript.done with no row", {
 			transcriptId,
 		});
 		return;
+	}
+
+	const incomingDone = transcriptStatusCode(data) !== "failed";
+	const shouldAdopt =
+		!row.recallTranscriptId ||
+		(row.recallTranscriptId !== transcriptId && incomingDone);
+	if (
+		row.recallTranscriptId &&
+		row.recallTranscriptId !== transcriptId &&
+		!incomingDone
+	) {
+		return;
+	}
+	if (!shouldStartTranscriptCompletion(row, transcriptId)) {
+		return;
+	}
+
+	if (shouldAdopt && row.recallTranscriptId !== transcriptId) {
+		await db()
+			.update(meetingBots)
+			.set({
+				recallTranscriptId: transcriptId,
+				status: "transcribing",
+			})
+			.where(eq(meetingBots.id, row.id));
+	} else if (row.status !== "transcribing" && row.status !== "complete") {
+		await db()
+			.update(meetingBots)
+			.set({
+				recallTranscriptId: transcriptId,
+				status: "transcribing",
+			})
+			.where(eq(meetingBots.id, row.id));
 	}
 
 	await start(completeRecallTranscriptWorkflow, [
@@ -218,13 +295,9 @@ async function handleTranscriptDone(data: unknown): Promise<void> {
 async function handleTranscriptFailed(data: unknown): Promise<void> {
 	const transcript = asRecord(data, "transcript");
 	const transcriptId = asString(transcript?.id);
-	const [row] = transcriptId
-		? await db()
-				.select()
-				.from(meetingBots)
-				.where(eq(meetingBots.recallTranscriptId, transcriptId))
-				.limit(1)
-		: [];
+	const row = transcriptId
+		? await findMeetingBotForTranscript(data, transcriptId)
+		: undefined;
 
 	if (!row) {
 		console.info("[recall-webhook] transcript.failed with no row", {
