@@ -66,6 +66,16 @@ Browser checks as the logged-in owner: `agent-browser` with the real Chrome
 - Serverless sleeping is on for Cap Web and the media server; the first
   request after idle wakes the container.
 
+### CI
+
+GitHub Actions `CI` runs on push to `main` and PRs, on Blacksmith Linux runners
+(`blacksmith-4vcpu-ubuntu-2404`). Jobs are gated by changed paths: web-only
+changes run Typecheck, Biome lint/format, Web unit tests, and Web build; Rust,
+desktop, and mobile jobs run only when their own paths change. Upstream's
+scheduled/push workflows (nightly, perf, A/V sync, media-server image,
+self-hosting test) are manual-only here. Before pushing, run vitest, Biome,
+tsc, and `pnpm run build:web`: the workflow bundler only fails at build time.
+
 ### Recall.ai meeting bots
 
 Meeting recording is done by Recall.ai bots (workspace "Boca Pro",
