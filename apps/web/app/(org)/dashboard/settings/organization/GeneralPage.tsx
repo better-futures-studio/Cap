@@ -1,3 +1,5 @@
+"use client";
+
 import DeleteOrg from "./components/DeleteOrg";
 import { OrganizationDetailsCard } from "./components/OrganizationDetailsCard";
 import { RecapSenderCard } from "./components/RecapSenderCard";
