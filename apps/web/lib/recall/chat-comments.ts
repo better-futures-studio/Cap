@@ -202,7 +202,7 @@ export async function importMeetingChatComments(
 				left.timestamp - right.timestamp ||
 				Number(left.fromBot) - Number(right.fromBot),
 		);
-		const base = (row.joinAt ?? row.createdAt).getTime();
+		const base = (row.joinAt ?? row.createdAt ?? new Date(0)).getTime();
 		const values = ordered.map((entry, index) => ({
 			id: Comment.CommentId.make(nanoId()),
 			type: "text" as const,
@@ -210,7 +210,9 @@ export async function importMeetingChatComments(
 			timestamp: entry.timestamp,
 			authorId: row.ownerId,
 			videoId,
-			createdAt: new Date(base + entry.timestamp * 1000 + index),
+			createdAt: new Date(
+				base + Math.floor(entry.timestamp) * 1000 + index * 1000,
+			),
 		}));
 
 		if (values.length === 0) {
