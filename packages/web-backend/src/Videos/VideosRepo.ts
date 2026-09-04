@@ -4,7 +4,7 @@ import * as Db from "@cap/database/schema";
 import { type User, Video } from "@cap/web-domain";
 import * as Dz from "drizzle-orm";
 import type { MySqlInsertBase } from "drizzle-orm/mysql-core";
-import { Effect, Option } from "effect";
+import { Array, Effect, Option } from "effect";
 import type { Schema } from "effect/Schema";
 import { Database } from "../Database.ts";
 
@@ -150,7 +150,44 @@ export class VideosRepo extends Effect.Service<VideosRepo>()("VideosRepo", {
 				return id;
 			});
 
-		return { getById, prepareDelete, delete: delete_, create };
+		const shareForVideo = (userId: User.UserId, videoId: Video.VideoId) =>
+			db
+				.use((db) =>
+					db
+						.select({ userId: Db.videoShares.userId })
+						.from(Db.videoShares)
+						.where(
+							Dz.and(
+								Dz.eq(Db.videoShares.userId, userId),
+								Dz.eq(Db.videoShares.videoId, videoId),
+							),
+						)
+						.limit(1),
+				)
+				.pipe(Effect.map(Array.get(0)));
+
+		const listShares = (videoId: Video.VideoId) =>
+			db.use((db) =>
+				db
+					.select({
+						id: Db.users.id,
+						name: Db.users.name,
+						email: Db.users.email,
+						source: Db.videoShares.source,
+					})
+					.from(Db.videoShares)
+					.innerJoin(Db.users, Dz.eq(Db.videoShares.userId, Db.users.id))
+					.where(Dz.eq(Db.videoShares.videoId, videoId)),
+			);
+
+		return {
+			getById,
+			prepareDelete,
+			delete: delete_,
+			create,
+			shareForVideo,
+			listShares,
+		};
 	}),
 	dependencies: [Database.Default],
 }) {}

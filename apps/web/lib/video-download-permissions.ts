@@ -4,6 +4,7 @@ import {
 	sharedVideos,
 	spaceMembers,
 	spaceVideos,
+	videoShares,
 } from "@cap/database/schema";
 import type { User, Video } from "@cap/web-domain";
 import { and, eq, inArray } from "drizzle-orm";
@@ -52,21 +53,31 @@ export async function canUserDownloadVideo({
 		.from(spaceVideos)
 		.where(eq(spaceVideos.videoId, videoId));
 
-	if (sharedSpaces.length === 0) return false;
-
-	const [spaceMembership] = await db()
-		.select({ id: spaceMembers.id })
-		.from(spaceMembers)
-		.where(
-			and(
-				eq(spaceMembers.userId, userId),
-				inArray(
-					spaceMembers.spaceId,
-					sharedSpaces.map((space) => space.spaceId),
+	if (sharedSpaces.length > 0) {
+		const [spaceMembership] = await db()
+			.select({ id: spaceMembers.id })
+			.from(spaceMembers)
+			.where(
+				and(
+					eq(spaceMembers.userId, userId),
+					inArray(
+						spaceMembers.spaceId,
+						sharedSpaces.map((space) => space.spaceId),
+					),
 				),
-			),
+			)
+			.limit(1);
+
+		if (spaceMembership) return true;
+	}
+
+	const [personShare] = await db()
+		.select({ userId: videoShares.userId })
+		.from(videoShares)
+		.where(
+			and(eq(videoShares.videoId, videoId), eq(videoShares.userId, userId)),
 		)
 		.limit(1);
 
-	return Boolean(spaceMembership);
+	return Boolean(personShare);
 }

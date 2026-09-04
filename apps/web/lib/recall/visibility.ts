@@ -1,5 +1,4 @@
 import { db } from "@cap/database";
-import { nanoId } from "@cap/database/helpers";
 import {
 	meetingBots,
 	organizationMembers,
@@ -7,15 +6,11 @@ import {
 	spaces,
 	spaceVideos,
 	users,
+	videoShares,
+	videos,
 } from "@cap/database/schema";
-import {
-	type Organisation,
-	Space,
-	SpaceMemberId,
-	type User,
-	type Video,
-} from "@cap/web-domain";
-import { and, eq } from "drizzle-orm";
+import type { Organisation, Space, User, Video } from "@cap/web-domain";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { RecallCalendarEvent, RecallClient } from "./client";
 import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
@@ -29,7 +24,7 @@ export function meetingVideoIsPublic(): boolean {
 	return MEETING_VIDEO_PUBLIC;
 }
 
-function meetingSpaceName(title: string | null, date: Date): string {
+export function meetingSpaceName(title: string | null, date: Date): string {
 	if (title?.trim()) return title.trim().slice(0, 255);
 	const formattedDate = `${date.getDate()} ${date.toLocaleString("default", {
 		month: "long",
@@ -118,87 +113,25 @@ export async function resolveMeetingAttendeeUserIds({
 	return [...ids];
 }
 
-async function existingMeetingSpaceId(
-	videoId: Video.VideoId,
-): Promise<Space.SpaceIdOrOrganisationId | null> {
-	const [row] = await db()
-		.select({ spaceId: spaceVideos.spaceId })
-		.from(spaceVideos)
-		.where(eq(spaceVideos.videoId, videoId))
-		.limit(1);
-	return row?.spaceId ?? null;
-}
-
-async function ensureSpaceMembers({
-	spaceId,
+async function insertMeetingShares({
+	videoId,
 	ownerId,
 	attendeeIds,
 }: {
-	spaceId: Space.SpaceIdOrOrganisationId;
+	videoId: Video.VideoId;
 	ownerId: User.UserId;
 	attendeeIds: User.UserId[];
 }): Promise<void> {
-	const existing = await db()
-		.select({ userId: spaceMembers.userId })
-		.from(spaceMembers)
-		.where(eq(spaceMembers.spaceId, spaceId))
-		.limit(200);
-	const present = new Set(existing.map((row) => row.userId));
-	const values: {
-		id: SpaceMemberId;
-		spaceId: Space.SpaceIdOrOrganisationId;
-		userId: User.UserId;
-		role: "admin" | "member";
-	}[] = [];
-
-	if (!present.has(ownerId)) {
-		values.push({
-			id: SpaceMemberId.make(nanoId()),
-			spaceId,
-			userId: ownerId,
-			role: "admin",
-		});
-		present.add(ownerId);
-	}
-
-	for (const userId of attendeeIds) {
-		if (present.has(userId)) continue;
-		values.push({
-			id: SpaceMemberId.make(nanoId()),
-			spaceId,
+	const values = attendeeIds
+		.filter((userId) => userId !== ownerId)
+		.map((userId) => ({
+			videoId,
 			userId,
-			role: userId === ownerId ? "admin" : "member",
-		});
-		present.add(userId);
-	}
-
+			sharedByUserId: ownerId,
+			source: "meeting" as const,
+		}));
 	if (values.length === 0) return;
-	await db().insert(spaceMembers).values(values);
-}
-
-async function ensureSpaceVideo({
-	spaceId,
-	videoId,
-	addedById,
-}: {
-	spaceId: Space.SpaceIdOrOrganisationId;
-	videoId: Video.VideoId;
-	addedById: User.UserId;
-}): Promise<void> {
-	const [existing] = await db()
-		.select({ id: spaceVideos.id })
-		.from(spaceVideos)
-		.where(
-			and(eq(spaceVideos.spaceId, spaceId), eq(spaceVideos.videoId, videoId)),
-		)
-		.limit(1);
-	if (existing) return;
-	await db().insert(spaceVideos).values({
-		id: nanoId(),
-		spaceId,
-		videoId,
-		addedById,
-	});
+	await db().insert(videoShares).ignore().values(values);
 }
 
 export async function shareMeetingRecordingWithAttendees(
@@ -210,8 +143,6 @@ export async function shareMeetingRecordingWithAttendees(
 			.select({
 				ownerId: meetingBots.ownerId,
 				orgId: meetingBots.orgId,
-				title: meetingBots.title,
-				joinAt: meetingBots.joinAt,
 				videoId: meetingBots.videoId,
 				calendarEventId: meetingBots.calendarEventId,
 			})
@@ -220,38 +151,16 @@ export async function shareMeetingRecordingWithAttendees(
 			.limit(1);
 		if (!primary?.videoId) return;
 
-		const videoId = primary.videoId;
 		const attendeeIds = await resolveMeetingAttendeeUserIds({
 			meetingBotId,
 			orgId: primary.orgId,
 			calendarEventId: primary.calendarEventId,
 			client: deps.client,
 		});
-
-		let spaceId = await existingMeetingSpaceId(videoId);
-		if (!spaceId) {
-			spaceId = Space.SpaceId.make(nanoId());
-			await db()
-				.insert(spaces)
-				.values({
-					id: spaceId,
-					name: meetingSpaceName(primary.title, primary.joinAt),
-					organizationId: primary.orgId,
-					createdById: primary.ownerId,
-					privacy: "Private",
-					public: false,
-				});
-		}
-
-		await ensureSpaceMembers({
-			spaceId,
+		await insertMeetingShares({
+			videoId: primary.videoId,
 			ownerId: primary.ownerId,
 			attendeeIds,
-		});
-		await ensureSpaceVideo({
-			spaceId,
-			videoId,
-			addedById: primary.ownerId,
 		});
 	} catch (error) {
 		console.error("[recall] share recording with attendees failed", {
@@ -259,4 +168,203 @@ export async function shareMeetingRecordingWithAttendees(
 			error: error instanceof Error ? error.message : "unknown",
 		});
 	}
+}
+
+function pickPrimaryMeetingBotId(
+	bots: { id: string; statusSubCode: string | null }[],
+): string | undefined {
+	const sharedFrom = bots
+		.map((bot) => bot.statusSubCode?.match(/^shared:(.+)$/)?.[1])
+		.find((id): id is string => Boolean(id));
+	if (sharedFrom && bots.some((bot) => bot.id === sharedFrom))
+		return sharedFrom;
+	const primary = bots.find((bot) => !bot.statusSubCode?.startsWith("shared:"));
+	return primary?.id ?? bots[0]?.id;
+}
+
+async function copySpaceMembersToShares({
+	spaceId,
+	videoId,
+	ownerId,
+}: {
+	spaceId: Space.SpaceIdOrOrganisationId;
+	videoId: Video.VideoId;
+	ownerId: User.UserId;
+}): Promise<void> {
+	const members = await db()
+		.select({ userId: spaceMembers.userId })
+		.from(spaceMembers)
+		.where(eq(spaceMembers.spaceId, spaceId))
+		.limit(200);
+	await insertMeetingShares({
+		videoId,
+		ownerId,
+		attendeeIds: members.map((row) => row.userId),
+	});
+}
+
+async function detachMeetingVideoFromSpace({
+	spaceId,
+	videoId,
+}: {
+	spaceId: Space.SpaceIdOrOrganisationId;
+	videoId: Video.VideoId;
+}): Promise<void> {
+	await db()
+		.delete(spaceVideos)
+		.where(
+			and(eq(spaceVideos.spaceId, spaceId), eq(spaceVideos.videoId, videoId)),
+		);
+	const [remaining] = await db()
+		.select({ id: spaceVideos.id })
+		.from(spaceVideos)
+		.where(eq(spaceVideos.spaceId, spaceId))
+		.limit(1);
+	if (remaining) return;
+	await db().delete(spaceMembers).where(eq(spaceMembers.spaceId, spaceId));
+	await db().delete(spaces).where(eq(spaces.id, spaceId));
+}
+
+export async function migrateMeetingSpacesToVideoShares(
+	deps: { client?: RecallClient } = {},
+): Promise<{ spacesMigrated: number; videosPrivatized: number }> {
+	const spaceCandidates = await db()
+		.select({
+			spaceId: spaces.id,
+			spaceName: spaces.name,
+			privacy: spaces.privacy,
+			public: spaces.public,
+			videoId: spaceVideos.videoId,
+			ownerId: videos.ownerId,
+			title: meetingBots.title,
+			joinAt: meetingBots.joinAt,
+			meetingBotId: meetingBots.id,
+			statusSubCode: meetingBots.statusSubCode,
+		})
+		.from(spaceVideos)
+		.innerJoin(meetingBots, eq(meetingBots.videoId, spaceVideos.videoId))
+		.innerJoin(spaces, eq(spaces.id, spaceVideos.spaceId))
+		.innerJoin(videos, eq(videos.id, spaceVideos.videoId))
+		.where(and(eq(spaces.privacy, "Private"), eq(spaces.public, false)))
+		.limit(200);
+
+	const meetingSpaces = new Map<
+		string,
+		{
+			spaceId: Space.SpaceIdOrOrganisationId;
+			videoId: Video.VideoId;
+			ownerId: User.UserId;
+			bots: { id: string; statusSubCode: string | null }[];
+		}
+	>();
+	for (const row of spaceCandidates) {
+		if (!row.videoId) continue;
+		if (row.spaceName !== meetingSpaceName(row.title, row.joinAt)) continue;
+		const key = `${row.spaceId}:${row.videoId}`;
+		const existing = meetingSpaces.get(key);
+		if (existing) {
+			existing.bots.push({
+				id: row.meetingBotId,
+				statusSubCode: row.statusSubCode,
+			});
+			continue;
+		}
+		meetingSpaces.set(key, {
+			spaceId: row.spaceId,
+			videoId: row.videoId,
+			ownerId: row.ownerId,
+			bots: [{ id: row.meetingBotId, statusSubCode: row.statusSubCode }],
+		});
+	}
+
+	const publicMeetingVideos = await db()
+		.select({
+			videoId: meetingBots.videoId,
+			ownerId: videos.ownerId,
+			meetingBotId: meetingBots.id,
+			statusSubCode: meetingBots.statusSubCode,
+		})
+		.from(meetingBots)
+		.innerJoin(videos, eq(videos.id, meetingBots.videoId))
+		.where(and(isNotNull(meetingBots.videoId), eq(videos.public, true)))
+		.limit(200);
+
+	if (meetingSpaces.size === 0 && publicMeetingVideos.length === 0) {
+		return { spacesMigrated: 0, videosPrivatized: 0 };
+	}
+
+	const privatizeIds = new Set<Video.VideoId>();
+	const shareBotIds = new Set<string>();
+	const spacesSeen = new Set<string>();
+
+	for (const row of meetingSpaces.values()) {
+		try {
+			await copySpaceMembersToShares({
+				spaceId: row.spaceId,
+				videoId: row.videoId,
+				ownerId: row.ownerId,
+			});
+			await detachMeetingVideoFromSpace({
+				spaceId: row.spaceId,
+				videoId: row.videoId,
+			});
+			privatizeIds.add(row.videoId);
+			const botId = pickPrimaryMeetingBotId(row.bots);
+			if (botId) shareBotIds.add(botId);
+			spacesSeen.add(row.spaceId);
+		} catch (error) {
+			console.error("[recall] meeting space share migration failed", {
+				spaceId: row.spaceId,
+				videoId: row.videoId,
+				error: error instanceof Error ? error.message : "unknown",
+			});
+		}
+	}
+
+	const publicByVideo = new Map<
+		string,
+		{
+			videoId: Video.VideoId;
+			bots: { id: string; statusSubCode: string | null }[];
+		}
+	>();
+	for (const row of publicMeetingVideos) {
+		if (!row.videoId) continue;
+		const existing = publicByVideo.get(row.videoId);
+		if (existing) {
+			existing.bots.push({
+				id: row.meetingBotId,
+				statusSubCode: row.statusSubCode,
+			});
+			continue;
+		}
+		publicByVideo.set(row.videoId, {
+			videoId: row.videoId,
+			bots: [{ id: row.meetingBotId, statusSubCode: row.statusSubCode }],
+		});
+	}
+
+	for (const row of publicByVideo.values()) {
+		privatizeIds.add(row.videoId);
+		const botId = pickPrimaryMeetingBotId(row.bots);
+		if (botId) shareBotIds.add(botId);
+	}
+
+	if (privatizeIds.size > 0) {
+		await db()
+			.update(videos)
+			.set({ public: false })
+			.where(inArray(videos.id, [...privatizeIds]));
+	}
+
+	for (const meetingBotId of shareBotIds) {
+		await shareMeetingRecordingWithAttendees(meetingBotId, {
+			client: deps.client,
+		});
+	}
+
+	return {
+		spacesMigrated: spacesSeen.size,
+		videosPrivatized: privatizeIds.size,
+	};
 }

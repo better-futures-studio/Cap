@@ -46,6 +46,7 @@ function makeDeps(config: {
 	spacePasswords?: string[];
 	orgMembership?: boolean;
 	spaceMembership?: boolean;
+	personShare?: boolean;
 	allowedEmailDomain?: Option.Option<string>;
 }): VideosPolicyDeps {
 	const {
@@ -54,6 +55,7 @@ function makeDeps(config: {
 		spacePasswords = [],
 		orgMembership = false,
 		spaceMembership = false,
+		personShare = false,
 		allowedEmailDomain = Option.none<string>(),
 	} = config;
 
@@ -62,6 +64,12 @@ function makeDeps(config: {
 			getById: () =>
 				Effect.succeed(
 					video ? Option.some([video, password] as const) : Option.none(),
+				),
+			shareForVideo: () =>
+				Effect.succeed(
+					personShare
+						? Option.some({ userId: TEST_OTHER_USER_ID })
+						: Option.none(),
 				),
 		},
 		orgsRepo: {
@@ -191,6 +199,31 @@ describe("VideosPolicy.canView", () => {
 			const deps = makeDeps({
 				video: makeVideo({ public: false }),
 				orgMembership: true,
+				allowedEmailDomain: Option.some("restricted.com"),
+			});
+
+			expect(await runCanView(deps, makeUser("contractor@gmail.com"))).toBe(
+				"allowed",
+			);
+		});
+	});
+
+	describe("explicit person share", () => {
+		it("allows a signed-in user with a video_shares row on a private video", async () => {
+			const deps = makeDeps({
+				video: makeVideo({ public: false }),
+				personShare: true,
+			});
+
+			expect(await runCanView(deps, makeUser("attendee@company.com"))).toBe(
+				"allowed",
+			);
+		});
+
+		it("allows a shared user even when email does NOT match restriction", async () => {
+			const deps = makeDeps({
+				video: makeVideo({ public: false }),
+				personShare: true,
 				allowedEmailDomain: Option.some("restricted.com"),
 			});
 

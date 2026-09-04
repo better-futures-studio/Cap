@@ -519,6 +519,24 @@ export const sharedVideos = mysqlTable(
 	}),
 );
 
+export const videoShares = mysqlTable(
+	"video_shares",
+	{
+		videoId: nanoId("videoId").notNull().$type<Video.VideoId>(),
+		userId: nanoId("userId").notNull().$type<User.UserId>(),
+		sharedByUserId: nanoId("sharedByUserId").notNull().$type<User.UserId>(),
+		source: varchar("source", {
+			length: 16,
+			enum: ["meeting", "manual"],
+		}).notNull(),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.videoId, table.userId] }),
+		index("video_shares_user_id_idx").on(table.userId),
+	],
+);
+
 export const comments = mysqlTable(
 	"comments",
 	{
@@ -1070,6 +1088,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
 	organizationMembers: many(organizationMembers),
 	videos: many(videos),
 	sharedVideos: many(sharedVideos),
+	videoShares: many(videoShares),
 	customBucket: one(s3Buckets),
 	storageIntegrations: many(storageIntegrations),
 	spaces: many(spaces),
@@ -1203,6 +1222,7 @@ export const videosRelations = relations(videos, ({ one, many }) => ({
 		references: [users.id],
 	}),
 	sharedVideos: many(sharedVideos),
+	videoShares: many(videoShares),
 	spaceVideos: many(spaceVideos),
 	edit: one(videoEdits, {
 		fields: [videos.id],
@@ -1236,6 +1256,21 @@ export const sharedVideosRelations = relations(sharedVideos, ({ one }) => ({
 	}),
 	sharedByUser: one(users, {
 		fields: [sharedVideos.sharedByUserId],
+		references: [users.id],
+	}),
+}));
+
+export const videoSharesRelations = relations(videoShares, ({ one }) => ({
+	video: one(videos, {
+		fields: [videoShares.videoId],
+		references: [videos.id],
+	}),
+	user: one(users, {
+		fields: [videoShares.userId],
+		references: [users.id],
+	}),
+	sharedByUser: one(users, {
+		fields: [videoShares.sharedByUserId],
 		references: [users.id],
 	}),
 }));

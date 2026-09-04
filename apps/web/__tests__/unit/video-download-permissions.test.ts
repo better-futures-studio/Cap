@@ -6,6 +6,7 @@ const schema = {
 	sharedVideos: { table: "sharedVideos" },
 	spaceMembers: { table: "spaceMembers" },
 	spaceVideos: { table: "spaceVideos" },
+	videoShares: { table: "videoShares" },
 };
 
 vi.mock("@cap/database/schema", () => schema);
@@ -64,11 +65,13 @@ describe("canUserDownloadVideo", () => {
 		queued = [
 			[], // sharedVideos: no explicit org share
 			[], // spaceVideos: no space share
+			[], // videoShares
 		];
 
 		expect(await call(OTHER)).toBe(false);
 		expect(tablesRead).toContain("sharedVideos");
 		expect(tablesRead).not.toContain("organizationMembers");
+		expect(tablesRead).toContain("videoShares");
 	});
 
 	it("allows a member of an org the video was explicitly shared with", async () => {
@@ -86,6 +89,7 @@ describe("canUserDownloadVideo", () => {
 			[{ organizationId: VIDEO_ORG }], // sharedVideos
 			[], // organizationMembers: not a member
 			[], // spaceVideos
+			[], // videoShares
 		];
 
 		expect(await call(OTHER)).toBe(false);
@@ -107,8 +111,20 @@ describe("canUserDownloadVideo", () => {
 			[], // sharedVideos
 			[{ spaceId: "space-1" }], // spaceVideos
 			[], // spaceMembers
+			[], // videoShares
 		];
 
 		expect(await call(OTHER)).toBe(false);
+	});
+
+	it("allows a user with a video_shares row", async () => {
+		queued = [
+			[], // sharedVideos
+			[], // spaceVideos
+			[{ userId: OTHER }], // videoShares
+		];
+
+		expect(await call(OTHER)).toBe(true);
+		expect(tablesRead).toContain("videoShares");
 	});
 });

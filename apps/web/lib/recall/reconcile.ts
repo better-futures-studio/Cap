@@ -9,6 +9,7 @@ import { RecallApiError } from "./client";
 import { isRecallConfigured } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 import { sendMeetingRecap } from "./recap";
+import { migrateMeetingSpacesToVideoShares } from "./visibility";
 
 const MISSED_RECORDING_MS = 15 * 60 * 1000;
 
@@ -119,14 +120,29 @@ export async function reconcileRecallMeetingBots(): Promise<{
 	missedRecordings: number;
 	chatBackfill: number;
 	recapEmails: number;
+	spacesMigrated: number;
+	videosPrivatized: number;
 } | null> {
 	if (!isRecallConfigured()) return null;
-	const [staleScheduling, missedRecordings, chatBackfill, recapEmails] =
-		await Promise.all([
-			reconcileStaleSchedulingRows(getDefaultRecallClient()),
-			reconcileMissedDoneRows(),
-			backfillChatComments(),
-			sendPendingRecapEmails(),
-		]);
-	return { staleScheduling, missedRecordings, chatBackfill, recapEmails };
+	const [
+		staleScheduling,
+		missedRecordings,
+		chatBackfill,
+		recapEmails,
+		shareMigration,
+	] = await Promise.all([
+		reconcileStaleSchedulingRows(getDefaultRecallClient()),
+		reconcileMissedDoneRows(),
+		backfillChatComments(),
+		sendPendingRecapEmails(),
+		migrateMeetingSpacesToVideoShares(),
+	]);
+	return {
+		staleScheduling,
+		missedRecordings,
+		chatBackfill,
+		recapEmails,
+		spacesMigrated: shareMigration.spacesMigrated,
+		videosPrivatized: shareMigration.videosPrivatized,
+	};
 }

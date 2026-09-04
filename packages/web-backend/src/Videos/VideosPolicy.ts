@@ -22,6 +22,10 @@ export type VideosPolicyDeps = {
 			Option.Option<readonly [Video.Video, Option.Option<string>]>,
 			DatabaseError
 		>;
+		shareForVideo: (
+			userId: User.UserId,
+			videoId: Video.VideoId,
+		) => Effect.Effect<Option.Option<{ userId: User.UserId }>, DatabaseError>;
 	};
 	orgsRepo: {
 		membershipForVideo: (
@@ -71,20 +75,25 @@ export function buildCanView(
 
 			if (Option.isSome(user)) {
 				const userId = user.value.id;
-				const [videoOrgShareMembership, videoSpaceShareMembership] =
-					yield* Effect.all([
-						orgsRepo
-							.membershipForVideo(userId, video.id)
-							.pipe(Effect.map(Array.get(0))),
-						spacesRepo.membershipForVideo(userId, video.id),
-					]);
+				const [
+					videoOrgShareMembership,
+					videoSpaceShareMembership,
+					videoPersonShare,
+				] = yield* Effect.all([
+					orgsRepo
+						.membershipForVideo(userId, video.id)
+						.pipe(Effect.map(Array.get(0))),
+					spacesRepo.membershipForVideo(userId, video.id),
+					repo.shareForVideo(userId, video.id),
+				]);
 
 				if (
 					Option.isSome(videoOrgShareMembership) ||
-					Option.isSome(videoSpaceShareMembership)
+					Option.isSome(videoSpaceShareMembership) ||
+					Option.isSome(videoPersonShare)
 				) {
 					yield* Effect.log(
-						"Explicit org/space membership found. Access granted.",
+						"Explicit org/space/person membership found. Access granted.",
 					);
 					yield* Video.verifyPasswordCandidates(video, passwordHashes);
 					return true;
