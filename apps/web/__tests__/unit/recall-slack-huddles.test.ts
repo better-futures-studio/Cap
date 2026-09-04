@@ -63,14 +63,15 @@ vi.mock("@cap/env", () => ({
 	serverEnv: () => ({ CAP_DEFAULT_ORG_ID: "org_1" }),
 }));
 vi.mock("@/lib/recall/config", () => ({
+	DEFAULT_BOT_NAME: "Meeting Notetaker",
 	getRecallConfig: () => ({
 		apiKey: "test-api-key",
 		region: "us-west-2",
 		baseUrl: "https://us-west-2.recall.ai",
 		verificationSecret: null,
-		botName: "Boca Pro Notetaker",
-		publicBaseUrl: "https://cap.boca.pro",
-		botImageUrl: "https://cap.boca.pro/meeting-bot/recording.jpg",
+		botName: "Meeting Notetaker",
+		publicBaseUrl: "https://cap.example.com",
+		botImageUrl: "https://cap.example.com/api/meeting-bot/card",
 		calendarGoogle: null,
 	}),
 	isRecallConfigured: () => true,
@@ -236,13 +237,13 @@ describe("slack_team webhooks", () => {
 
 		expect(mocks.activateSlackTeam).toHaveBeenCalledOnce();
 		expect(mocks.activateSlackTeam).toHaveBeenCalledWith("team_1", {
-			botName: "Boca Pro Notetaker",
+			botName: "Meeting Notetaker",
 		});
 		expect(tableRows("slack_huddle_teams")).toHaveLength(1);
 		expect(tableRows("slack_huddle_teams")[0]).toMatchObject({
 			orgId,
 			recallSlackTeamId: "team_1",
-			botName: "Boca Pro Notetaker",
+			botName: "Meeting Notetaker",
 			status: "active",
 		});
 	});
@@ -253,7 +254,7 @@ describe("slack_team webhooks", () => {
 				id: "sht_1",
 				orgId,
 				recallSlackTeamId: "team_1",
-				botName: "Boca Pro Notetaker",
+				botName: "Meeting Notetaker",
 				status: "active",
 			},
 		];
@@ -299,7 +300,7 @@ describe("slack huddle bot status events", () => {
 				id: "sht_1",
 				orgId,
 				recallSlackTeamId: "team_1",
-				botName: "Boca Pro Notetaker",
+				botName: "Meeting Notetaker",
 				status: "active",
 			},
 		];

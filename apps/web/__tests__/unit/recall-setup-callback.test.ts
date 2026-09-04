@@ -8,7 +8,7 @@ import { GET } from "@/app/api/integrations/recall-calendar/setup-callback/route
 
 function makeRequest(query: string) {
 	return new NextRequest(
-		`https://cap.boca.pro/api/integrations/recall-calendar/setup-callback${query}`,
+		`https://cap.example.com/api/integrations/recall-calendar/setup-callback${query}`,
 	);
 }
 

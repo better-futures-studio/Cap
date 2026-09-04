@@ -17,7 +17,7 @@ import {
 } from "@cap/web-domain";
 import { and, eq } from "drizzle-orm";
 import type { RecallCalendarEvent, RecallClient } from "./client";
-import { getRecallConfig } from "./config";
+import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 import { sharedMeetingSubCode } from "./shared-recording";
 
@@ -95,7 +95,7 @@ export async function resolveMeetingAttendeeUserIds({
 	if (!calendarEventId) return [...ids];
 
 	const recall = client ?? getDefaultRecallClient();
-	const botName = getRecallConfig()?.botName ?? "Boca Pro Notetaker";
+	const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
 	let emails: string[] = [];
 	try {
 		const event = await recall.getCalendarEvent(calendarEventId);

@@ -1,7 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText, stepCountIs } from "ai";
 import { runWithAiProviders } from "@/lib/ai/run";
-import { getRecallConfig } from "./config";
+import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 import {
 	appendCapture,
@@ -16,8 +16,9 @@ const MAX_REPLY_CHARS = 600;
 const CONTEXT_CHARS = 12_000;
 const MAX_CHAT_EXCHANGES = 10;
 
-const LIVE_MEETING_SYSTEM =
-	"You are Boca Pro Notetaker, a helpful assistant inside a live meeting. Use the transcript below as context when the question is about the meeting. For anything else, answer directly; use web search when the answer depends on current or external information (weather, news, prices, facts you are not sure of). Keep replies under 600 characters, plain text, no markdown, no links unless asked.";
+function liveMeetingSystem(botName: string) {
+	return `You are ${botName}, a helpful assistant inside a live meeting. Use the transcript below as context when the question is about the meeting. For anything else, answer directly; use web search when the answer depends on current or external information (weather, news, prices, facts you are not sure of). Keep replies under 600 characters, plain text, no markdown, no links unless asked.`;
+}
 
 export type ChatAnswerOptions = {
 	webSearch: boolean;
@@ -174,6 +175,7 @@ export async function answerLiveMeeting(
 		return "Noted.";
 	}
 	if (!context) return "There is no transcript yet.";
+	const botName = deps.botName ?? DEFAULT_BOT_NAME;
 	const intent = /\b(action items?)\b/i.test(prompt)
 		? "List the action items mentioned so far as short bullets, with owners when stated."
 		: /\bcatch me up\b/i.test(prompt)
@@ -183,7 +185,7 @@ export async function answerLiveMeeting(
 				: null;
 	return clipped(
 		await (deps.answer ?? llmAnswer)(
-			LIVE_MEETING_SYSTEM,
+			liveMeetingSystem(botName),
 			[
 				...meetingMessages(document, prompt),
 				{ role: "user", content: intent ?? prompt },
@@ -204,7 +206,7 @@ export async function handleLiveChatMessage(
 	deps: ChatAgentDeps = {},
 ) {
 	const config = deps.botName && deps.trigger ? null : getRecallConfig();
-	const botName = deps.botName ?? config?.botName ?? "Boca Pro Notetaker";
+	const botName = deps.botName ?? config?.botName ?? DEFAULT_BOT_NAME;
 	const trigger = deps.trigger ?? config?.agentTrigger ?? "/nt";
 	if (input.speaker.trim().toLowerCase() === botName.trim().toLowerCase())
 		return false;
@@ -219,7 +221,7 @@ export async function handleLiveChatMessage(
 				speaker: input.speaker,
 				timestamp: input.timestamp,
 			},
-			deps,
+			{ ...deps, botName },
 		);
 		await (
 			deps.send ??

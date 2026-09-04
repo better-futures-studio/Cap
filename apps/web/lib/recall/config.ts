@@ -3,7 +3,7 @@ import { serverEnv } from "@cap/env";
 type ServerEnv = ReturnType<typeof serverEnv>;
 
 const DEFAULT_REGION = "us-west-2";
-const DEFAULT_BOT_NAME = "Boca Pro Notetaker";
+export const DEFAULT_BOT_NAME = "Meeting Notetaker";
 
 export type RecallTranscriptionProvider = "recallai" | "assemblyai";
 
@@ -21,12 +21,34 @@ export type RecallConfig = {
 	calendarGoogle: { clientId: string; clientSecret: string } | null;
 };
 
+function stripTrailingSlash(url: string): string {
+	return url.replace(/\/$/, "");
+}
+
+export function defaultBotCardUrl(publicBaseUrl: string): string {
+	return `${stripTrailingSlash(publicBaseUrl)}/api/meeting-bot/card`;
+}
+
+export function botImageUrlForOrg(
+	config: Pick<RecallConfig, "botImageUrl" | "publicBaseUrl">,
+	orgId: string,
+): string {
+	const cardUrl = defaultBotCardUrl(config.publicBaseUrl);
+	if (config.botImageUrl !== cardUrl) {
+		return config.botImageUrl;
+	}
+	const url = new URL(cardUrl);
+	url.searchParams.set("orgId", orgId);
+	return url.toString();
+}
+
 export function getRecallConfig(
 	env: ServerEnv = serverEnv(),
 ): RecallConfig | null {
 	if (!env.RECALL_API_KEY) return null;
 
 	const region = env.RECALL_REGION || DEFAULT_REGION;
+	const publicBaseUrl = env.WEB_URL;
 
 	return {
 		apiKey: env.RECALL_API_KEY,
@@ -34,10 +56,8 @@ export function getRecallConfig(
 		baseUrl: `https://${region}.recall.ai`,
 		verificationSecret: env.RECALL_WEBHOOK_VERIFICATION_SECRET ?? null,
 		botName: env.RECALL_BOT_NAME || DEFAULT_BOT_NAME,
-		publicBaseUrl: env.WEB_URL,
-		botImageUrl:
-			env.RECALL_BOT_IMAGE_URL ||
-			`${env.WEB_URL.replace(/\/$/, "")}/meeting-bot/recording.jpg`,
+		publicBaseUrl,
+		botImageUrl: env.RECALL_BOT_IMAGE_URL || defaultBotCardUrl(publicBaseUrl),
 		liveAgent: env.RECALL_LIVE_AGENT,
 		agentTrigger: env.RECALL_AGENT_TRIGGER || "/nt",
 		transcriptionProvider:

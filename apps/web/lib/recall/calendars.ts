@@ -16,7 +16,7 @@ import {
 	type RecallCalendarEvent,
 	type RecallClient,
 } from "./client";
-import { getRecallConfig } from "./config";
+import { botImageUrlForOrg, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 import { buildLiveRecordingConfig } from "./realtime-config";
 
@@ -168,7 +168,11 @@ export async function scheduleCalendarEventBotForRow({
 	});
 
 	const automaticVideoOutput =
-		botImage !== undefined ? botImage : await loadBotVideoOutput(config);
+		botImage !== undefined
+			? botImage
+			: await loadBotVideoOutput({
+					botImageUrl: botImageUrlForOrg(config, calendar.orgId),
+				});
 	const recordingConfig = buildLiveRecordingConfig(config);
 
 	try {

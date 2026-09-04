@@ -36,7 +36,6 @@ jobs:
             desktop:
               - '.gitattributes'
               - '.github/actions/install-desktop-deps/**'
-              - '.github/workflows/ci.yml'
               - 'apps/cli/**'
               - 'apps/desktop/**'
               - 'apps/desktop-gpui/**'

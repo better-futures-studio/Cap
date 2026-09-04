@@ -193,7 +193,7 @@ function createServerEnv() {
 				.string()
 				.optional()
 				.describe(
-					"JPEG shown as the meeting bot's camera while recording; defaults to <WEB_URL>/meeting-bot/recording.jpg",
+					"JPEG shown as the meeting bot's camera while recording; defaults to <WEB_URL>/api/meeting-bot/card?orgId=…",
 				),
 			RECALL_CALENDAR_GOOGLE_CLIENT_ID: z
 				.string()

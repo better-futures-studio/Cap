@@ -73,6 +73,7 @@ vi.mock("drizzle-orm", () => ({
 	isNull: (column: string) => ({ op: "isNull", column }),
 }));
 vi.mock("@/lib/recall/config", () => ({
+	DEFAULT_BOT_NAME: "Meeting Notetaker",
 	getRecallConfig: () => null,
 	isRecallConfigured: () => false,
 }));
@@ -269,12 +270,12 @@ describe("scheduleManualMeetingBot", () => {
 		expect(client.createBot).toHaveBeenCalledWith({
 			meetingUrl: "https://zoom.us/j/123",
 			joinAt: now.toISOString(),
-			botName: "Boca Pro Notetaker",
+			botName: "Meeting Notetaker",
 			metadata: {
 				cap_meeting_bot_id: result.id,
 				cap_org_id: orgId,
 			},
-			joinChatMessage: "Boca Pro Notetaker is recording this meeting.",
+			joinChatMessage: "Meeting Notetaker is recording this meeting.",
 		});
 		expect(bots()[0]).toMatchObject({
 			status: "scheduled",

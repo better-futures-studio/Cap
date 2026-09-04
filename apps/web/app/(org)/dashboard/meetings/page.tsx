@@ -8,6 +8,7 @@ import {
 	listMeetingBots,
 	listMeetingVocabulary,
 } from "@/actions/meetings";
+import { DEFAULT_BOT_NAME, getRecallConfig } from "@/lib/recall/config";
 import { MeetingsPage } from "./MeetingsPage";
 
 export const metadata: Metadata = {
@@ -47,6 +48,7 @@ export default async function Page({
 	return (
 		<MeetingsPage
 			orgId={user.activeOrganizationId}
+			botName={getRecallConfig()?.botName ?? DEFAULT_BOT_NAME}
 			initialUpcomingBots={bots.upcoming}
 			initialPastBots={bots.past}
 			calendarSettings={calendarSettings}

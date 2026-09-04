@@ -22,9 +22,10 @@ vi.mock("@cap/database/schema", () => ({
 }));
 vi.mock("drizzle-orm", () => ({ eq: vi.fn((left, right) => [left, right]) }));
 vi.mock("@/lib/recall/config", () => ({
+	DEFAULT_BOT_NAME: "Meeting Notetaker",
 	getRecallConfig: () => ({
 		verificationSecret: secret,
-		botName: "Boca Pro Notetaker",
+		botName: "Meeting Notetaker",
 		agentTrigger: "/nt",
 	}),
 }));
@@ -62,15 +63,18 @@ function sign(id: string, timestamp: string, payload: string) {
 
 function signedRequest(payload: string, id = "realtime_1") {
 	const timestamp = String(Math.floor(Date.now() / 1000));
-	return new NextRequest("https://cap.boca.pro/api/webhooks/recall/realtime/", {
-		method: "POST",
-		body: payload,
-		headers: {
-			"webhook-id": id,
-			"webhook-timestamp": timestamp,
-			"webhook-signature": sign(id, timestamp, payload),
+	return new NextRequest(
+		"https://cap.example.com/api/webhooks/recall/realtime/",
+		{
+			method: "POST",
+			body: payload,
+			headers: {
+				"webhook-id": id,
+				"webhook-timestamp": timestamp,
+				"webhook-signature": sign(id, timestamp, payload),
+			},
 		},
-	});
+	);
 }
 
 function transcriptPayload() {
@@ -121,7 +125,7 @@ describe("POST /api/webhooks/recall/realtime", () => {
 	it("requires a valid raw-body signature", async () => {
 		const payload = JSON.stringify({ event: "unknown", data: {} });
 		const response = await POST(
-			new NextRequest("https://cap.boca.pro/api/webhooks/recall/realtime/", {
+			new NextRequest("https://cap.example.com/api/webhooks/recall/realtime/", {
 				method: "POST",
 				body: payload,
 			}),
@@ -179,7 +183,7 @@ describe("handleRealtimeEvent", () => {
 		await handleRealtimeEvent(chatPayload("/Nt when is launch?"), {
 			appendChat,
 			chatAgent: {
-				botName: "Boca Pro Notetaker",
+				botName: "Meeting Notetaker",
 				trigger: "/nt",
 				readTranscript: async () => ({
 					version: 1,
@@ -205,7 +209,7 @@ describe("handleRealtimeEvent", () => {
 		expect(send).toHaveBeenCalledWith("recall_bot_1", { message: "Friday." });
 		expect(appendChat).toHaveBeenLastCalledWith("meeting_1", {
 			t: 51.25,
-			speaker: "Boca Pro Notetaker",
+			speaker: "Meeting Notetaker",
 			text: "Friday.",
 			fromBot: true,
 		});
@@ -219,7 +223,7 @@ describe("handleRealtimeEvent", () => {
 		await handleRealtimeEvent(chatPayload("when is launch?"), {
 			appendChat,
 			chatAgent: {
-				botName: "Boca Pro Notetaker",
+				botName: "Meeting Notetaker",
 				trigger: "/nt",
 				answer,
 				send,
@@ -243,11 +247,11 @@ describe("handleRealtimeEvent", () => {
 		const send = vi.fn();
 
 		await handleRealtimeEvent(
-			chatPayload("/nt summarize", "Boca Pro Notetaker"),
+			chatPayload("/nt summarize", "Meeting Notetaker"),
 			{
 				appendChat,
 				chatAgent: {
-					botName: "Boca Pro Notetaker",
+					botName: "Meeting Notetaker",
 					trigger: "/nt",
 					answer,
 					send,
@@ -294,7 +298,7 @@ describe("handleRealtimeEvent", () => {
 		const deps = {
 			appendChat,
 			chatAgent: {
-				botName: "Boca Pro Notetaker",
+				botName: "Meeting Notetaker",
 				trigger: "/nt",
 				readTranscript: async () => document,
 				appendChat,

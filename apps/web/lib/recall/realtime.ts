@@ -2,7 +2,7 @@ import { db } from "@cap/database";
 import { meetingBots } from "@cap/database/schema";
 import { eq } from "drizzle-orm";
 import { type ChatAgentDeps, handleLiveChatMessage } from "./chat-agent";
-import { getRecallConfig } from "./config";
+import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { appendChat, appendUtterance } from "./live-transcript";
 
 type RecordValue = Record<string, unknown>;
@@ -72,9 +72,7 @@ export async function handleRealtimeEvent(
 		if (!text || timestamp === null) return;
 		const speaker = string(participant?.name) ?? "Participant";
 		const botName =
-			deps.chatAgent?.botName ??
-			getRecallConfig()?.botName ??
-			"Boca Pro Notetaker";
+			deps.chatAgent?.botName ?? getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
 		if (speaker.trim().toLowerCase() === botName.trim().toLowerCase()) return;
 		const work = async () => {
 			await (deps.appendChat ?? appendChat)(meeting.id, {

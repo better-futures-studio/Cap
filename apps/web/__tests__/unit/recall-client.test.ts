@@ -7,9 +7,9 @@ const config: RecallConfig = {
 	region: "us-west-2",
 	baseUrl: "https://us-west-2.recall.ai",
 	verificationSecret: null,
-	botName: "Boca Pro Notetaker",
-	publicBaseUrl: "https://cap.boca.pro",
-	botImageUrl: "https://cap.boca.pro/meeting-bot/recording.jpg",
+	botName: "Meeting Notetaker",
+	publicBaseUrl: "https://cap.example.com",
+	botImageUrl: "https://cap.example.com/api/meeting-bot/card",
 	liveAgent: false,
 	agentTrigger: "/nt",
 	transcriptionProvider: "recallai",
@@ -52,9 +52,9 @@ describe("createRecallClient", () => {
 		await client.createBot({
 			meetingUrl: "https://zoom.us/j/123",
 			joinAt: "2026-01-01T00:00:00.000Z",
-			botName: "Boca Pro Notetaker",
+			botName: "Meeting Notetaker",
 			metadata: { cap_meeting_bot_id: "mb_1" },
-			joinChatMessage: "Boca Pro Notetaker is recording this meeting.",
+			joinChatMessage: "Meeting Notetaker is recording this meeting.",
 		});
 
 		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -63,12 +63,12 @@ describe("createRecallClient", () => {
 		expect(JSON.parse(init.body as string)).toEqual({
 			meeting_url: "https://zoom.us/j/123",
 			join_at: "2026-01-01T00:00:00.000Z",
-			bot_name: "Boca Pro Notetaker",
+			bot_name: "Meeting Notetaker",
 			metadata: { cap_meeting_bot_id: "mb_1" },
 			chat: {
 				on_bot_join: {
 					send_to: "everyone",
-					message: "Boca Pro Notetaker is recording this meeting.",
+					message: "Meeting Notetaker is recording this meeting.",
 					pin: true,
 				},
 			},
@@ -149,13 +149,13 @@ describe("createRecallClient", () => {
 		);
 		const client = createRecallClient(config, { fetch: fetchMock });
 
-		await client.activateSlackTeam("team_1", { botName: "Boca Pro Notetaker" });
+		await client.activateSlackTeam("team_1", { botName: "Meeting Notetaker" });
 
 		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://us-west-2.recall.ai/api/v2/slack-teams/team_1/");
 		expect(init.method).toBe("PATCH");
 		expect(JSON.parse(init.body as string)).toEqual({
-			bot_name: "Boca Pro Notetaker",
+			bot_name: "Meeting Notetaker",
 		});
 	});
 
@@ -167,8 +167,8 @@ describe("createRecallClient", () => {
 		const client = createRecallClient(config, { fetch: fetchMock });
 
 		await client.createAsyncTranscript("rec_1", {
-			keyTerms: ["Boca Pro", "Cap"],
-			spelling: [{ find: ["bokapro"], replace: "Boca Pro" }],
+			keyTerms: ["Acme Corp", "Cap"],
+			spelling: [{ find: ["acmecorp"], replace: "Acme Corp" }],
 		});
 
 		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -180,8 +180,8 @@ describe("createRecallClient", () => {
 			provider: {
 				recallai_async: {
 					language_code: "auto",
-					key_terms: ["Boca Pro", "Cap"],
-					spelling: [{ find: ["bokapro"], replace: "Boca Pro" }],
+					key_terms: ["Acme Corp", "Cap"],
+					spelling: [{ find: ["acmecorp"], replace: "Acme Corp" }],
 				},
 			},
 			diarization: { use_separate_streams_when_available: true },
@@ -197,8 +197,8 @@ describe("createRecallClient", () => {
 
 		await client.createAsyncTranscript("rec_1", {
 			provider: "assemblyai",
-			keyTerms: ["Boca Pro", "Cap"],
-			spelling: [{ find: ["bokapro"], replace: "Boca Pro" }],
+			keyTerms: ["Acme Corp", "Cap"],
+			spelling: [{ find: ["acmecorp"], replace: "Acme Corp" }],
 		});
 
 		const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -208,8 +208,8 @@ describe("createRecallClient", () => {
 					speech_models: ["universal-2"],
 					language_detection: true,
 					language_detection_options: { code_switching: true },
-					keyterms_prompt: ["Boca Pro", "Cap"],
-					custom_spelling: [{ from: ["bokapro"], to: "Boca Pro" }],
+					keyterms_prompt: ["Acme Corp", "Cap"],
+					custom_spelling: [{ from: ["acmecorp"], to: "Acme Corp" }],
 				},
 			},
 			diarization: { use_separate_streams_when_available: true },

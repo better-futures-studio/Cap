@@ -57,7 +57,8 @@ vi.mock("drizzle-orm", () => ({
 	eq: (column: string, value: unknown) => ({ op: "eq", column, value }),
 }));
 vi.mock("@/lib/recall/config", () => ({
-	getRecallConfig: () => ({ botName: "Boca Pro Notetaker" }),
+	DEFAULT_BOT_NAME: "Meeting Notetaker",
+	getRecallConfig: () => ({ botName: "Meeting Notetaker" }),
 }));
 vi.mock("@/lib/recall/default-client", () => ({
 	getDefaultRecallClient: () => {
@@ -170,9 +171,9 @@ function seedMeeting() {
 			},
 		],
 		users: [
-			{ id: ownerId, email: "Ada@boca.pro" },
-			{ id: sharedOwnerId, email: "cam@boca.pro" },
-			{ id: calendarUserId, email: "Bea@boca.pro" },
+			{ id: ownerId, email: "Ada@example.com" },
+			{ id: sharedOwnerId, email: "cam@example.com" },
+			{ id: calendarUserId, email: "Bea@example.com" },
 			{ id: "outsider", email: "zoe@example.com" },
 		],
 		organization_members: [
@@ -193,8 +194,8 @@ function mockClient(): RecallClient {
 			id: "evt_1",
 			raw: {
 				attendees: [
-					{ email: "ada@boca.pro" },
-					{ email: "bea@boca.pro" },
+					{ email: "ada@example.com" },
+					{ email: "bea@example.com" },
 					{ email: "room@resource.calendar.google.com", resource: true },
 					{ email: "zoe@example.com" },
 				],

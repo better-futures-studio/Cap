@@ -8,11 +8,10 @@ import {
 	type RecallClient,
 	type RecallParticipantEvent,
 } from "./client";
-import { getRecallConfig } from "./config";
+import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 
 const MAX_COMMENT_CONTENT = 2000;
-const DEFAULT_BOT_NAME = "Boca Pro Notetaker";
 
 function getAffectedRows(result: unknown): number {
 	if (Array.isArray(result)) {

@@ -24,6 +24,8 @@ export function MeetingRecap({
 	talkTime = "",
 	actionItems = [],
 	recapMode = "self",
+	botName = "",
+	organizationName = "",
 }: {
 	email: string;
 	url: string;
@@ -34,6 +36,8 @@ export function MeetingRecap({
 	talkTime?: string | null;
 	actionItems: { text: string; owner: string | null; due: string | null }[];
 	recapMode: string;
+	botName: string;
+	organizationName: string;
 }) {
 	return (
 		<Html>
@@ -93,8 +97,10 @@ export function MeetingRecap({
 							</Link>
 						</Section>
 						<Text className="text-sm leading-6 text-gray-600">
-							Sent by Boca Pro Notetaker because your recording preference is
-							set to {recapMode}. Change it on the Meetings page.
+							Sent by {botName}
+							{organizationName ? ` for ${organizationName}` : ""} because your
+							recording preference is set to {recapMode}. Change it on the
+							Meetings page.
 						</Text>
 						<Footer email={email} />
 					</Container>

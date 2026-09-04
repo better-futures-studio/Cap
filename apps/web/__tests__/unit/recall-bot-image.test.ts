@@ -3,7 +3,8 @@ import { loadBotVideoOutput } from "@/lib/recall/bot-image";
 
 const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
 const JPEG_B64 = Buffer.from(JPEG_BYTES).toString("base64");
-const BOT_IMAGE_URL = "https://cap.boca.pro/meeting-bot/recording.jpg";
+const BOT_IMAGE_URL =
+	"https://cap.example.com/api/meeting-bot/card?orgId=org_1";
 
 function imageResponse(
 	body: Uint8Array,

@@ -20,13 +20,14 @@ vi.mock("@cap/database/schema", () => ({
 	},
 }));
 vi.mock("@/lib/recall/config", () => ({
+	DEFAULT_BOT_NAME: "Meeting Notetaker",
 	getRecallConfig: () => ({
 		apiKey: "test-api-key",
 		region: "us-west-2",
 		baseUrl: "https://us-west-2.recall.ai",
 		verificationSecret: "whsec_dGVzdC1zZWNyZXQ",
-		botName: "Boca Pro Notetaker",
-		publicBaseUrl: "https://cap.boca.pro",
+		botName: "Meeting Notetaker",
+		publicBaseUrl: "https://cap.example.com",
 		calendarGoogle: null,
 	}),
 }));
@@ -81,7 +82,7 @@ function signedRequest(
 	id = "msg_123",
 ) {
 	const timestamp = String(Math.floor(Date.now() / 1000));
-	return new NextRequest("https://cap.boca.pro/api/webhooks/recall", {
+	return new NextRequest("https://cap.example.com/api/webhooks/recall", {
 		method: "POST",
 		body: payload,
 		headers: {

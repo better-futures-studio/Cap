@@ -17,7 +17,7 @@ import {
 	type RecallCalendarEvent,
 	type RecallClient,
 } from "./client";
-import { getRecallConfig } from "./config";
+import { botImageUrlForOrg, DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 import { buildLiveRecordingConfig } from "./realtime-config";
 
@@ -311,12 +311,14 @@ export async function scheduleManualMeetingBot(
 		status: "scheduling",
 	});
 	const config = getRecallConfig();
-	const botName = deps.botName ?? config?.botName ?? "Boca Pro Notetaker";
+	const botName = deps.botName ?? config?.botName ?? DEFAULT_BOT_NAME;
 	const automaticVideoOutput =
 		deps.botImage !== undefined
 			? deps.botImage
 			: config
-				? await loadBotVideoOutput(config)
+				? await loadBotVideoOutput({
+						botImageUrl: botImageUrlForOrg(config, orgId),
+					})
 				: null;
 
 	try {

@@ -18,7 +18,7 @@ import {
 	importRecallRecordingWorkflow,
 } from "@/workflows/recall-meeting";
 import { applyBotStatusEvent } from "./bots";
-import { getRecallConfig } from "./config";
+import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 
 const TERMINAL_STATUSES: MeetingBotStatus[] = [
@@ -339,7 +339,7 @@ async function handleSlackTeamInvited(data: unknown): Promise<void> {
 	}
 
 	const config = getRecallConfig();
-	const botName = config?.botName ?? "Boca Pro Notetaker";
+	const botName = config?.botName ?? DEFAULT_BOT_NAME;
 	await upsertSlackHuddleTeam({
 		recallSlackTeamId,
 		botName,

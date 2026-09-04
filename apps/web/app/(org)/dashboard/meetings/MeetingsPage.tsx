@@ -94,9 +94,11 @@ function formatPastDate(date: Date): string {
 
 function SendBotBar({
 	orgId,
+	botName,
 	onScheduled,
 }: {
 	orgId: Organisation.OrganisationId;
+	botName: string;
 	onScheduled: () => void;
 }) {
 	const [meetingUrl, setMeetingUrl] = useState("");
@@ -146,8 +148,8 @@ function SendBotBar({
 				</Button>
 			</div>
 			<p className="text-xs text-gray-10">
-				The bot joins as a visible participant named Boca Pro Notetaker and
-				announces the recording in chat.
+				The bot joins as a visible participant named {botName} and announces the
+				recording in chat.
 			</p>
 		</div>
 	);
@@ -769,6 +771,7 @@ function VocabularyEditor({
 
 export function MeetingsPage({
 	orgId,
+	botName,
 	initialUpcomingBots,
 	initialPastBots,
 	calendarSettings,
@@ -778,6 +781,7 @@ export function MeetingsPage({
 	result,
 }: {
 	orgId: Organisation.OrganisationId;
+	botName: string;
 	initialUpcomingBots: MeetingBotRow[];
 	initialPastBots: MeetingBotRow[];
 	calendarSettings: CalendarSettings;
@@ -821,7 +825,11 @@ export function MeetingsPage({
 	return (
 		<div className="mx-auto flex max-w-4xl flex-col gap-4">
 			{calendarSettings.configured ? (
-				<SendBotBar orgId={orgId} onScheduled={() => router.refresh()} />
+				<SendBotBar
+					orgId={orgId}
+					botName={botName}
+					onScheduled={() => router.refresh()}
+				/>
 			) : (
 				<p className="text-xs text-gray-10">
 					Meeting bots aren't configured on this deployment.

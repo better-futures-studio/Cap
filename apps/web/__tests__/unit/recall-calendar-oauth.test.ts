@@ -10,7 +10,7 @@ describe("buildGoogleCalendarAuthUrl", () => {
 			buildGoogleCalendarAuthUrl({
 				clientId: "client-id",
 				redirectUri:
-					"https://cap.boca.pro/api/integrations/recall-calendar/callback",
+					"https://cap.example.com/api/integrations/recall-calendar/callback",
 				state: "signed-state",
 			}),
 		);
@@ -49,7 +49,7 @@ describe("exchangeGoogleCode", () => {
 			clientId: "client-id",
 			clientSecret: "client-secret",
 			redirectUri:
-				"https://cap.boca.pro/api/integrations/recall-calendar/callback",
+				"https://cap.example.com/api/integrations/recall-calendar/callback",
 			fetch: fetchImpl,
 		});
 
@@ -66,7 +66,7 @@ describe("exchangeGoogleCode", () => {
 		expect(body.get("client_id")).toBe("client-id");
 		expect(body.get("client_secret")).toBe("client-secret");
 		expect(body.get("redirect_uri")).toBe(
-			"https://cap.boca.pro/api/integrations/recall-calendar/callback",
+			"https://cap.example.com/api/integrations/recall-calendar/callback",
 		);
 		expect(body.get("grant_type")).toBe("authorization_code");
 	});
@@ -84,7 +84,7 @@ describe("exchangeGoogleCode", () => {
 				clientId: "client-id",
 				clientSecret: "client-secret",
 				redirectUri:
-					"https://cap.boca.pro/api/integrations/recall-calendar/callback",
+					"https://cap.example.com/api/integrations/recall-calendar/callback",
 				fetch: fetchImpl,
 			}),
 		).rejects.toThrow(/did not return a refresh token/);
@@ -103,7 +103,7 @@ describe("exchangeGoogleCode", () => {
 				clientId: "client-id",
 				clientSecret: "client-secret",
 				redirectUri:
-					"https://cap.boca.pro/api/integrations/recall-calendar/callback",
+					"https://cap.example.com/api/integrations/recall-calendar/callback",
 				fetch: fetchImpl,
 			}),
 		).rejects.toThrow(/token exchange failed/);

@@ -26,6 +26,7 @@ vi.mock("@cap/database/schema", () => {
 	return {
 		meetingBots: table("meeting_bots", [
 			"id",
+			"orgId",
 			"ownerId",
 			"title",
 			"joinAt",
@@ -36,6 +37,7 @@ vi.mock("@cap/database/schema", () => {
 			"status",
 		]),
 		meetingPreferences: table("meeting_preferences", ["userId", "recapMode"]),
+		organizations: table("organizations", ["id", "name"]),
 		users: table("users", ["id", "email"]),
 		videos: table("videos", [
 			"id",
@@ -53,10 +55,11 @@ vi.mock("drizzle-orm", () => ({
 	isNull: (column: string) => ({ op: "isNull", column }),
 }));
 vi.mock("@cap/env", () => ({
-	serverEnv: () => ({ WEB_URL: "https://cap.boca.pro" }),
+	serverEnv: () => ({ WEB_URL: "https://cap.example.com" }),
 }));
 vi.mock("@/lib/recall/config", () => ({
-	getRecallConfig: () => ({ botName: "Boca Pro Notetaker" }),
+	DEFAULT_BOT_NAME: "Meeting Notetaker",
+	getRecallConfig: () => ({ botName: "Meeting Notetaker" }),
 }));
 vi.mock("@/lib/recall/default-client", () => ({
 	getDefaultRecallClient: () => {
@@ -144,6 +147,7 @@ function seedReadyMeeting(
 		meeting_bots: [
 			{
 				id: "mb_1",
+				orgId: "org_1",
 				ownerId: "user_1",
 				title: "Standup",
 				joinAt: now,
@@ -154,6 +158,7 @@ function seedReadyMeeting(
 				status: "complete",
 			},
 		],
+		organizations: [{ id: "org_1", name: "Acme" }],
 		videos: [
 			{
 				id: videoId,
@@ -166,7 +171,7 @@ function seedReadyMeeting(
 				createdAt: now,
 			},
 		],
-		users: [{ id: "user_1", email: "ada@boca.pro" }],
+		users: [{ id: "user_1", email: "ada@example.com" }],
 		meeting_preferences: overrides.recapMode
 			? [{ userId: "user_1", recapMode: overrides.recapMode }]
 			: [],
@@ -180,10 +185,10 @@ function mockClient(overrides: Partial<RecallClient> = {}): RecallClient {
 			id: "evt_1",
 			raw: {
 				attendees: [
-					{ email: "ada@boca.pro" },
-					{ email: "bea@boca.pro" },
+					{ email: "ada@example.com" },
+					{ email: "bea@example.com" },
 					{ email: "room@resource.calendar.google.com", resource: true },
-					{ email: "Boca Pro Notetaker" },
+					{ email: "Meeting Notetaker" },
 				],
 			},
 		})),
@@ -202,8 +207,8 @@ describe("resolveRecapRecipients", () => {
 		expect(
 			resolveRecapRecipients({
 				mode: "off",
-				ownerEmail: "ada@boca.pro",
-				attendeeEmails: ["bea@boca.pro"],
+				ownerEmail: "ada@example.com",
+				attendeeEmails: ["bea@example.com"],
 			}),
 		).toEqual([]);
 	});
@@ -212,22 +217,22 @@ describe("resolveRecapRecipients", () => {
 		expect(
 			resolveRecapRecipients({
 				mode: "self",
-				ownerEmail: "Ada@boca.pro",
-				attendeeEmails: ["bea@boca.pro"],
+				ownerEmail: "Ada@example.com",
+				attendeeEmails: ["bea@example.com"],
 			}),
-		).toEqual(["ada@boca.pro"]);
+		).toEqual(["ada@example.com"]);
 	});
 
 	it("includes owner plus attendees, deduped and capped", () => {
 		const extras = Array.from(
 			{ length: 30 },
-			(_, index) => `person${index}@boca.pro`,
+			(_, index) => `person${index}@example.com`,
 		);
 		expect(
 			resolveRecapRecipients({
 				mode: "attendees",
-				ownerEmail: "ada@boca.pro",
-				attendeeEmails: ["ADA@boca.pro", "bea@boca.pro", ...extras],
+				ownerEmail: "ada@example.com",
+				attendeeEmails: ["ADA@example.com", "bea@example.com", ...extras],
 			}),
 		).toHaveLength(25);
 	});
@@ -282,8 +287,12 @@ describe("sendMeetingRecap", () => {
 		});
 		expect(mocks.sendEmail).toHaveBeenCalledOnce();
 		expect(mocks.sendEmail.mock.calls[0]?.[0]).toMatchObject({
-			email: "ada@boca.pro",
+			email: "ada@example.com",
 			subject: "Recap: Standup",
+			react: {
+				botName: "Meeting Notetaker",
+				organizationName: "Acme",
+			},
 		});
 		expect(rows.meeting_bots?.[0]?.recapSentAt).toBeInstanceOf(Date);
 	});
@@ -298,8 +307,8 @@ describe("sendMeetingRecap", () => {
 		});
 		expect(mocks.sendEmail).toHaveBeenCalledTimes(2);
 		expect(mocks.sendEmail.mock.calls.map((call) => call[0]?.email)).toEqual([
-			"ada@boca.pro",
-			"bea@boca.pro",
+			"ada@example.com",
+			"bea@example.com",
 		]);
 	});
 

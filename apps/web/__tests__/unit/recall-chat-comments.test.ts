@@ -59,6 +59,7 @@ vi.mock("drizzle-orm", () => ({
 	isNotNull: (column: string) => ({ op: "isNotNull", column }),
 }));
 vi.mock("@/lib/recall/config", () => ({
+	DEFAULT_BOT_NAME: "Meeting Notetaker",
 	getRecallConfig: () => null,
 	isRecallConfigured: () => false,
 }));
@@ -181,7 +182,7 @@ function participantEvent(
 			id: 1,
 			name: "Alice",
 			is_host: true,
-			email: "alice@boca.pro",
+			email: "alice@example.com",
 		},
 		data: overrides.data === undefined ? null : overrides.data,
 	};
@@ -255,12 +256,12 @@ describe("importMeetingChatComments", () => {
 				timestamp: { absolute: "2026-09-03T16:00:01.000Z", relative: 1 },
 				participant: {
 					id: 99,
-					name: "Boca Pro Notetaker",
+					name: "Meeting Notetaker",
 					is_host: false,
 					email: null,
 				},
 				data: {
-					text: "This meeting is being recorded by Boca Pro Notetaker.",
+					text: "This meeting is being recorded by Meeting Notetaker.",
 					to: "everyone",
 				},
 			}),

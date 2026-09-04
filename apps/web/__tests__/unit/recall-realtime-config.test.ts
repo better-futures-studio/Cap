@@ -7,7 +7,7 @@ const config: RecallConfig = {
 	region: "us-west-2",
 	baseUrl: "https://us-west-2.recall.ai",
 	verificationSecret: null,
-	botName: "Boca Pro Notetaker",
+	botName: "Meeting Notetaker",
 	publicBaseUrl: "https://cap.test/",
 	botImageUrl: "https://cap.test/bot.jpg",
 	liveAgent: true,

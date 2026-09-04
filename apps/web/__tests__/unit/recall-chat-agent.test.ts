@@ -38,7 +38,7 @@ describe("liveContextAsText", () => {
 					{ t: 2, speaker: "Lin", text: "hello everyone", fromBot: false },
 					{
 						t: 8,
-						speaker: "Boca Pro Notetaker",
+						speaker: "Meeting Notetaker",
 						text: "Noted.",
 						fromBot: true,
 					},
@@ -165,7 +165,7 @@ describe("answerLiveMeeting", () => {
 				},
 				{
 					t: 11,
-					speaker: "Boca Pro Notetaker",
+					speaker: "Meeting Notetaker",
 					text: "Sunny and 82F in Tampa.",
 					fromBot: true,
 				},
@@ -219,7 +219,7 @@ describe("answerLiveMeeting", () => {
 				timestamp: 18.5,
 			},
 			{
-				botName: "Boca Pro Notetaker",
+				botName: "Meeting Notetaker",
 				trigger: "/nt",
 				readTranscript: async () => transcript,
 				appendCapture,
@@ -238,7 +238,7 @@ describe("answerLiveMeeting", () => {
 		expect(send).toHaveBeenCalledWith("recall_bot_1", { message: "Noted." });
 		expect(appendChat).toHaveBeenCalledWith("meeting_1", {
 			t: 18.5,
-			speaker: "Boca Pro Notetaker",
+			speaker: "Meeting Notetaker",
 			text: "Noted.",
 			fromBot: true,
 		});
@@ -262,7 +262,7 @@ describe("answerLiveMeeting", () => {
 			timestamp: 20,
 		};
 		const deps = {
-			botName: "Boca Pro Notetaker",
+			botName: "Meeting Notetaker",
 			trigger: "/nt",
 			readTranscript: async () => transcript,
 			answer,

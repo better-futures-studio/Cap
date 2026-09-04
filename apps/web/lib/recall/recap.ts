@@ -5,6 +5,7 @@ import {
 	type MeetingRecapMode,
 	meetingBots,
 	meetingPreferences,
+	organizations,
 	users,
 	videos,
 } from "@cap/database/schema";
@@ -18,7 +19,7 @@ import type {
 	RecallClient,
 	RecallParticipantEvent,
 } from "./client";
-import { getRecallConfig } from "./config";
+import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 import { formatTalkTimeLine, parseMeetingSpeakerStats } from "./speaker-stats";
 import { shareMeetingRecordingWithAttendees } from "./visibility";
@@ -232,8 +233,15 @@ export async function sendMeetingRecap(
 		.limit(1);
 	const mode = parseRecapMode(preference?.recapMode);
 
+	const [org] = await db()
+		.select({ name: organizations.name })
+		.from(organizations)
+		.where(eq(organizations.id, row.orgId))
+		.limit(1);
+
 	const client = deps.client ?? getDefaultRecallClient();
-	const botName = getRecallConfig()?.botName ?? "Boca Pro Notetaker";
+	const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
+	const organizationName = org?.name?.trim() || "";
 	const attendeeEmails =
 		mode === "attendees"
 			? await loadAttendeeEmails({ row, client, botName })
@@ -282,6 +290,8 @@ export async function sendMeetingRecap(
 					talkTime,
 					actionItems,
 					recapMode: mode,
+					botName,
+					organizationName,
 				}),
 			});
 		}

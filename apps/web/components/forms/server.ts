@@ -1,7 +1,6 @@
 "use server";
 
 import { db } from "@cap/database";
-import { serverEnv } from "@cap/env";
 import { getCurrentUser } from "@cap/database/auth/session";
 import { nanoId } from "@cap/database/helpers";
 import {
@@ -9,6 +8,7 @@ import {
 	organizations,
 	users,
 } from "@cap/database/schema";
+import { serverEnv } from "@cap/env";
 import { S3Buckets } from "@cap/web-backend";
 import { ImageUpload, Organisation, type User } from "@cap/web-domain";
 import { eq } from "drizzle-orm";
