@@ -48,6 +48,7 @@ import {
 } from "@/actions/organization/shareable-link-icon";
 import { editTitle } from "@/actions/videos/edit-title";
 import type { VideoStatusResult } from "@/actions/videos/get-status";
+import { getVideoShareSummary } from "@/actions/videos/shares";
 import { useDashboardContext } from "@/app/(org)/dashboard/DashboardContext";
 import type { Spaces } from "@/app/(org)/dashboard/dashboard-data";
 import { useCurrentUser } from "@/app/Layout/AuthContext";
@@ -252,6 +253,28 @@ export const ShareHeader = ({
 	const effectiveSharedSpaces = contextSharedSpaces || sharedSpaces;
 
 	const isOwner = user && user.id === data.owner.id;
+
+	// Per-person shares, fetched once for the owner and re-fetched whenever the
+	// share dialog changes who has access. `getVideoShareSummary` throws for
+	// anyone else, so this simply stays null for non-owners.
+	const [peopleCount, setPeopleCount] = useState<number | null>(null);
+	const [peopleRefreshKey, setPeopleRefreshKey] = useState(0);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: peopleRefreshKey is a refetch trigger, not a value read here
+	useEffect(() => {
+		if (!isOwner || data.public) return;
+		let cancelled = false;
+		getVideoShareSummary({ videoId: data.id })
+			.then((summary) => {
+				if (!cancelled) setPeopleCount(summary.people);
+			})
+			.catch(() => {
+				if (!cancelled) setPeopleCount(null);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [isOwner, data.public, data.id, peopleRefreshKey]);
 
 	const { webUrl } = usePublicEnv();
 	const { download, isDownloading } = useVideoDownload(data.id);
@@ -476,6 +499,17 @@ export const ShareHeader = ({
 		],
 	});
 
+	// Named person shares only speak up when nothing wider already explains the
+	// audience — a public link or an org/space share stays exactly as before.
+	const displayAudience =
+		audience.kind === "private" && peopleCount !== null && peopleCount > 1
+			? {
+					...audience,
+					label: `Shared with ${peopleCount} people`,
+					tooltip: `Shared with ${peopleCount} people, including you. The link won't work for anyone else.`,
+				}
+			: audience;
+
 	const renderSharedStatus = () => {
 		if (!isOwner) {
 			return (
@@ -492,21 +526,24 @@ export const ShareHeader = ({
 		const AudienceIcon =
 			audience.kind === "public"
 				? Globe2
-				: audience.kind === "spaces"
+				: audience.kind === "spaces" ||
+						(audience.kind === "private" &&
+							peopleCount !== null &&
+							peopleCount > 1)
 					? Users
 					: Lock;
 
 		return (
-			<Tooltip content={audience.tooltip} position="bottom">
+			<Tooltip content={displayAudience.tooltip} position="bottom">
 				<Button
 					className="gap-1.5 px-3 w-fit"
 					size="xs"
 					variant="outline"
-					aria-label={`Sharing: ${audience.label}. Click to manage access.`}
+					aria-label={`Sharing: ${displayAudience.label}. Click to manage access.`}
 					onClick={() => setIsSharingDialogOpen(true)}
 				>
 					<AudienceIcon className="size-3.5 text-gray-11" />
-					{audience.label}
+					{displayAudience.label}
 					<FontAwesomeIcon
 						className="size-2.5 text-gray-10"
 						icon={faChevronDown}
@@ -780,6 +817,7 @@ export const ShareHeader = ({
 						setIsShareLinkDialogOpen(false);
 						setIsSharingDialogOpen(true);
 					}}
+					onSharesChanged={() => setPeopleRefreshKey((key) => key + 1)}
 				/>
 			)}
 			{isOwner && (
@@ -1098,7 +1136,7 @@ export const ShareHeader = ({
 													{/* The audience pill is desktop-only, so its readout
 													    has to live here on phones. */}
 													<span className="ml-auto max-w-[9rem] truncate pl-3 text-xs text-gray-10 sm:hidden">
-														{audience.label}
+														{displayAudience.label}
 													</span>
 												</DropdownMenuItem>
 												<DropdownMenuItem

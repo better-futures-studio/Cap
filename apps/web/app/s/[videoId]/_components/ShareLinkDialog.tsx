@@ -1,10 +1,26 @@
 "use client";
 
-import { Dialog, DialogContent, DialogTitle } from "@cap/ui";
+import { Avatar, Dialog, DialogContent, DialogTitle, Select } from "@cap/ui";
+import type { Video } from "@cap/web-domain";
 import clsx from "clsx";
-import { Check, CodeXml, Link2, Lock, Megaphone, X } from "lucide-react";
+import {
+	Check,
+	CodeXml,
+	Link2,
+	Lock,
+	Megaphone,
+	UserPlus,
+	X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import {
+	addVideoShare,
+	listVideoShares,
+	removeVideoShare,
+	type VideoShareCandidate,
+	type VideoSharePerson,
+} from "@/actions/videos/shares";
 import {
 	FacebookIcon,
 	GoogleIcon,
@@ -81,6 +97,191 @@ const readCurrentTime = (currentTime: number | undefined): number => {
 		: 0;
 };
 
+const SOURCE_LABEL: Record<VideoSharePerson["source"], string> = {
+	owner: "Owner",
+	meeting: "Attendee",
+	manual: "Added",
+};
+
+/**
+ * Per-person access, shown to whoever can manage it (the owner, or an org
+ * settings manager). `listVideoShares` throws for anyone else, so a viewer
+ * just sees no section instead of an error.
+ */
+const PeopleWithAccess = ({
+	open,
+	videoId,
+	onSharesChanged,
+}: {
+	open: boolean;
+	videoId: string;
+	onSharesChanged?: () => void;
+}) => {
+	const [people, setPeople] = useState<VideoSharePerson[] | null>(null);
+	const [candidates, setCandidates] = useState<VideoShareCandidate[] | null>(
+		null,
+	);
+	const [canManage, setCanManage] = useState(false);
+	const [selectedCandidateId, setSelectedCandidateId] = useState("");
+	const [isAdding, setIsAdding] = useState(false);
+	const [removingId, setRemovingId] = useState<string | null>(null);
+
+	const loadShares = useCallback(async () => {
+		try {
+			const result = await listVideoShares({
+				videoId: videoId as Video.VideoId,
+			});
+			setPeople(result.people);
+			setCandidates(result.candidates);
+			setCanManage(true);
+		} catch {
+			setCanManage(false);
+			setPeople(null);
+			setCandidates(null);
+		}
+	}, [videoId]);
+
+	useEffect(() => {
+		if (!open) return;
+		void loadShares();
+	}, [open, loadShares]);
+
+	const handleAddPerson = async () => {
+		if (!selectedCandidateId || !candidates || !people) return;
+		const candidate = candidates.find((c) => c.id === selectedCandidateId);
+		if (!candidate) return;
+
+		const previousPeople = people;
+		const previousCandidates = candidates;
+		setIsAdding(true);
+		setSelectedCandidateId("");
+		setPeople([
+			...previousPeople,
+			{
+				id: candidate.id,
+				name: candidate.name,
+				email: candidate.email,
+				source: "manual",
+			},
+		]);
+		setCandidates(previousCandidates.filter((c) => c.id !== candidate.id));
+
+		try {
+			await addVideoShare({
+				videoId: videoId as Video.VideoId,
+				userId: candidate.id,
+			});
+			toast.success(`Added ${candidate.name || candidate.email}`);
+		} catch (error) {
+			setPeople(previousPeople);
+			setCandidates(previousCandidates);
+			toast.error(
+				error instanceof Error ? error.message : "Failed to add person",
+			);
+		} finally {
+			setIsAdding(false);
+			void loadShares();
+			onSharesChanged?.();
+		}
+	};
+
+	const handleRemovePerson = async (person: VideoSharePerson) => {
+		if (!people) return;
+		const previousPeople = people;
+		setRemovingId(person.id);
+		setPeople(previousPeople.filter((p) => p.id !== person.id));
+
+		try {
+			await removeVideoShare({
+				videoId: videoId as Video.VideoId,
+				userId: person.id,
+			});
+			toast.success(`Removed ${person.name || person.email}`);
+		} catch (error) {
+			setPeople(previousPeople);
+			toast.error(
+				error instanceof Error ? error.message : "Failed to remove person",
+			);
+		} finally {
+			setRemovingId(null);
+			void loadShares();
+			onSharesChanged?.();
+		}
+	};
+
+	if (!canManage || !people) return null;
+
+	return (
+		<div className="flex flex-col gap-3 border-t border-gray-4 px-6 py-5">
+			<p className="text-[15px] font-semibold text-gray-12">
+				People with access
+			</p>
+			<div className="flex flex-col gap-2">
+				{people.map((person) => {
+					const displayName = person.name || person.email;
+					return (
+						<div key={person.id} className="flex items-center gap-3">
+							<Avatar
+								name={displayName}
+								className="size-8 shrink-0"
+								letterClass="text-sm"
+							/>
+							<div className="min-w-0 flex-1">
+								<p className="truncate text-sm font-medium text-gray-12">
+									{displayName}
+								</p>
+								{person.name && (
+									<p className="truncate text-xs text-gray-10">
+										{person.email}
+									</p>
+								)}
+							</div>
+							<span className="shrink-0 rounded-full bg-gray-3 px-2 py-0.5 text-xs font-medium text-gray-11">
+								{SOURCE_LABEL[person.source]}
+							</span>
+							{person.source !== "owner" && (
+								<button
+									type="button"
+									aria-label={`Remove ${displayName}`}
+									disabled={removingId === person.id}
+									onClick={() => handleRemovePerson(person)}
+									className="shrink-0 rounded-lg p-1 text-gray-10 transition-colors hover:bg-gray-3 hover:text-gray-12 disabled:opacity-50"
+								>
+									<X className="size-4" aria-hidden />
+								</button>
+							)}
+						</div>
+					);
+				})}
+			</div>
+			{candidates && candidates.length > 0 && (
+				<div className="flex items-center gap-2 pt-1">
+					<Select
+						className="flex-1"
+						size="md"
+						placeholder="Add person"
+						value={selectedCandidateId}
+						onValueChange={setSelectedCandidateId}
+						options={candidates.map((candidate) => ({
+							value: candidate.id,
+							label: candidate.name || candidate.email,
+						}))}
+					/>
+					<button
+						type="button"
+						onClick={handleAddPerson}
+						disabled={!selectedCandidateId || isAdding}
+						className="flex shrink-0 items-center gap-1.5 rounded-xl bg-blue-9 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-10 disabled:opacity-50"
+					>
+						<UserPlus className="size-4" aria-hidden />
+						Add
+					</button>
+				</div>
+			)}
+		</div>
+	);
+};
+
 export const ShareLinkDialog = ({
 	open,
 	onOpenChange,
@@ -90,6 +291,7 @@ export const ShareLinkDialog = ({
 	isPublic,
 	canManageAccess = false,
 	onManageAccess,
+	onSharesChanged,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -100,6 +302,8 @@ export const ShareLinkDialog = ({
 	isPublic: boolean;
 	canManageAccess?: boolean;
 	onManageAccess?: () => void;
+	/** Fires after a person is added to or removed from the video's access list. */
+	onSharesChanged?: () => void;
 }) => {
 	const { webUrl } = usePublicEnv();
 	const playback = useOptionalPlayback();
@@ -259,6 +463,12 @@ export const ShareLinkDialog = ({
 						</div>
 					)}
 				</div>
+
+				<PeopleWithAccess
+					open={open}
+					videoId={videoId}
+					onSharesChanged={onSharesChanged}
+				/>
 
 				<div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-gray-4 px-6 py-4">
 					<button
