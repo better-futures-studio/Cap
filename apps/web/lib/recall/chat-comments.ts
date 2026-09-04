@@ -12,8 +12,10 @@ import {
 } from "./client";
 import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
+import { type LiveTranscript, readLiveTranscript } from "./live-transcript";
 
 const MAX_COMMENT_CONTENT = 2000;
+const CAPTURE_ACKNOWLEDGEMENT = "Noted.";
 
 function getAffectedRows(result: unknown): number {
 	if (Array.isArray(result)) {
@@ -97,9 +99,30 @@ function isChatEvent(
 	return !isCaptureCommand(text, trigger, botName);
 }
 
+function roundedTimestamp(t: number): number {
+	return Math.round(t * 1000) / 1000;
+}
+
+function normalizeCommentText(text: string): string {
+	return text.trim().toLowerCase();
+}
+
+function commentDedupeKey(text: string, timestamp: number): string {
+	return `${normalizeCommentText(text)}\0${roundedTimestamp(timestamp)}`;
+}
+
+function isCaptureAcknowledgement(text: string): boolean {
+	return text.trim() === CAPTURE_ACKNOWLEDGEMENT;
+}
+
 export async function importMeetingChatComments(
 	{ meetingBotId }: { meetingBotId: string },
-	deps: { client?: RecallClient; botName?: string; agentTrigger?: string } = {},
+	deps: {
+		client?: RecallClient;
+		botName?: string;
+		agentTrigger?: string;
+		readTranscript?: (meetingBotId: string) => Promise<LiveTranscript | null>;
+	} = {},
 ): Promise<{ imported: number; skipped: boolean }> {
 	const [row] = await db()
 		.select()
@@ -130,40 +153,65 @@ export async function importMeetingChatComments(
 		const downloadUrl =
 			recording.media_shortcuts.participant_events?.data
 				?.participant_events_download_url;
-		if (!downloadUrl) {
-			return { imported: 0, skipped: false };
-		}
-
-		const events =
-			await client.downloadJson<RecallParticipantEvent[]>(downloadUrl);
+		const events = downloadUrl
+			? await client.downloadJson<RecallParticipantEvent[]>(downloadUrl)
+			: [];
 		const config = getRecallConfig();
 		const botName = deps.botName ?? config?.botName ?? DEFAULT_BOT_NAME;
 		const agentTrigger = deps.agentTrigger ?? config?.agentTrigger ?? "/nt";
 		const chatEvents = (Array.isArray(events) ? events : []).filter((event) =>
 			isChatEvent(event, botName, agentTrigger),
 		);
+		const seen = new Set(
+			chatEvents.map((event) =>
+				commentDedupeKey(event.data.text, event.timestamp.relative),
+			),
+		);
+		const transcript = await (deps.readTranscript ?? readLiveTranscript)(
+			meetingBotId,
+		);
+		const liveBotReplies = (transcript?.chat ?? []).filter((entry) => {
+			if (!entry.fromBot) return false;
+			const text = entry.text.trim();
+			if (!text) return false;
+			if (!Number.isFinite(entry.t) || entry.t < 0) return false;
+			if (isJoinMessage(text, botName)) return false;
+			if (isCaptureAcknowledgement(text)) return false;
+			const key = commentDedupeKey(text, entry.t);
+			if (seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		});
 
-		if (chatEvents.length === 0) {
+		const values = [
+			...chatEvents.map((event) => ({
+				id: Comment.CommentId.make(nanoId()),
+				type: "text" as const,
+				content: formatChatContent(event, botName, agentTrigger),
+				timestamp: roundedTimestamp(event.timestamp.relative),
+				authorId: row.ownerId,
+				videoId,
+			})),
+			...liveBotReplies.map((entry) => ({
+				id: Comment.CommentId.make(nanoId()),
+				type: "text" as const,
+				content: `${botName}: ${entry.text.trim()}`.slice(
+					0,
+					MAX_COMMENT_CONTENT,
+				),
+				timestamp: roundedTimestamp(entry.t),
+				authorId: row.ownerId,
+				videoId,
+			})),
+		];
+
+		if (values.length === 0) {
 			return { imported: 0, skipped: false };
 		}
 
-		await db()
-			.insert(comments)
-			.values(
-				chatEvents.map((event) => {
-					const content = formatChatContent(event, botName, agentTrigger);
-					return {
-						id: Comment.CommentId.make(nanoId()),
-						type: "text" as const,
-						content,
-						timestamp: Math.round(event.timestamp.relative * 1000) / 1000,
-						authorId: row.ownerId,
-						videoId,
-					};
-				}),
-			);
+		await db().insert(comments).values(values);
 
-		return { imported: chatEvents.length, skipped: false };
+		return { imported: values.length, skipped: false };
 	} catch (error) {
 		await db()
 			.update(meetingBots)

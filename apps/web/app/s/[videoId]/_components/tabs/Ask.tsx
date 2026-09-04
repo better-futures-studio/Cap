@@ -6,6 +6,7 @@ import { LoaderCircle, Send } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { type AskVideoMessage, askVideo } from "@/actions/videos/ask";
+import { MarkdownAnswer } from "@/components/MarkdownAnswer";
 
 interface AskProps {
 	videoId: Video.VideoId;
@@ -19,62 +20,6 @@ const SUGGESTED_QUESTIONS = [
 	"List the action items and who owns them",
 	"Summarize what was said about …",
 ] as const;
-
-/** Matches the `[mm:ss]` / `[h:mm:ss]` markers the backend embeds in answers. */
-const TIME_MARKER = /(\[(?:\d{1,2}:)?\d{1,2}:\d{2}\])/g;
-
-const parseMarkerSeconds = (marker: string): number | null => {
-	const parts = marker
-		.slice(1, -1)
-		.split(":")
-		.map((part) => Number(part));
-	if (parts.length < 2 || parts.length > 3) return null;
-	if (parts.some((part) => Number.isNaN(part))) return null;
-	return parts.reduce((total, part) => total * 60 + part, 0);
-};
-
-const AnswerText = ({
-	content,
-	onSeek,
-}: {
-	content: string;
-	onSeek?: (time: number) => void;
-}) => {
-	const paragraphs = content.split(/\n{2,}/).filter((p) => p.trim());
-
-	return (
-		<div className="space-y-2">
-			{paragraphs.map((paragraph, pIndex) => (
-				// biome-ignore lint/suspicious/noArrayIndexKey: paragraphs are static once rendered
-				<p
-					key={pIndex}
-					className="text-sm leading-relaxed whitespace-pre-wrap text-gray-12"
-				>
-					{paragraph.split(TIME_MARKER).map((part, index) => {
-						// split() on a single-capture-group regex puts each match at an
-						// odd index; only those parts are candidate `[mm:ss]` markers.
-						const seconds = index % 2 === 1 ? parseMarkerSeconds(part) : null;
-						if (seconds !== null) {
-							return (
-								<button
-									// biome-ignore lint/suspicious/noArrayIndexKey: parts are static once rendered
-									key={index}
-									type="button"
-									onClick={() => onSeek?.(seconds)}
-									className="mx-0.5 inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.5 font-mono text-[11px] font-medium text-blue-600 transition hover:bg-blue-100"
-								>
-									{part}
-								</button>
-							);
-						}
-						// biome-ignore lint/suspicious/noArrayIndexKey: parts are static once rendered
-						return <span key={index}>{part}</span>;
-					})}
-				</p>
-			))}
-		</div>
-	);
-};
 
 export const Ask: React.FC<AskProps> = ({ videoId, onSeek }) => {
 	const [messages, setMessages] = useState<AskVideoMessage[]>([]);
@@ -169,7 +114,7 @@ export const Ask: React.FC<AskProps> = ({ videoId, onSeek }) => {
 									</div>
 								) : (
 									<div className="max-w-[85%]">
-										<AnswerText content={message.content} onSeek={onSeek} />
+										<MarkdownAnswer content={message.content} onSeek={onSeek} />
 									</div>
 								)}
 							</div>

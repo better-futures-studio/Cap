@@ -7,6 +7,10 @@ import {
 	type RecallClient,
 	type RecallParticipantEvent,
 } from "@/lib/recall/client";
+import type {
+	LiveChatEntry,
+	LiveTranscript,
+} from "@/lib/recall/live-transcript";
 
 const botName = "Meeting Notetaker";
 const agentTrigger = "/nt";
@@ -85,6 +89,9 @@ vi.mock("@/lib/recall/default-client", () => ({
 	getDefaultRecallClient: () => {
 		throw new Error("default Recall client should not be used in tests");
 	},
+}));
+vi.mock("@/lib/recall/live-transcript", () => ({
+	readLiveTranscript: vi.fn(async () => null),
 }));
 
 type Row = Record<string, unknown>;
@@ -203,6 +210,16 @@ function participantEvent(
 			email: "alice@example.com",
 		},
 		data: overrides.data === undefined ? null : overrides.data,
+	};
+}
+
+function liveTranscript(chat: LiveChatEntry[]): LiveTranscript {
+	return {
+		version: 1,
+		updatedAt: "2026-09-03T16:00:00.000Z",
+		utterances: [],
+		captures: [],
+		chat,
 	};
 }
 
@@ -433,6 +450,138 @@ describe("importMeetingChatComments", () => {
 		expect(second).toEqual({ imported: 0, skipped: true });
 		expect(client.getRecording).toHaveBeenCalledOnce();
 		expect(commentRows()).toHaveLength(1);
+	});
+
+	it("imports a bot reply from the stored live chat with a converted timestamp", async () => {
+		seedBot();
+		const client = mockClient();
+
+		const result = await importMeetingChatComments(
+			{ meetingBotId: "mb_1" },
+			{
+				client,
+				readTranscript: async () =>
+					liveTranscript([
+						{
+							t: 42.3456,
+							speaker: botName,
+							text: "  The launch is Friday.  ",
+							fromBot: true,
+						},
+						{
+							t: 10,
+							speaker: "Alice",
+							text: "hello team",
+							fromBot: false,
+						},
+					]),
+			},
+		);
+
+		expect(result).toEqual({ imported: 1, skipped: false });
+		expect(commentRows()).toEqual([
+			expect.objectContaining({
+				type: "text",
+				content: `${botName}: The launch is Friday.`,
+				timestamp: 42.346,
+				authorId: ownerId,
+				videoId,
+			}),
+		]);
+	});
+
+	it("skips the join message stored in the live chat", async () => {
+		seedBot();
+		const client = mockClient();
+
+		const result = await importMeetingChatComments(
+			{ meetingBotId: "mb_1" },
+			{
+				client,
+				readTranscript: async () =>
+					liveTranscript([
+						{
+							t: 1,
+							speaker: botName,
+							text: joinMessage,
+							fromBot: true,
+						},
+					]),
+			},
+		);
+
+		expect(result).toEqual({ imported: 0, skipped: false });
+		expect(commentRows()).toEqual([]);
+	});
+
+	it("does not insert a live bot reply that duplicates a Recall event", async () => {
+		seedBot();
+		const events: RecallParticipantEvent[] = [
+			participantEvent({
+				id: "bot_reply",
+				action: "chat_message",
+				timestamp: { absolute: "2026-09-03T16:00:30.000Z", relative: 30 },
+				participant: botParticipant(),
+				data: {
+					text: "The launch is Friday.",
+					to: "everyone",
+				},
+			}),
+		];
+		const client = mockClient({
+			downloadJson: vi.fn(async () => events) as RecallClient["downloadJson"],
+		});
+
+		const result = await importMeetingChatComments(
+			{ meetingBotId: "mb_1" },
+			{
+				client,
+				readTranscript: async () =>
+					liveTranscript([
+						{
+							t: 30.0004,
+							speaker: botName,
+							text: "  THE LAUNCH IS FRIDAY.  ",
+							fromBot: true,
+						},
+					]),
+			},
+		);
+
+		expect(result).toEqual({ imported: 1, skipped: false });
+		expect(commentRows()).toEqual([
+			expect.objectContaining({
+				type: "text",
+				content: `${botName}: The launch is Friday.`,
+				timestamp: 30,
+				authorId: ownerId,
+				videoId,
+			}),
+		]);
+	});
+
+	it("skips a live chat capture acknowledgement", async () => {
+		seedBot();
+		const client = mockClient();
+
+		const result = await importMeetingChatComments(
+			{ meetingBotId: "mb_1" },
+			{
+				client,
+				readTranscript: async () =>
+					liveTranscript([
+						{
+							t: 18,
+							speaker: botName,
+							text: "Noted.",
+							fromBot: true,
+						},
+					]),
+			},
+		);
+
+		expect(result).toEqual({ imported: 0, skipped: false });
+		expect(commentRows()).toEqual([]);
 	});
 
 	it("resets chatSyncedAt and rethrows when download fails", async () => {

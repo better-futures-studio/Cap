@@ -5,6 +5,7 @@ import type { Organisation } from "@cap/web-domain";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, useTransition } from "react";
 import { askLiveMeeting } from "@/actions/meeting-live";
+import { MarkdownAnswer } from "@/components/MarkdownAnswer";
 import type { LiveUtterance } from "@/lib/recall/live-transcript";
 
 const ACTIVE = new Set<MeetingBotStatus>([
@@ -85,7 +86,7 @@ export function LiveMeeting({
 						Ask
 					</button>
 				</div>
-				{answer && <p className="text-sm text-gray-11">{answer}</p>}
+				{answer && <MarkdownAnswer content={answer} />}
 			</form>
 		</main>
 	);
