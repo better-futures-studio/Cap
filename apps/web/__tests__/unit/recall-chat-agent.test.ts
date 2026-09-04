@@ -106,6 +106,49 @@ describe("answerLiveMeeting", () => {
 		},
 	);
 
+	it("replies in English by default", async () => {
+		const answer = vi.fn().mockResolvedValue("Friday.");
+
+		await answerLiveMeeting(
+			{ meetingBotId: "meeting_1", question: "When is the launch?" },
+			{ readTranscript: async () => transcript, answer },
+		);
+
+		expect(answer.mock.calls[0]?.[0]).toContain("Reply in English.");
+	});
+
+	it("replies in Arabic when the org summary language is Arabic", async () => {
+		const answer = vi.fn().mockResolvedValue("الجمعة.");
+
+		await answerLiveMeeting(
+			{
+				meetingBotId: "meeting_1",
+				question: "When is the launch?",
+				summaryLanguage: "ar",
+			},
+			{ readTranscript: async () => transcript, answer },
+		);
+
+		expect(answer.mock.calls[0]?.[0]).toContain("Reply in Arabic.");
+	});
+
+	it("falls back to the message language when auto is selected", async () => {
+		const answer = vi.fn().mockResolvedValue("Friday.");
+
+		await answerLiveMeeting(
+			{
+				meetingBotId: "meeting_1",
+				question: "When is the launch?",
+				summaryLanguage: "auto",
+			},
+			{ readTranscript: async () => transcript, answer },
+		);
+
+		expect(answer.mock.calls[0]?.[0]).toContain(
+			"Reply in the language of the message.",
+		);
+	});
+
 	it("passes the live transcript and stripped question as messages", async () => {
 		const answer = vi.fn().mockResolvedValue("The launch is Friday.");
 

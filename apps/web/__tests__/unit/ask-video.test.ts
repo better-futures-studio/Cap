@@ -1,6 +1,10 @@
 import { Exit, Option } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { parseAskVideoReferences, trimTranscriptForAsk } from "@/lib/ask-video";
+import {
+	askVideoSystemPrompt,
+	parseAskVideoReferences,
+	trimTranscriptForAsk,
+} from "@/lib/ask-video";
 
 const mocks = vi.hoisted(() => ({
 	runPromiseExit: vi.fn(),
@@ -72,6 +76,7 @@ vi.mock("@/lib/video-storage", () => ({
 const completeVideo = {
 	id: "video-1",
 	ownerId: "user-1",
+	orgId: "org-1",
 	transcriptionStatus: "COMPLETE",
 	metadata: {
 		summary: "We decided to launch Friday.",
@@ -130,6 +135,26 @@ beforeEach(() => {
 	);
 	mocks.generateText.mockResolvedValue({
 		text: "They agreed to launch on Friday [02:15].",
+	});
+});
+
+describe("askVideoSystemPrompt", () => {
+	it("answers in English by default", () => {
+		expect(askVideoSystemPrompt(false)).toContain(
+			"Write plain prose in English.",
+		);
+	});
+
+	it("answers in Arabic when the org summary language is Arabic", () => {
+		expect(askVideoSystemPrompt(false, "ar")).toContain(
+			"Write plain prose in Arabic.",
+		);
+	});
+
+	it("falls back to the question language when auto is selected", () => {
+		expect(askVideoSystemPrompt(false, "auto")).toContain(
+			"language of the question",
+		);
 	});
 });
 
@@ -209,6 +234,7 @@ describe("askVideo", () => {
 		expect(generateArgs.system).toContain(
 			"Answer only from the provided material",
 		);
+		expect(generateArgs.system).toContain("Write plain prose in English.");
 		expect(generateArgs.system).toContain("[mm:ss]");
 		expect(generateArgs.messages.at(-1)).toEqual({
 			role: "user",

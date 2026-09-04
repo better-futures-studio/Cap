@@ -1,6 +1,7 @@
 import { db } from "@cap/database";
 import { meetingBots } from "@cap/database/schema";
 import { eq } from "drizzle-orm";
+import { loadOrganizationSummaryLanguage } from "@/lib/summary-language";
 import { type ChatAgentDeps, handleLiveChatMessage } from "./chat-agent";
 import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { appendChat, appendUtterance } from "./live-transcript";
@@ -40,7 +41,7 @@ export async function handleRealtimeEvent(
 	const recallBotId = string(bot?.id);
 	if (!recallBotId) return;
 	const [meeting] = await db()
-		.select({ id: meetingBots.id })
+		.select({ id: meetingBots.id, orgId: meetingBots.orgId })
 		.from(meetingBots)
 		.where(eq(meetingBots.recallBotId, recallBotId))
 		.limit(1);
@@ -81,6 +82,11 @@ export async function handleRealtimeEvent(
 				text,
 				fromBot: false,
 			});
+			const summaryLanguage =
+				deps.chatAgent?.summaryLanguage ??
+				(meeting.orgId
+					? await loadOrganizationSummaryLanguage(meeting.orgId)
+					: undefined);
 			await (deps.handleChatMessage ?? handleLiveChatMessage)(
 				{
 					meetingBotId: meeting.id,
@@ -89,7 +95,7 @@ export async function handleRealtimeEvent(
 					speaker,
 					timestamp,
 				},
-				deps.chatAgent,
+				{ ...deps.chatAgent, summaryLanguage },
 			);
 		};
 		if (deps.deferChat) deps.deferChat(work);

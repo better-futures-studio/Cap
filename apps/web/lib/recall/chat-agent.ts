@@ -1,4 +1,11 @@
 import { openai } from "@ai-sdk/openai";
+import {
+	AI_GENERATION_LANGUAGE_AUTO,
+	type AiGenerationLanguage,
+	DEFAULT_SUMMARY_LANGUAGE,
+	getAiGenerationLanguageName,
+	parseSummaryLanguage,
+} from "@cap/web-domain";
 import { generateText, stepCountIs } from "ai";
 import { runWithAiProviders } from "@/lib/ai/run";
 import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
@@ -16,8 +23,21 @@ const MAX_REPLY_CHARS = 600;
 const CONTEXT_CHARS = 12_000;
 const MAX_CHAT_EXCHANGES = 10;
 
-function liveMeetingSystem(botName: string) {
-	return `You are ${botName}, a helpful assistant inside a live meeting. Use the transcript below as context when the question is about the meeting. For anything else, answer directly; use web search when the answer depends on current or external information (weather, news, prices, facts you are not sure of). Keep replies under 600 characters, plain text, no markdown, no links unless asked.`;
+export function liveReplyLanguageInstruction(
+	language: AiGenerationLanguage,
+): string {
+	if (language === AI_GENERATION_LANGUAGE_AUTO) {
+		return "Reply in the language of the message.";
+	}
+
+	return `Reply in ${getAiGenerationLanguageName(language)}.`;
+}
+
+export function liveMeetingSystem(
+	botName: string,
+	language: AiGenerationLanguage = DEFAULT_SUMMARY_LANGUAGE,
+) {
+	return `You are ${botName}, a helpful assistant inside a live meeting. Use the transcript below as context when the question is about the meeting. For anything else, answer directly; use web search when the answer depends on current or external information (weather, news, prices, facts you are not sure of). Keep replies under 600 characters, plain text, no markdown, no links unless asked. ${liveReplyLanguageInstruction(language)}`;
 }
 
 export type ChatAnswerOptions = {
@@ -44,6 +64,7 @@ export type ChatAgentDeps = {
 	send?: (botId: string, params: { message: string }) => Promise<void>;
 	botName?: string;
 	trigger?: string;
+	summaryLanguage?: AiGenerationLanguage;
 };
 
 const replies = new Set<string>();
@@ -153,11 +174,13 @@ export async function answerLiveMeeting(
 		question,
 		speaker = "Participant",
 		timestamp = 0,
+		summaryLanguage,
 	}: {
 		meetingBotId: string;
 		question: string;
 		speaker?: string;
 		timestamp?: number;
+		summaryLanguage?: AiGenerationLanguage;
 	},
 	deps: ChatAgentDeps = {},
 ): Promise<string> {
@@ -180,6 +203,9 @@ export async function answerLiveMeeting(
 	}
 	if (!context) return "There is no transcript yet.";
 	const botName = deps.botName ?? DEFAULT_BOT_NAME;
+	const outputLanguage = parseSummaryLanguage(
+		summaryLanguage ?? deps.summaryLanguage,
+	);
 	const intent = /\b(action items?)\b/i.test(prompt)
 		? "List the action items mentioned so far as short bullets, with owners when stated."
 		: /\bcatch me up\b/i.test(prompt)
@@ -189,7 +215,7 @@ export async function answerLiveMeeting(
 				: null;
 	return clipped(
 		await (deps.answer ?? llmAnswer)(
-			liveMeetingSystem(botName),
+			liveMeetingSystem(botName, outputLanguage),
 			[
 				...meetingMessages(document, prompt),
 				{ role: "user", content: intent ?? prompt },
@@ -224,6 +250,7 @@ export async function handleLiveChatMessage(
 				question: messageWithoutInvocation(input.text, trigger, botName),
 				speaker: input.speaker,
 				timestamp: input.timestamp,
+				summaryLanguage: deps.summaryLanguage,
 			},
 			{ ...deps, botName },
 		);

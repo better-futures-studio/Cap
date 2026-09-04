@@ -7,6 +7,7 @@ import { userIsPro } from "@cap/utils";
 import {
 	AI_GENERATION_LANGUAGE_AUTO,
 	type AiGenerationLanguage,
+	DEFAULT_SUMMARY_LANGUAGE,
 	isAiGenerationLanguage,
 } from "@cap/web-domain";
 import { eq } from "drizzle-orm";
@@ -24,6 +25,7 @@ type OrganizationSettingsInput = {
 	hideShareableLinkCapLogo?: boolean;
 	shareableLinkUseOrganizationIcon?: boolean;
 	aiGenerationLanguage?: AiGenerationLanguage;
+	summaryLanguage?: AiGenerationLanguage;
 	defaultPlaybackSpeed?: number;
 };
 
@@ -34,6 +36,7 @@ const proOrganizationSettingKeys = [
 	"hideShareableLinkCapLogo",
 	"shareableLinkUseOrganizationIcon",
 	"aiGenerationLanguage",
+	"summaryLanguage",
 ] as const satisfies readonly (keyof OrganizationSettingsInput)[];
 
 const defaultProOrganizationSettings = {
@@ -43,6 +46,7 @@ const defaultProOrganizationSettings = {
 	hideShareableLinkCapLogo: false,
 	shareableLinkUseOrganizationIcon: false,
 	aiGenerationLanguage: AI_GENERATION_LANGUAGE_AUTO,
+	summaryLanguage: DEFAULT_SUMMARY_LANGUAGE,
 } as const satisfies Pick<
 	Required<OrganizationSettingsInput>,
 	(typeof proOrganizationSettingKeys)[number]
@@ -79,6 +83,13 @@ export async function updateOrganizationSettings(
 		!isAiGenerationLanguage(settings.aiGenerationLanguage)
 	) {
 		throw new Error("Unsupported AI generation language");
+	}
+
+	if (
+		settings.summaryLanguage !== undefined &&
+		!isAiGenerationLanguage(settings.summaryLanguage)
+	) {
+		throw new Error("Unsupported summary language");
 	}
 
 	if (!user.activeOrganizationId) {

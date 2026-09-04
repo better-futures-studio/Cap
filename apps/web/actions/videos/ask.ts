@@ -28,6 +28,7 @@ import {
 } from "@/lib/recall/live-transcript";
 import * as EffectRuntime from "@/lib/server";
 import { runPromise } from "@/lib/server";
+import { loadOrganizationSummaryLanguage } from "@/lib/summary-language";
 import { decodeStorageVideo } from "@/lib/video-storage";
 
 export type {
@@ -231,12 +232,16 @@ export async function askVideo(input: {
 		transcript: transcript.text,
 	});
 	const history = normalizeAskVideoHistory(input.history);
+	const summaryLanguage = await loadOrganizationSummaryLanguage(video.orgId);
 	const answer = (
-		await answerAskVideo(askVideoSystemPrompt(transcript.trimmed), [
-			{ role: "user", content: material },
-			...history,
-			{ role: "user", content: question },
-		])
+		await answerAskVideo(
+			askVideoSystemPrompt(transcript.trimmed, summaryLanguage),
+			[
+				{ role: "user", content: material },
+				...history,
+				{ role: "user", content: question },
+			],
+		)
 	).trim();
 
 	return {

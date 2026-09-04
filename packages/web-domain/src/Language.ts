@@ -113,6 +113,26 @@ export function parseAiGenerationLanguage(
 	return isAiGenerationLanguage(value) ? value : AI_GENERATION_LANGUAGE_AUTO;
 }
 
+export const DEFAULT_SUMMARY_LANGUAGE =
+	"en" as const satisfies AiGenerationLanguageCode;
+
+export function parseSummaryLanguage(value: unknown): AiGenerationLanguage {
+	return isAiGenerationLanguage(value) ? value : DEFAULT_SUMMARY_LANGUAGE;
+}
+
+export function resolveAiOutputLanguage({
+	summaryLanguage,
+	transcriptLanguage,
+}: {
+	summaryLanguage: AiGenerationLanguage;
+	transcriptLanguage?: AiGenerationLanguage;
+}): AiGenerationLanguage {
+	if (summaryLanguage !== AI_GENERATION_LANGUAGE_AUTO) {
+		return summaryLanguage;
+	}
+	return transcriptLanguage ?? AI_GENERATION_LANGUAGE_AUTO;
+}
+
 export function getAiGenerationLanguageName(
 	language: AiGenerationLanguage,
 ): string {

@@ -1,3 +1,10 @@
+import {
+	AI_GENERATION_LANGUAGE_AUTO,
+	type AiGenerationLanguage,
+	DEFAULT_SUMMARY_LANGUAGE,
+	getAiGenerationLanguageName,
+} from "@cap/web-domain";
+
 export type AskVideoMessage = { role: "user" | "assistant"; content: string };
 export type AskVideoReference = { seconds: number; label: string };
 export type AskVideoResult = {
@@ -112,10 +119,23 @@ export function formatAskTranscript(vttContent: string): {
 	return trimTranscriptForAsk(formatted);
 }
 
-export function askVideoSystemPrompt(trimmed: boolean): string {
+export function askVideoLanguageInstruction(
+	language: AiGenerationLanguage,
+): string {
+	if (language === AI_GENERATION_LANGUAGE_AUTO) {
+		return "Write plain prose in the language of the question.";
+	}
+
+	return `Write plain prose in ${getAiGenerationLanguageName(language)}.`;
+}
+
+export function askVideoSystemPrompt(
+	trimmed: boolean,
+	language: AiGenerationLanguage = DEFAULT_SUMMARY_LANGUAGE,
+): string {
 	return [
 		"Answer only from the provided material. Do not use outside knowledge.",
-		"Write plain prose in the language of the question.",
+		askVideoLanguageInstruction(language),
 		"Cite moments as [mm:ss] or [h:mm:ss] taken from the cue timestamps in the transcript.",
 		trimmed
 			? "The transcript was trimmed to the beginning and the end to fit the context budget."

@@ -8,6 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { requireOrganizationAccess } from "@/actions/organization/authorization";
 import { answerLiveMeeting } from "@/lib/recall/chat-agent";
 import { canUserAccessMeetingBot } from "@/lib/recall/visibility";
+import { loadOrganizationSummaryLanguage } from "@/lib/summary-language";
 
 export async function askLiveMeeting({
 	orgId,
@@ -30,5 +31,10 @@ export async function askLiveMeeting({
 	if (!(await canUserAccessMeetingBot(meeting.id, user.id))) {
 		throw new Error("Meeting not found");
 	}
-	return answerLiveMeeting({ meetingBotId: meeting.id, question });
+	const summaryLanguage = await loadOrganizationSummaryLanguage(orgId);
+	return answerLiveMeeting({
+		meetingBotId: meeting.id,
+		question,
+		summaryLanguage,
+	});
 }

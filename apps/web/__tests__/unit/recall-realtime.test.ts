@@ -21,6 +21,10 @@ vi.mock("@cap/database/schema", () => ({
 	},
 }));
 vi.mock("drizzle-orm", () => ({ eq: vi.fn((left, right) => [left, right]) }));
+vi.mock("@/lib/summary-language", () => ({
+	loadOrganizationSummaryLanguage: vi.fn(async () => "en"),
+}));
+
 vi.mock("@/lib/recall/config", () => ({
 	DEFAULT_BOT_NAME: "Meeting Notetaker",
 	getRecallConfig: () => ({

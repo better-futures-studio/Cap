@@ -183,7 +183,15 @@ describe("shouldReplaceVideoTitle", () => {
 });
 
 describe("getAiLanguageInstruction", () => {
-	it("uses transcript language when auto-detect is selected", () => {
+	it("uses English when the org summary language is the default", () => {
+		expect(getAiLanguageInstruction("en")).toContain("English");
+	});
+
+	it("uses Arabic when the org summary language is Arabic", () => {
+		expect(getAiLanguageInstruction("ar")).toContain("Arabic");
+	});
+
+	it("falls back to the transcript language when auto-detect is selected", () => {
 		expect(getAiLanguageInstruction("auto")).toContain(
 			"same language as the transcript",
 		);

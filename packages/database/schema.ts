@@ -217,6 +217,7 @@ export const organizations = mysqlTable(
 			hideShareableLinkCapLogo?: boolean;
 			shareableLinkUseOrganizationIcon?: boolean;
 			aiGenerationLanguage?: AiGenerationLanguage;
+			summaryLanguage?: AiGenerationLanguage;
 			defaultPlaybackSpeed?: number;
 			recapFromName?: string;
 			recapFromAddress?: string;

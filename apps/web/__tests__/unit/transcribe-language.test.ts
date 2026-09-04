@@ -3,6 +3,8 @@ import {
 	AI_GENERATION_LANGUAGES,
 	isAiGenerationLanguage,
 	parseAiGenerationLanguage,
+	parseSummaryLanguage,
+	resolveAiOutputLanguage,
 } from "@cap/web-domain";
 import { describe, expect, it } from "vitest";
 import { getAssemblyAITranscriptionOptions } from "@/lib/assemblyai";
@@ -18,6 +20,21 @@ describe("AI generation language support", () => {
 		expect(AI_GENERATION_LANGUAGES).not.toHaveProperty("pa");
 		expect(isAiGenerationLanguage("pa")).toBe(false);
 		expect(parseAiGenerationLanguage("pa")).toBe("auto");
+	});
+
+	it("parses summary language with an English default", () => {
+		expect(parseSummaryLanguage(undefined)).toBe("en");
+		expect(parseSummaryLanguage("ar")).toBe("ar");
+		expect(parseSummaryLanguage("auto")).toBe("auto");
+		expect(parseSummaryLanguage("nope")).toBe("en");
+		expect(resolveAiOutputLanguage({ summaryLanguage: "ar" })).toBe("ar");
+		expect(
+			resolveAiOutputLanguage({
+				summaryLanguage: "auto",
+				transcriptLanguage: "ar",
+			}),
+		).toBe("ar");
+		expect(resolveAiOutputLanguage({ summaryLanguage: "auto" })).toBe("auto");
 	});
 
 	it("uses Universal-3.5 Pro with Universal-2 fallback", () => {

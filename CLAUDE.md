@@ -119,6 +119,10 @@ Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
   the Recall dashboard Transcription page (us-west-2, US hosts); supports
   English/Arabic code-switching. `transcript.failed` still falls back to
   Cap's own AssemblyAI pipeline.
+- Org setting `summaryLanguage` (default `en`) controls AI summaries, chapters,
+  action items, Ask answers, and live-agent replies. Transcription stays on
+  `aiGenerationLanguage` (typically `auto` for mixed English/Arabic). Recap
+  email sends the stored summary as-is.
 - In-call agent (off by default): set `RECALL_LIVE_AGENT=true` to create bots
   with real-time transcription streamed to `/api/webhooks/recall/realtime`
   (same verification secret). Chat messages starting with

@@ -28,12 +28,13 @@ const defaultSettings: OrganizationSettings = {
 	hideShareableLinkCapLogo: false,
 	shareableLinkUseOrganizationIcon: false,
 	aiGenerationLanguage: AI_GENERATION_LANGUAGE_AUTO,
+	summaryLanguage: "en",
 	defaultPlaybackSpeed: DEFAULT_PLAYBACK_SPEED,
 };
 
 type BooleanOrganizationSettingKey = Exclude<
 	keyof OrganizationSettings,
-	"aiGenerationLanguage"
+	"aiGenerationLanguage" | "summaryLanguage"
 >;
 
 const options: Array<{
@@ -96,6 +97,9 @@ const mergeSettings = (
 	aiGenerationLanguage: isAiGenerationLanguage(settings?.aiGenerationLanguage)
 		? settings.aiGenerationLanguage
 		: AI_GENERATION_LANGUAGE_AUTO,
+	summaryLanguage: isAiGenerationLanguage(settings?.summaryLanguage)
+		? settings.summaryLanguage
+		: "en",
 });
 
 const CapSettingsCard = () => {
@@ -104,13 +108,16 @@ const CapSettingsCard = () => {
 	const [settings, setSettings] =
 		useState<OrganizationSettings>(initialSettings);
 	const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+	const [showSummaryLanguageMenu, setShowSummaryLanguageMenu] = useState(false);
 
 	const lastSavedSettings = useRef<OrganizationSettings>(initialSettings);
 	const languageMenuRef = useRef<HTMLDivElement>(null);
+	const summaryLanguageMenuRef = useRef<HTMLDivElement>(null);
 
 	const debouncedUpdateSettings = useDebounce(settings, 1000);
 	const selectedLanguage =
 		settings.aiGenerationLanguage ?? AI_GENERATION_LANGUAGE_AUTO;
+	const selectedSummaryLanguage = settings.summaryLanguage ?? "en";
 
 	useEffect(() => {
 		const next = mergeSettings(organizationSettings);
@@ -125,6 +132,12 @@ const CapSettingsCard = () => {
 				!languageMenuRef.current.contains(event.target as Node)
 			) {
 				setShowLanguageMenu(false);
+			}
+			if (
+				summaryLanguageMenuRef.current &&
+				!summaryLanguageMenuRef.current.contains(event.target as Node)
+			) {
+				setShowSummaryLanguageMenu(false);
 			}
 		};
 
@@ -162,7 +175,15 @@ const CapSettingsCard = () => {
 								debouncedUpdateSettings.aiGenerationLanguage ??
 								AI_GENERATION_LANGUAGE_AUTO;
 							toast.success(
-								`AI language set to ${getAiGenerationLanguageName(language)}`,
+								`Transcription language set to ${getAiGenerationLanguageName(language)}`,
+							);
+							return;
+						}
+
+						if (changedKey === "summaryLanguage") {
+							const language = debouncedUpdateSettings.summaryLanguage ?? "en";
+							toast.success(
+								`Summary language set to ${getAiGenerationLanguageName(language)}`,
 							);
 							return;
 						}
@@ -247,6 +268,18 @@ const CapSettingsCard = () => {
 		}));
 	};
 
+	const handleSummaryLanguageChange = (language: AiGenerationLanguage) => {
+		if (!isAiGenerationLanguage(language)) {
+			return;
+		}
+
+		setShowSummaryLanguageMenu(false);
+		setSettings((prev) => ({
+			...prev,
+			summaryLanguage: language,
+		}));
+	};
+
 	return (
 		<Card className="flex relative flex-col flex-1 gap-6 w-full min-h-fit">
 			<CardHeader>
@@ -326,14 +359,14 @@ const CapSettingsCard = () => {
 			<div className="flex flex-col gap-3 p-4 text-left rounded-xl border transition-colors bg-gray-2 border-gray-3 sm:flex-row sm:justify-between sm:items-center">
 				<div className="flex flex-col flex-1 gap-1">
 					<div className="flex gap-1.5 items-center">
-						<p className="text-sm text-gray-12">AI generation language</p>
+						<p className="text-sm text-gray-12">Transcription language</p>
 						<p className="py-1 px-1.5 text-[10px] leading-none font-medium rounded-full text-white bg-blue-11">
 							Pro
 						</p>
 					</div>
 					<p className="text-xs text-gray-10">
-						Set the language used for transcripts, titles, summaries, and
-						chapters.
+						Language spoken in recordings. Auto-detect handles mixed English and
+						Arabic.
 					</p>
 				</div>
 				<div className="relative w-full sm:w-auto" ref={languageMenuRef}>
@@ -360,6 +393,57 @@ const CapSettingsCard = () => {
 										onClick={() => handleLanguageChange(code)}
 										className={`w-full px-3 py-1.5 text-left text-xs hover:bg-gray-2 transition-colors ${
 											selectedLanguage === code
+												? "text-blue-500 font-medium"
+												: "text-gray-12"
+										}`}
+										type="button"
+									>
+										{name}
+									</button>
+								</div>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
+
+			<div className="flex flex-col gap-3 p-4 text-left rounded-xl border transition-colors bg-gray-2 border-gray-3 sm:flex-row sm:justify-between sm:items-center">
+				<div className="flex flex-col flex-1 gap-1">
+					<div className="flex gap-1.5 items-center">
+						<p className="text-sm text-gray-12">Summary language</p>
+						<p className="py-1 px-1.5 text-[10px] leading-none font-medium rounded-full text-white bg-blue-11">
+							Pro
+						</p>
+					</div>
+					<p className="text-xs text-gray-10">
+						Language for AI summaries, chapters, action items, recap emails, and
+						Ask answers. Transcription follows the setting above.
+					</p>
+				</div>
+				<div className="relative w-full sm:w-auto" ref={summaryLanguageMenuRef}>
+					<button
+						onClick={() => setShowSummaryLanguageMenu((value) => !value)}
+						disabled={!user.isPro}
+						className="flex items-center gap-1.5 px-2.5 py-1.5 w-full justify-between text-xs font-medium rounded-lg border border-gray-3 bg-gray-1 hover:bg-gray-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors sm:min-w-40"
+						type="button"
+					>
+						<span className="flex items-center gap-1.5 text-gray-12">
+							<Globe className="w-3 h-3 text-gray-9" />
+							{getAiGenerationLanguageName(selectedSummaryLanguage)}
+						</span>
+						<ChevronDown className="w-3 h-3 text-gray-9" />
+					</button>
+					{showSummaryLanguageMenu && (
+						<div className="absolute right-0 top-full mt-1 z-50 w-full py-1 bg-gray-1 border border-gray-3 rounded-lg shadow-lg max-h-64 overflow-y-auto sm:w-56">
+							{languageOptions.map(([code, name], index) => (
+								<div key={code}>
+									{index === 1 && (
+										<div className="my-1 border-t border-gray-3" />
+									)}
+									<button
+										onClick={() => handleSummaryLanguageChange(code)}
+										className={`w-full px-3 py-1.5 text-left text-xs hover:bg-gray-2 transition-colors ${
+											selectedSummaryLanguage === code
 												? "text-blue-500 font-medium"
 												: "text-gray-12"
 										}`}

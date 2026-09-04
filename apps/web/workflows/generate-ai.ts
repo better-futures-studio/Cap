@@ -6,7 +6,8 @@ import {
 	AI_GENERATION_LANGUAGE_AUTO,
 	type AiGenerationLanguage,
 	getAiGenerationLanguageName,
-	parseAiGenerationLanguage,
+	parseSummaryLanguage,
+	resolveAiOutputLanguage,
 	type Video,
 } from "@cap/web-domain";
 import { generateText } from "ai";
@@ -33,7 +34,7 @@ interface GenerateAiWorkflowPayload {
 interface VideoData {
 	video: typeof videos.$inferSelect;
 	metadata: VideoMetadata;
-	aiGenerationLanguage: AiGenerationLanguage;
+	summaryLanguage: AiGenerationLanguage;
 	meetingBotId: string | null;
 }
 
@@ -122,7 +123,9 @@ export async function generateAiWorkflow(payload: GenerateAiWorkflowPayload) {
 
 		const result = await generateWithAi(
 			transcript,
-			videoData.aiGenerationLanguage,
+			resolveAiOutputLanguage({
+				summaryLanguage: videoData.summaryLanguage,
+			}),
 			videoData.meetingBotId !== null,
 		);
 
@@ -193,8 +196,8 @@ async function validateAndSetProcessing(videoId: string): Promise<VideoData> {
 	return {
 		video,
 		metadata,
-		aiGenerationLanguage: parseAiGenerationLanguage(
-			query[0]?.orgSettings?.aiGenerationLanguage,
+		summaryLanguage: parseSummaryLanguage(
+			query[0]?.orgSettings?.summaryLanguage,
 		),
 		meetingBotId: meetingBot?.id ?? null,
 	};

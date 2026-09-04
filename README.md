@@ -107,6 +107,11 @@ transcription accuracy for names and jargon. Setting
 AssemblyAI through Recall (instead of Recall's own engine) for both
 post-meeting and live transcripts, and adds English/Arabic code-switching
 support; it requires an AssemblyAI key configured on the Recall dashboard.
+The org setting `summaryLanguage` (default English) is the language for AI
+summaries, chapters, action items, Ask answers, and live-agent replies.
+Transcription language is a separate setting (`aiGenerationLanguage`,
+typically Auto-detect for mixed English and Arabic). Recap emails send the
+stored summary without translating it.
 
 ## Architecture
 
