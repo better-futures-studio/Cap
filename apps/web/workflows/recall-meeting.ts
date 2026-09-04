@@ -92,11 +92,7 @@ async function claimImport({
 	if (!row) {
 		throw new FatalError("Meeting bot not found");
 	}
-	if (
-		row.status === "importing" ||
-		row.status === "transcribing" ||
-		row.status === "complete"
-	) {
+	if (row.recallRecordingId || row.videoId || row.status === "complete") {
 		return false;
 	}
 
@@ -104,6 +100,7 @@ async function claimImport({
 		.update(meetingBots)
 		.set({
 			status: "importing",
+			statusSubCode: null,
 			recallRecordingId: recordingId,
 			errorMessage: null,
 		})

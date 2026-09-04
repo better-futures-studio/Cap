@@ -21,8 +21,9 @@ async function reconcileMissedDoneRows(): Promise<number> {
 		.from(meetingBots)
 		.where(
 			and(
-				eq(meetingBots.status, "done"),
+				inArray(meetingBots.status, ["done", "call_ended", "transcribing"]),
 				isNull(meetingBots.recallRecordingId),
+				isNull(meetingBots.videoId),
 				lt(meetingBots.updatedAt, cutoff),
 			),
 		);

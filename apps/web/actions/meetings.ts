@@ -15,11 +15,7 @@ import type { Organisation } from "@cap/web-domain";
 import { and, asc, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import { Effect } from "effect";
 import { revalidatePath } from "next/cache";
-import {
-	getOrganizationAccess,
-	requireOrganizationAccess,
-} from "@/actions/organization/authorization";
-import { canManageOrganizationSettings } from "@/lib/permissions/roles";
+import { requireOrganizationAccess } from "@/actions/organization/authorization";
 import { getMeetingActionItems } from "@/lib/recall/action-items";
 import {
 	cancelMeetingBot,
@@ -196,8 +192,6 @@ export async function listMeetingBots({
 	orgId: Organisation.OrganisationId;
 }) {
 	const user = await requireUser(orgId);
-	const access = await getOrganizationAccess(user.id, orgId);
-	const seeAll = canManageOrganizationSettings(access?.role);
 
 	const cutoff = new Date(Date.now() - UPCOMING_JOIN_AT_GRACE_MS);
 
@@ -230,13 +224,6 @@ export async function listMeetingBots({
 		)
 		.orderBy(desc(meetingBots.joinAt))
 		.limit(50);
-
-	if (seeAll) {
-		return {
-			upcoming: withVideoReady(upcomingRows),
-			past: withVideoReady(pastRows),
-		};
-	}
 
 	const allowed = await meetingBotIdsAccessibleToUser({
 		bots: [...upcomingRows, ...pastRows],

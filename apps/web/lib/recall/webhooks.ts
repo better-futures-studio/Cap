@@ -113,14 +113,12 @@ async function handleRecordingDone(data: unknown): Promise<void> {
 		? rows.find((row) => row.calendarEventId === calendarEventId)
 		: undefined;
 
-	const alreadyStarted = rows.find((row) =>
-		IMPORT_STARTED_STATUSES.includes(row.status),
-	);
+	const importStarted = (row: (typeof rows)[number]) =>
+		row.recallRecordingId !== null || row.videoId !== null;
+	const alreadyStarted = rows.find(importStarted);
 	const eligible = rows
 		.filter(
-			(row) =>
-				!TERMINAL_STATUSES.includes(row.status) &&
-				!IMPORT_STARTED_STATUSES.includes(row.status),
+			(row) => !TERMINAL_STATUSES.includes(row.status) && !importStarted(row),
 		)
 		.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
@@ -132,7 +130,7 @@ async function handleRecordingDone(data: unknown): Promise<void> {
 		eligible[0];
 	if (!primary) return;
 
-	if (!IMPORT_STARTED_STATUSES.includes(primary.status)) {
+	if (!importStarted(primary)) {
 		await start(importRecallRecordingWorkflow, [
 			{ meetingBotId: primary.id, recordingId },
 		]);
@@ -146,7 +144,7 @@ async function handleRecordingDone(data: unknown): Promise<void> {
 	for (const row of rows) {
 		if (row.id === primary.id) continue;
 		if (TERMINAL_STATUSES.includes(row.status)) continue;
-		if (IMPORT_STARTED_STATUSES.includes(row.status)) continue;
+		if (importStarted(row)) continue;
 		await db()
 			.update(meetingBots)
 			.set({ statusSubCode: sharedSubCode(primary.id) })
@@ -245,6 +243,18 @@ async function handleTranscriptDone(data: unknown): Promise<void> {
 	const row = await findMeetingBotForTranscript(data, transcriptId);
 	if (!row) {
 		console.info("[recall-webhook] transcript.done with no row", {
+			transcriptId,
+		});
+		return;
+	}
+
+	if (!row.videoId && !row.recallRecordingId) {
+		await db()
+			.update(meetingBots)
+			.set({ recallTranscriptId: transcriptId })
+			.where(eq(meetingBots.id, row.id));
+		console.info("[recall-webhook] transcript.done before recording import", {
+			meetingBotId: row.id,
 			transcriptId,
 		});
 		return;

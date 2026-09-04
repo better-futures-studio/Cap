@@ -4,7 +4,6 @@ import { meetingBots } from "@cap/database/schema";
 import { eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { requireOrganizationAccess } from "@/actions/organization/authorization";
-import { canManageOrganizationSettings } from "@/lib/permissions/roles";
 import { readLiveTranscript } from "@/lib/recall/live-transcript";
 import { canUserAccessMeetingBot } from "@/lib/recall/visibility";
 import { LiveMeeting } from "./LiveMeeting";
@@ -16,10 +15,7 @@ export default async function Page({
 }) {
 	const user = await getCurrentUser();
 	if (!user?.activeOrganizationId) redirect("/dashboard/meetings");
-	const access = await requireOrganizationAccess(
-		user.id,
-		user.activeOrganizationId,
-	);
+	await requireOrganizationAccess(user.id, user.activeOrganizationId);
 	const { id } = await params;
 	const [meeting] = await db()
 		.select()
@@ -27,10 +23,7 @@ export default async function Page({
 		.where(eq(meetingBots.id, id))
 		.limit(1);
 	if (!meeting || meeting.orgId !== user.activeOrganizationId) notFound();
-	if (
-		!canManageOrganizationSettings(access.role) &&
-		!(await canUserAccessMeetingBot(meeting.id, user.id))
-	) {
+	if (!(await canUserAccessMeetingBot(meeting.id, user.id))) {
 		notFound();
 	}
 	const transcript = await readLiveTranscript(meeting.id).catch(() => null);

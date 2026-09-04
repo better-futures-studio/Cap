@@ -113,7 +113,10 @@ vi.mock("@/lib/recall/recap", () => ({
 			: "self",
 }));
 vi.mock("@/lib/recall/visibility", () => ({
-	meetingBotIdsAccessibleToUser: vi.fn(async () => new Set()),
+	meetingBotIdsAccessibleToUser: vi.fn(
+		async ({ bots }: { bots: { id: string }[] }) =>
+			new Set(bots.map((bot) => bot.id)),
+	),
 	canUserAccessMeetingBot: vi.fn(async () => false),
 }));
 vi.mock("@/lib/recall/media-retention", () => ({
