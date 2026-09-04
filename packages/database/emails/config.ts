@@ -1,7 +1,7 @@
 import { buildEnv, serverEnv } from "@cap/env";
-import type { JSXElementConstructor, ReactElement } from "react";
 import { render } from "@react-email/render";
 import nodemailer from "nodemailer";
+import type { JSXElementConstructor, ReactElement } from "react";
 import { Resend } from "resend";
 
 export const resend = () =>
@@ -71,7 +71,10 @@ export const sendEmail = async ({
 				MessageStream: "outbound",
 				Attachments: attachments?.map((a) => ({
 					Name: a.filename,
-					Content: Buffer.from(a.content).toString("base64"),
+					Content:
+						typeof a.content === "string"
+							? Buffer.from(a.content).toString("base64")
+							: a.content.toString("base64"),
 					ContentType: a.contentType ?? "application/octet-stream",
 				})),
 			}),

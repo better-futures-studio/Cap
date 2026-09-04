@@ -40,9 +40,11 @@ const AUTH_KEY = "cap-extension-auth";
 const BOOTSTRAP_CACHE_KEY = "cap-extension-bootstrap-cache";
 
 const readRequestBody = async (request: IncomingMessage) => {
-	const chunks: Buffer[] = [];
+	const chunks: Uint8Array[] = [];
 	for await (const chunk of request) {
-		chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+		chunks.push(
+			Uint8Array.from(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)),
+		);
 	}
 	return Buffer.concat(chunks);
 };

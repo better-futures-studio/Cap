@@ -31,8 +31,8 @@ export function verifyStorageObjectToken(token: string) {
 	if (!encodedPayload || !signature) return null;
 
 	const expected = sign(encodedPayload);
-	const signatureBuffer = Buffer.from(signature);
-	const expectedBuffer = Buffer.from(expected);
+	const signatureBuffer = Uint8Array.from(Buffer.from(signature));
+	const expectedBuffer = Uint8Array.from(Buffer.from(expected));
 	if (signatureBuffer.length !== expectedBuffer.length) return null;
 	if (!timingSafeEqual(signatureBuffer, expectedBuffer)) return null;
 

@@ -36,11 +36,11 @@ async function deriveKey(salt: BufferSource): Promise<CryptoKey> {
 	const key = ENCRYPTION_KEY();
 	if (!key) throw new Error("Encryption key is not available");
 
-	const keyBuffer = Buffer.from(key, "hex");
+	const keyBytes = Uint8Array.from(Buffer.from(key, "hex"));
 
 	const keyMaterial = await crypto.subtle.importKey(
 		"raw",
-		keyBuffer,
+		keyBytes,
 		"PBKDF2",
 		false,
 		["deriveKey"],
@@ -80,11 +80,7 @@ export async function encrypt(text: string): Promise<string> {
 			encoded,
 		);
 
-		const result = Buffer.concat([
-			Buffer.from(salt),
-			Buffer.from(iv),
-			Buffer.from(encrypted),
-		]);
+		const result = Buffer.concat([salt, iv, new Uint8Array(encrypted)]);
 
 		return result.toString("base64");
 	} catch (error: unknown) {
@@ -103,9 +99,13 @@ export async function decrypt(encryptedText: string): Promise<string> {
 	try {
 		const encrypted = Buffer.from(encryptedText, "base64");
 
-		const salt = encrypted.subarray(0, SALT_LENGTH);
-		const iv = encrypted.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-		const content = encrypted.subarray(SALT_LENGTH + IV_LENGTH);
+		const salt = Uint8Array.from(encrypted.subarray(0, SALT_LENGTH));
+		const iv = Uint8Array.from(
+			encrypted.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH),
+		);
+		const content = Uint8Array.from(
+			encrypted.subarray(SALT_LENGTH + IV_LENGTH),
+		);
 
 		const key = await deriveKey(salt);
 
@@ -156,7 +156,7 @@ export async function hashPassword(password: string): Promise<string> {
 		PASSWORD_KEY_LENGTH * 8,
 	);
 
-	const result = Buffer.concat([Buffer.from(salt), Buffer.from(derived)]);
+	const result = Buffer.concat([salt, new Uint8Array(derived)]);
 
 	return result.toString("base64");
 }
@@ -168,8 +168,8 @@ export async function verifyPassword(
 	if (!stored || !password) return false;
 
 	const data = Buffer.from(stored, "base64");
-	const salt = data.subarray(0, SALT_LENGTH);
-	const hash = data.subarray(SALT_LENGTH);
+	const salt = Uint8Array.from(data.subarray(0, SALT_LENGTH));
+	const hash = Uint8Array.from(data.subarray(SALT_LENGTH));
 
 	const keyMaterial = await crypto.subtle.importKey(
 		"raw",
@@ -190,5 +190,5 @@ export async function verifyPassword(
 		PASSWORD_KEY_LENGTH * 8,
 	);
 
-	return timingSafeEqual(Buffer.from(hash), Buffer.from(derived));
+	return timingSafeEqual(hash, new Uint8Array(derived));
 }

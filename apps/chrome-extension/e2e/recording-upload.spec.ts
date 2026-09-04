@@ -63,9 +63,11 @@ const RECORDING_MS = 3_500;
 const RECORDING_MODE = "fullscreen";
 
 const readRequestBody = async (request: IncomingMessage) => {
-	const chunks: Buffer[] = [];
+	const chunks: Uint8Array[] = [];
 	for await (const chunk of request) {
-		chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+		chunks.push(
+			Uint8Array.from(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)),
+		);
 	}
 	return Buffer.concat(chunks);
 };

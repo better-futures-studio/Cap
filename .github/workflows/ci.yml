@@ -85,6 +85,43 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+  web-unit-tests:
+    name: Web unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-js
+
+      - run: pnpm web exec next typegen
+
+      - name: Web unit tests
+        run: pnpm --filter @cap/web test
+
+  web-build:
+    name: Web build
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_DOCKER_BUILD: "true"
+      NEXT_PUBLIC_WEB_URL: http://localhost:3000
+      WEB_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ci-placeholder-nextauth-secret
+      DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/ci
+      CAP_AWS_BUCKET: ci
+      CAP_AWS_REGION: us-east-1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-js
+
+      - run: pnpm web exec next typegen
+
+      - name: Web build
+        run: pnpm --filter @cap/web run build:web
+
   mobile:
     name: Mobile
     runs-on: ubuntu-latest

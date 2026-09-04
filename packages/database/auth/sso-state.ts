@@ -102,8 +102,8 @@ export function verifySsoLoginIntent(
 	const expected = createHmac("sha256", secret)
 		.update(payload)
 		.digest("base64url");
-	const actualBuffer = Buffer.from(signature);
-	const expectedBuffer = Buffer.from(expected);
+	const actualBuffer = Uint8Array.from(Buffer.from(signature));
+	const expectedBuffer = Uint8Array.from(Buffer.from(expected));
 	if (
 		actualBuffer.length !== expectedBuffer.length ||
 		!timingSafeEqual(actualBuffer, expectedBuffer)
