@@ -225,7 +225,7 @@ function createServerEnv() {
 				.describe(
 					"Hours Recall keeps bot media before deleting it (default 168)",
 				),
-			RECALL_DELETE_MEDIA_AFTER_IMPORT: boolString(true).describe(
+			RECALL_DELETE_MEDIA_AFTER_IMPORT: boolString(false).describe(
 				"Delete Recall-stored media after Cap has imported the recording and transcript",
 			),
 

@@ -56,6 +56,7 @@ export type RecallRecording = {
 		transcript?: {
 			id: string;
 			status?: { code: string; sub_code?: string | null };
+			provider?: Record<string, unknown> | null;
 			data?: { download_url?: string };
 		};
 		participant_events?: {

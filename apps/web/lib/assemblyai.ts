@@ -55,6 +55,7 @@ export function getAssemblyAITranscriptionOptions(
 			language_detection: true,
 			language_detection_options: {
 				expected_languages: [...ASSEMBLYAI_SUPPORTED_LANGUAGES],
+				code_switching: true,
 			},
 		};
 	}

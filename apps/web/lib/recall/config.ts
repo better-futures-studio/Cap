@@ -77,7 +77,7 @@ export function getRecallConfig(
 				: null,
 		mediaRetentionHours:
 			env.RECALL_MEDIA_RETENTION_HOURS ?? DEFAULT_MEDIA_RETENTION_HOURS,
-		deleteMediaAfterImport: env.RECALL_DELETE_MEDIA_AFTER_IMPORT ?? true,
+		deleteMediaAfterImport: env.RECALL_DELETE_MEDIA_AFTER_IMPORT ?? false,
 	};
 }
 

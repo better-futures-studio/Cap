@@ -104,7 +104,7 @@ Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
   "Recall.ai Boca Pro Calendar App" in GCP project `cap-boca-pro`).
 - `RECALL_MEDIA_RETENTION_HOURS` (default 168): Recall `recording_config.retention`
   on every bot create/schedule; Recall's free tier stores media for 7 days.
-- `RECALL_DELETE_MEDIA_AFTER_IMPORT` (default true): after Cap has imported the
+- `RECALL_DELETE_MEDIA_AFTER_IMPORT` (default false): after Cap has imported the
   video and transcript, call Recall `POST /api/v1/bot/{id}/delete_media/` unless
   another `meeting_bots` row still needs that Recall bot.
 - Dashboard webhook endpoint: `https://cap.boca.pro/api/webhooks/recall`
