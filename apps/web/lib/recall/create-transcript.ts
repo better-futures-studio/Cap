@@ -6,6 +6,7 @@ import { queueVideoTranscription } from "@/lib/queue-video-transcription";
 import { RecallApiError, type RecallClient } from "./client";
 import { getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
+import { maybeDeleteImportedRecallMedia } from "./media-retention";
 import {
 	reusableRecordingTranscript,
 	shouldStartTranscriptCompletion,
@@ -33,6 +34,7 @@ export async function applyCapTranscriptionFallback(
 			statusSubCode: "cap_fallback",
 		})
 		.where(eq(meetingBots.id, meetingBotId));
+	if (videoId) await maybeDeleteImportedRecallMedia(meetingBotId);
 }
 
 export async function createMeetingTranscript(

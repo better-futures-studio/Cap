@@ -23,6 +23,7 @@ import {
 } from "@/lib/recall/create-transcript";
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
 import { readLiveTranscript } from "@/lib/recall/live-transcript";
+import { maybeDeleteImportedRecallMedia } from "@/lib/recall/media-retention";
 import { computeSpeakerStats } from "@/lib/recall/speaker-stats";
 import {
 	type RecallTranscriptPart,
@@ -571,6 +572,7 @@ async function writeRecallTranscript({
 		})
 		.where(eq(meetingBots.id, meetingBotId));
 	await completeSharedRows(meetingBotId, row.videoId, "complete");
+	await maybeDeleteImportedRecallMedia(meetingBotId);
 
 	await startAiGeneration(row.videoId, row.ownerId);
 }

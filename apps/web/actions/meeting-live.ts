@@ -6,7 +6,9 @@ import { meetingBots } from "@cap/database/schema";
 import type { Organisation } from "@cap/web-domain";
 import { and, eq } from "drizzle-orm";
 import { requireOrganizationAccess } from "@/actions/organization/authorization";
+import { canManageOrganizationSettings } from "@/lib/permissions/roles";
 import { answerLiveMeeting } from "@/lib/recall/chat-agent";
+import { canUserAccessMeetingBot } from "@/lib/recall/visibility";
 
 export async function askLiveMeeting({
 	orgId,
@@ -19,12 +21,18 @@ export async function askLiveMeeting({
 }) {
 	const user = await getCurrentUser();
 	if (!user) throw new Error("Unauthorized");
-	await requireOrganizationAccess(user.id, orgId);
+	const access = await requireOrganizationAccess(user.id, orgId);
 	const [meeting] = await db()
 		.select({ id: meetingBots.id })
 		.from(meetingBots)
 		.where(and(eq(meetingBots.id, meetingBotId), eq(meetingBots.orgId, orgId)))
 		.limit(1);
 	if (!meeting) throw new Error("Meeting not found");
+	if (
+		!canManageOrganizationSettings(access.role) &&
+		!(await canUserAccessMeetingBot(meeting.id, user.id))
+	) {
+		throw new Error("Meeting not found");
+	}
 	return answerLiveMeeting({ meetingBotId: meeting.id, question });
 }

@@ -276,6 +276,9 @@ describe("scheduleManualMeetingBot", () => {
 				cap_org_id: orgId,
 			},
 			joinChatMessage: "Meeting Notetaker is recording this meeting.",
+			recordingConfig: {
+				retention: { type: "timed", hours: 168 },
+			},
 		});
 		expect(bots()[0]).toMatchObject({
 			status: "scheduled",

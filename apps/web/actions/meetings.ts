@@ -10,10 +10,16 @@ import {
 	slackHuddleTeams,
 	videoUploads,
 } from "@cap/database/schema";
+import { makeCurrentUserLayer, Videos } from "@cap/web-backend";
 import type { Organisation } from "@cap/web-domain";
 import { and, asc, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
+import { Effect } from "effect";
 import { revalidatePath } from "next/cache";
-import { requireOrganizationAccess } from "@/actions/organization/authorization";
+import {
+	getOrganizationAccess,
+	requireOrganizationAccess,
+} from "@/actions/organization/authorization";
+import { canManageOrganizationSettings } from "@/lib/permissions/roles";
 import { getMeetingActionItems } from "@/lib/recall/action-items";
 import {
 	cancelMeetingBot,
@@ -32,13 +38,16 @@ import {
 	isRecallCalendarConfigured,
 	isRecallConfigured,
 } from "@/lib/recall/config";
+import { maybeDeleteRecallMediaIfUnused } from "@/lib/recall/media-retention";
 import { parseRecapMode } from "@/lib/recall/recap";
 import { getMeetingSpeakerStats } from "@/lib/recall/speaker-stats";
+import { meetingBotIdsAccessibleToUser } from "@/lib/recall/visibility";
 import {
 	addMeetingVocabularyTerm,
 	listMeetingVocabularyTerms,
 	removeMeetingVocabularyTerm,
 } from "@/lib/recall/vocabulary";
+import { runPromise } from "@/lib/server";
 
 const MEETINGS_PATH = "/dashboard/meetings";
 
@@ -71,6 +80,9 @@ const MEETING_BOT_COLUMNS = {
 	status: meetingBots.status,
 	errorMessage: meetingBots.errorMessage,
 	videoId: meetingBots.videoId,
+	recallBotId: meetingBots.recallBotId,
+	calendarEventId: meetingBots.calendarEventId,
+	statusSubCode: meetingBots.statusSubCode,
 	createdAt: meetingBots.createdAt,
 	pendingUploadVideoId: videoUploads.videoId,
 };
@@ -118,6 +130,54 @@ export async function scheduleMeetingBot({
 	return result;
 }
 
+export async function deleteMeeting({
+	meetingBotId,
+}: {
+	meetingBotId: string;
+}) {
+	const user = await getCurrentUser();
+	if (!user) throw new Error("Unauthorized");
+
+	const [row] = await db()
+		.select()
+		.from(meetingBots)
+		.where(eq(meetingBots.id, meetingBotId))
+		.limit(1);
+	if (!row || row.ownerId !== user.id) throw new Error("Meeting not found");
+	await requireOrganizationAccess(user.id, row.orgId);
+
+	if (row.status === "scheduling" || row.status === "scheduled") {
+		await cancelMeetingBot({
+			id: row.id,
+			orgId: row.orgId,
+			userId: user.id,
+		});
+	}
+
+	await db().delete(meetingBots).where(eq(meetingBots.id, meetingBotId));
+
+	if (row.videoId) {
+		const videoId = row.videoId;
+		const [other] = await db()
+			.select({ id: meetingBots.id })
+			.from(meetingBots)
+			.where(eq(meetingBots.videoId, videoId))
+			.limit(1);
+		if (!other) {
+			await Effect.gen(function* () {
+				const videos = yield* Videos;
+				yield* videos.delete(videoId);
+			}).pipe(Effect.provide(makeCurrentUserLayer(user)), runPromise);
+		}
+	}
+
+	if (row.recallBotId) {
+		await maybeDeleteRecallMediaIfUnused(row.recallBotId);
+	}
+
+	revalidatePath(MEETINGS_PATH);
+}
+
 export async function cancelMeetingBotAction({
 	orgId,
 	id,
@@ -135,7 +195,9 @@ export async function listMeetingBots({
 }: {
 	orgId: Organisation.OrganisationId;
 }) {
-	await requireUser(orgId);
+	const user = await requireUser(orgId);
+	const access = await getOrganizationAccess(user.id, orgId);
+	const seeAll = canManageOrganizationSettings(access?.role);
 
 	const cutoff = new Date(Date.now() - UPCOMING_JOIN_AT_GRACE_MS);
 
@@ -169,9 +231,20 @@ export async function listMeetingBots({
 		.orderBy(desc(meetingBots.joinAt))
 		.limit(50);
 
+	if (seeAll) {
+		return {
+			upcoming: withVideoReady(upcomingRows),
+			past: withVideoReady(pastRows),
+		};
+	}
+
+	const allowed = await meetingBotIdsAccessibleToUser({
+		bots: [...upcomingRows, ...pastRows],
+		userId: user.id,
+	});
 	return {
-		upcoming: withVideoReady(upcomingRows),
-		past: withVideoReady(pastRows),
+		upcoming: withVideoReady(upcomingRows.filter((row) => allowed.has(row.id))),
+		past: withVideoReady(pastRows.filter((row) => allowed.has(row.id))),
 	};
 }
 

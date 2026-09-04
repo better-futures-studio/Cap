@@ -165,6 +165,8 @@ database, and general Cap AI provider variables not listed here.
 | `RECALL_LIVE_AGENT` | optional | Enable live transcripts and the in-call chat agent. Off by default. |
 | `RECALL_AGENT_TRIGGER` | optional | Chat command that invokes the live meeting agent. Defaults to `/nt`. |
 | `RECALL_TRANSCRIPTION_PROVIDER` | optional | `recallai` (default) or `assemblyai`; see Features above. |
+| `RECALL_MEDIA_RETENTION_HOURS` | optional | Hours Recall keeps bot media. Defaults to `168` (7 days). |
+| `RECALL_DELETE_MEDIA_AFTER_IMPORT` | optional | After Cap imports the recording and transcript, delete Recall-stored media. Defaults to `true`. |
 
 **Recall Calendar V2 (Google Calendar scheduling)**
 

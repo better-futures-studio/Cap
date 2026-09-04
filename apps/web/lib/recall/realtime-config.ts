@@ -1,4 +1,4 @@
-import type { RecordingConfig } from "./client";
+import type { RecordingConfig, RecordingRetention } from "./client";
 import type { RecallConfig } from "./config";
 
 export function buildLiveRecordingConfig(
@@ -40,5 +40,24 @@ export function buildLiveRecordingConfig(
 				events: ["transcript.data", "participant_events.chat_message"],
 			},
 		],
+	};
+}
+
+export function recordingRetention(
+	config?: Pick<RecallConfig, "mediaRetentionHours"> | null,
+): RecordingRetention {
+	return {
+		type: "timed",
+		hours: config?.mediaRetentionHours ?? 168,
+	};
+}
+
+export function withRecordingRetention(
+	config: Pick<RecallConfig, "mediaRetentionHours"> | null | undefined,
+	recording?: RecordingConfig,
+): RecordingConfig {
+	return {
+		...(recording ?? {}),
+		retention: recording?.retention ?? recordingRetention(config),
 	};
 }

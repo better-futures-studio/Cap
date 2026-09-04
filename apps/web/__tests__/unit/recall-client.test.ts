@@ -14,6 +14,8 @@ const config: RecallConfig = {
 	agentTrigger: "/nt",
 	transcriptionProvider: "recallai",
 	calendarGoogle: null,
+	mediaRetentionHours: 168,
+	deleteMediaAfterImport: true,
 };
 
 function jsonResponse(
@@ -72,7 +74,26 @@ describe("createRecallClient", () => {
 					pin: true,
 				},
 			},
+			recording_config: {
+				retention: { type: "timed", hours: 168 },
+			},
 		});
+	});
+
+	it("POSTs deleteBotMedia to the Recall delete_media URL", async () => {
+		const fetchMock = vi.fn(
+			async (_url: RequestInfo | URL, _init?: RequestInit) =>
+				jsonResponse(204, undefined),
+		);
+		const client = createRecallClient(config, { fetch: fetchMock });
+
+		await client.deleteBotMedia("bot_1");
+
+		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(url).toBe(
+			"https://us-west-2.recall.ai/api/v1/bot/bot_1/delete_media/",
+		);
+		expect(init.method).toBe("POST");
 	});
 
 	it("retries a 429 for the Retry-After duration then succeeds", async () => {

@@ -5,6 +5,7 @@ import {
 	type MeetingRecapMode,
 	meetingBots,
 	meetingPreferences,
+	organizationMembers,
 	organizations,
 	users,
 	videos,
@@ -12,7 +13,7 @@ import {
 import type { MeetingActionItem, VideoMetadata } from "@cap/database/types";
 import { serverEnv } from "@cap/env";
 import { ImageUploads } from "@cap/web-backend";
-import type { ImageUpload, User } from "@cap/web-domain";
+import type { ImageUpload, Organisation, User } from "@cap/web-domain";
 import { and, eq, isNull } from "drizzle-orm";
 import { Effect } from "effect";
 import { runPromise } from "@/lib/server";
@@ -165,6 +166,41 @@ export function resolveRecapRecipients({
 	if (owner) push(owner);
 	for (const email of attendeeEmails) push(email);
 	return emails;
+}
+
+export async function filterEmailsToOrganizationMembers({
+	orgId,
+	emails,
+}: {
+	orgId: Organisation.OrganisationId;
+	emails: string[];
+}): Promise<string[]> {
+	if (emails.length === 0) return [];
+	const members = await db()
+		.select({ email: users.email })
+		.from(users)
+		.innerJoin(organizationMembers, eq(organizationMembers.userId, users.id))
+		.where(eq(organizationMembers.organizationId, orgId))
+		.limit(500);
+	const memberEmails = new Set(
+		members.map((row) => row.email.trim().toLowerCase()),
+	);
+	const kept: string[] = [];
+	let dropped = 0;
+	for (const value of emails) {
+		const email = value.trim().toLowerCase();
+		if (memberEmails.has(email)) kept.push(email);
+		else dropped += 1;
+	}
+	if (dropped > 0) {
+		console.debug(
+			"[recall] dropped recap recipients outside the organization",
+			{
+				dropped,
+			},
+		);
+	}
+	return kept;
 }
 
 function calendarAttendeeEmails(
@@ -329,7 +365,10 @@ export async function sendMeetingRecap(
 		: null;
 	const attendeeEmails =
 		mode === "attendees"
-			? await loadAttendeeEmails({ row, client, botName })
+			? await filterEmailsToOrganizationMembers({
+					orgId: row.orgId,
+					emails: await loadAttendeeEmails({ row, client, botName }),
+				})
 			: [];
 	const recipients = resolveRecapRecipients({
 		mode,

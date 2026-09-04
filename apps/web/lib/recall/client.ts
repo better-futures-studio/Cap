@@ -1,5 +1,7 @@
 import type { RecallConfig, RecallTranscriptionProvider } from "./config";
 
+const DEFAULT_MEDIA_RETENTION_HOURS = 168;
+
 const MAX_ATTEMPTS = 6;
 const MAX_CALENDAR_EVENT_PAGES = 20;
 const MAX_CONFLICT_RETRIES = 3;
@@ -146,13 +148,19 @@ export type RecallBotConfig = {
 	recording_config?: RecordingConfig;
 };
 
+export type RecordingRetention = {
+	type: "timed";
+	hours: number;
+};
+
 export type RecordingConfig = {
-	video_mixed_mp4: Record<string, never>;
-	participant_events: Record<string, never>;
-	meeting_metadata: Record<string, never>;
-	video_mixed_layout: "speaker_view";
-	start_recording_on: "participant_join";
-	transcript: {
+	retention?: RecordingRetention;
+	video_mixed_mp4?: Record<string, never>;
+	participant_events?: Record<string, never>;
+	meeting_metadata?: Record<string, never>;
+	video_mixed_layout?: "speaker_view";
+	start_recording_on?: "participant_join";
+	transcript?: {
 		provider:
 			| {
 					recallai_streaming: {
@@ -169,7 +177,7 @@ export type RecordingConfig = {
 			  };
 		diarization: { use_separate_streams_when_available: true };
 	};
-	realtime_endpoints: {
+	realtime_endpoints?: {
 		type: "webhook";
 		url: string;
 		events: ["transcript.data", "participant_events.chat_message"];
@@ -301,9 +309,13 @@ export function createRecallClient(
 				...(params.automaticVideoOutput
 					? { automatic_video_output: params.automaticVideoOutput }
 					: {}),
-				...(params.recordingConfig
-					? { recording_config: params.recordingConfig }
-					: {}),
+				recording_config: {
+					...(params.recordingConfig ?? {}),
+					retention: params.recordingConfig?.retention ?? {
+						type: "timed",
+						hours: DEFAULT_MEDIA_RETENTION_HOURS,
+					},
+				},
 			},
 		});
 	}
@@ -324,6 +336,17 @@ export function createRecallClient(
 				...(params.pin ? { pin: true } : {}),
 			},
 		});
+	}
+
+	async function deleteBotMedia(id: string): Promise<void> {
+		try {
+			await request<void>(`/api/v1/bot/${id}/delete_media/`, {
+				method: "POST",
+			});
+		} catch (error) {
+			if (error instanceof RecallApiError && error.status === 404) return;
+			throw error;
+		}
 	}
 
 	async function deleteScheduledBot(id: string): Promise<void> {
@@ -522,6 +545,7 @@ export function createRecallClient(
 		createBot,
 		getBot,
 		sendChatMessage,
+		deleteBotMedia,
 		deleteScheduledBot,
 		getRecording,
 		createAsyncTranscript,

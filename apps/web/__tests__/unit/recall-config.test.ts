@@ -40,6 +40,23 @@ describe("getRecallConfig", () => {
 		);
 	});
 
+	it("defaults media retention to 7 days and deletes after import", () => {
+		const config = getRecallConfig(env());
+		expect(config?.mediaRetentionHours).toBe(168);
+		expect(config?.deleteMediaAfterImport).toBe(true);
+	});
+
+	it("reads RECALL_MEDIA_RETENTION_HOURS and RECALL_DELETE_MEDIA_AFTER_IMPORT", () => {
+		const config = getRecallConfig(
+			env({
+				RECALL_MEDIA_RETENTION_HOURS: 24,
+				RECALL_DELETE_MEDIA_AFTER_IMPORT: false,
+			}),
+		);
+		expect(config?.mediaRetentionHours).toBe(24);
+		expect(config?.deleteMediaAfterImport).toBe(false);
+	});
+
 	it("keeps RECALL_BOT_IMAGE_URL as an override", () => {
 		const config = getRecallConfig(
 			env({ RECALL_BOT_IMAGE_URL: "https://cdn.example.com/bot.jpg" }),

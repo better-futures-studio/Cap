@@ -2,6 +2,7 @@ import type { Video } from "@cap/web-domain";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RecallClient } from "@/lib/recall/client";
 import {
+	filterEmailsToOrganizationMembers,
 	isRecapReady,
 	resolveRecapRecipients,
 	resolveRecapSender,
@@ -59,6 +60,10 @@ vi.mock("@cap/database/schema", () => {
 			"settings",
 		]),
 		users: table("users", ["id", "email"]),
+		organizationMembers: table("organization_members", [
+			"userId",
+			"organizationId",
+		]),
 		videos: table("videos", [
 			"id",
 			"name",
@@ -123,12 +128,29 @@ function createClient() {
 	return {
 		select() {
 			let table = "";
+			const joins: string[] = [];
 			let condition: Condition | undefined;
-			const run = () =>
-				(rows[table] ?? []).filter((row) => matches(row, condition));
+			const run = () => {
+				if (table === "users" && joins.includes("organization_members")) {
+					const org = condition?.value ?? "org_1";
+					const memberIds = new Set(
+						(rows.organization_members ?? [])
+							.filter((row) => row.organizationId === org)
+							.map((row) => row.userId),
+					);
+					return (rows.users ?? [])
+						.filter((row) => memberIds.has(row.id))
+						.map((row) => ({ email: row.email }));
+				}
+				return (rows[table] ?? []).filter((row) => matches(row, condition));
+			};
 			const query = {
 				from(value: Table) {
 					table = value.table;
+					return query;
+				},
+				innerJoin(value: Table) {
+					joins.push(value.table);
 					return query;
 				},
 				where(value: Condition) {
@@ -205,7 +227,15 @@ function seedReadyMeeting(
 				createdAt: now,
 			},
 		],
-		users: [{ id: "user_1", email: "ada@example.com" }],
+		users: [
+			{ id: "user_1", email: "ada@example.com" },
+			{ id: "user_2", email: "bea@example.com" },
+			{ id: "user_3", email: "zoe@evil.example" },
+		],
+		organization_members: [
+			{ userId: "user_1", organizationId: "org_1" },
+			{ userId: "user_2", organizationId: "org_1" },
+		],
 		meeting_preferences: overrides.recapMode
 			? [{ userId: "user_1", recapMode: overrides.recapMode }]
 			: [],
@@ -221,6 +251,7 @@ function mockClient(overrides: Partial<RecallClient> = {}): RecallClient {
 				attendees: [
 					{ email: "ada@example.com" },
 					{ email: "bea@example.com" },
+					{ email: "zoe@evil.example" },
 					{ email: "room@resource.calendar.google.com", resource: true },
 					{ email: "Meeting Notetaker" },
 				],
@@ -234,6 +265,32 @@ beforeEach(() => {
 	rows = {};
 	mocks.sendEmail.mockReset().mockResolvedValue(undefined);
 	mocks.db.mockReset();
+});
+
+describe("filterEmailsToOrganizationMembers", () => {
+	it("drops addresses that are not organization members", async () => {
+		seedReadyMeeting();
+		const debug = vi
+			.spyOn(console, "debug")
+			.mockImplementation(() => undefined);
+
+		await expect(
+			filterEmailsToOrganizationMembers({
+				orgId: "org_1" as never,
+				emails: [
+					"ada@example.com",
+					"bea@example.com",
+					"zoe@evil.example",
+					"guest@other.com",
+				],
+			}),
+		).resolves.toEqual(["ada@example.com", "bea@example.com"]);
+		expect(debug).toHaveBeenCalledWith(
+			"[recall] dropped recap recipients outside the organization",
+			{ dropped: 2 },
+		);
+		debug.mockRestore();
+	});
 });
 
 describe("resolveRecapRecipients", () => {
@@ -418,6 +475,9 @@ describe("sendMeetingRecap", () => {
 	it("includes calendar attendees when the mode is attendees", async () => {
 		seedReadyMeeting({ recapMode: "attendees" });
 		const client = mockClient();
+		const debug = vi
+			.spyOn(console, "debug")
+			.mockImplementation(() => undefined);
 
 		await expect(sendMeetingRecap("mb_1", { client })).resolves.toEqual({
 			sent: true,
@@ -428,6 +488,11 @@ describe("sendMeetingRecap", () => {
 			"ada@example.com",
 			"bea@example.com",
 		]);
+		expect(debug).toHaveBeenCalledWith(
+			"[recall] dropped recap recipients outside the organization",
+			{ dropped: 1 },
+		);
+		debug.mockRestore();
 	});
 
 	it("sends nothing when the mode is off", async () => {

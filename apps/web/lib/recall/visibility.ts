@@ -32,7 +32,7 @@ export function meetingSpaceName(title: string | null, date: Date): string {
 	return `Meeting - ${formattedDate}`.slice(0, 255);
 }
 
-function calendarInviteEmails(
+export function calendarInviteEmails(
 	event: RecallCalendarEvent,
 	botName: string,
 ): string[] {
@@ -111,6 +111,205 @@ export async function resolveMeetingAttendeeUserIds({
 		if (wanted.has(row.email.trim().toLowerCase())) ids.add(row.userId);
 	}
 	return [...ids];
+}
+
+type MeetingAccessRow = {
+	id: string;
+	ownerId: User.UserId;
+	recallBotId: string | null;
+	videoId: Video.VideoId | null;
+	calendarEventId: string | null;
+	statusSubCode: string | null;
+};
+
+export async function meetingBotIdsAccessibleToUser({
+	bots,
+	userId,
+	client,
+}: {
+	bots: MeetingAccessRow[];
+	userId: User.UserId;
+	client?: RecallClient;
+}): Promise<Set<string>> {
+	const allowed = new Set<string>();
+	if (bots.length === 0) return allowed;
+
+	for (const bot of bots) {
+		if (bot.ownerId === userId) allowed.add(bot.id);
+	}
+
+	const recallBotIds = [
+		...new Set(
+			bots
+				.map((bot) => bot.recallBotId)
+				.filter((id): id is string => Boolean(id)),
+		),
+	];
+	if (recallBotIds.length > 0) {
+		const ownedShared = await db()
+			.select({
+				recallBotId: meetingBots.recallBotId,
+			})
+			.from(meetingBots)
+			.where(
+				and(
+					eq(meetingBots.ownerId, userId),
+					inArray(meetingBots.recallBotId, recallBotIds),
+				),
+			)
+			.limit(200);
+		const ownedRecallIds = new Set(
+			ownedShared
+				.map((row) => row.recallBotId)
+				.filter((id): id is string => Boolean(id)),
+		);
+		for (const bot of bots) {
+			if (bot.recallBotId && ownedRecallIds.has(bot.recallBotId)) {
+				allowed.add(bot.id);
+			}
+		}
+	}
+
+	const remaining = bots.filter((bot) => !allowed.has(bot.id));
+	if (remaining.length === 0) return allowed;
+
+	const sharedCodes = remaining.map((bot) => sharedMeetingSubCode(bot.id));
+	const sharedOwned = await db()
+		.select({ statusSubCode: meetingBots.statusSubCode })
+		.from(meetingBots)
+		.where(
+			and(
+				eq(meetingBots.ownerId, userId),
+				inArray(meetingBots.statusSubCode, sharedCodes),
+			),
+		)
+		.limit(200);
+	for (const row of sharedOwned) {
+		const primaryId = row.statusSubCode?.startsWith("shared:")
+			? row.statusSubCode.slice("shared:".length)
+			: null;
+		if (primaryId) allowed.add(primaryId);
+	}
+
+	const primaryIds = remaining
+		.map((bot) =>
+			bot.statusSubCode?.startsWith("shared:")
+				? bot.statusSubCode.slice("shared:".length)
+				: null,
+		)
+		.filter((id): id is string => Boolean(id));
+	if (primaryIds.length > 0) {
+		const ownedPrimaries = await db()
+			.select({ id: meetingBots.id })
+			.from(meetingBots)
+			.where(
+				and(
+					eq(meetingBots.ownerId, userId),
+					inArray(meetingBots.id, primaryIds),
+				),
+			)
+			.limit(200);
+		const ownedPrimaryIds = new Set(ownedPrimaries.map((row) => row.id));
+		for (const bot of remaining) {
+			const primaryId = bot.statusSubCode?.startsWith("shared:")
+				? bot.statusSubCode.slice("shared:".length)
+				: null;
+			if (primaryId && ownedPrimaryIds.has(primaryId)) allowed.add(bot.id);
+		}
+	}
+
+	const videoIds = [
+		...new Set(
+			bots
+				.filter((bot) => !allowed.has(bot.id))
+				.map((bot) => bot.videoId)
+				.filter((id): id is Video.VideoId => Boolean(id)),
+		),
+	];
+	if (videoIds.length > 0) {
+		const shares = await db()
+			.select({ videoId: videoShares.videoId })
+			.from(videoShares)
+			.where(
+				and(
+					eq(videoShares.userId, userId),
+					inArray(videoShares.videoId, videoIds),
+				),
+			)
+			.limit(200);
+		const sharedVideoIds = new Set(shares.map((row) => row.videoId));
+		for (const bot of bots) {
+			if (bot.videoId && sharedVideoIds.has(bot.videoId)) allowed.add(bot.id);
+		}
+	}
+
+	const calendarBots = bots.filter(
+		(bot) => !allowed.has(bot.id) && bot.calendarEventId,
+	);
+	if (calendarBots.length === 0) return allowed;
+
+	const [user] = await db()
+		.select({ email: users.email })
+		.from(users)
+		.where(eq(users.id, userId))
+		.limit(1);
+	const email = user?.email.trim().toLowerCase() ?? "";
+	if (!email) return allowed;
+
+	const recall = client ?? getDefaultRecallClient();
+	const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
+	const eventIds = [
+		...new Set(
+			calendarBots
+				.map((bot) => bot.calendarEventId)
+				.filter((id): id is string => Boolean(id)),
+		),
+	];
+	const attendeeEvents = new Set<string>();
+	await Promise.all(
+		eventIds.map(async (eventId) => {
+			try {
+				const event = await recall.getCalendarEvent(eventId);
+				if (calendarInviteEmails(event, botName).includes(email)) {
+					attendeeEvents.add(eventId);
+				}
+			} catch {
+				return;
+			}
+		}),
+	);
+	for (const bot of calendarBots) {
+		if (bot.calendarEventId && attendeeEvents.has(bot.calendarEventId)) {
+			allowed.add(bot.id);
+		}
+	}
+	return allowed;
+}
+
+export async function canUserAccessMeetingBot(
+	botId: string,
+	userId: User.UserId,
+	deps: { client?: RecallClient } = {},
+): Promise<boolean> {
+	const [bot] = await db()
+		.select({
+			id: meetingBots.id,
+			ownerId: meetingBots.ownerId,
+			recallBotId: meetingBots.recallBotId,
+			videoId: meetingBots.videoId,
+			calendarEventId: meetingBots.calendarEventId,
+			statusSubCode: meetingBots.statusSubCode,
+		})
+		.from(meetingBots)
+		.where(eq(meetingBots.id, botId))
+		.limit(1);
+	if (!bot) return false;
+	const allowed = await meetingBotIdsAccessibleToUser({
+		bots: [bot],
+		userId,
+		client: deps.client,
+	});
+	return allowed.has(botId);
 }
 
 async function insertMeetingShares({

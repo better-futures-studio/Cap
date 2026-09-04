@@ -2,6 +2,7 @@ import type { Organisation, User, Video } from "@cap/web-domain";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RecallClient } from "@/lib/recall/client";
 import {
+	canUserAccessMeetingBot,
 	meetingSpaceName,
 	meetingVideoIsPublic,
 	migrateMeetingSpacesToVideoShares,
@@ -28,6 +29,7 @@ vi.mock("@cap/database/schema", () => {
 			"joinAt",
 			"videoId",
 			"calendarEventId",
+			"recallBotId",
 			"statusSubCode",
 		]),
 		users: table("users", ["id", "email"]),
@@ -94,6 +96,8 @@ const orgId = "org_1" as Organisation.OrganisationId;
 const ownerId = "user_1" as User.UserId;
 const sharedOwnerId = "user_2" as User.UserId;
 const calendarUserId = "user_3" as User.UserId;
+const strangerId = "user_4" as User.UserId;
+const shareOnlyId = "user_5" as User.UserId;
 const videoId = "video_1" as Video.VideoId;
 const meetingBotId = "primary_1";
 const spaceId = "space_1";
@@ -260,6 +264,7 @@ function seedMeeting() {
 				joinAt,
 				videoId,
 				calendarEventId: "evt_1",
+				recallBotId: "recall_1",
 				statusSubCode: null,
 			},
 			{
@@ -270,6 +275,7 @@ function seedMeeting() {
 				joinAt,
 				videoId,
 				calendarEventId: "evt_1",
+				recallBotId: "recall_1",
 				statusSubCode: `shared:${meetingBotId}`,
 			},
 		],
@@ -277,12 +283,16 @@ function seedMeeting() {
 			{ id: ownerId, email: "Ada@example.com" },
 			{ id: sharedOwnerId, email: "cam@example.com" },
 			{ id: calendarUserId, email: "Bea@example.com" },
+			{ id: strangerId, email: "dan@example.com" },
+			{ id: shareOnlyId, email: "erin@example.com" },
 			{ id: "outsider", email: "zoe@example.com" },
 		],
 		organization_members: [
 			{ userId: ownerId, organizationId: orgId },
 			{ userId: sharedOwnerId, organizationId: orgId },
 			{ userId: calendarUserId, organizationId: orgId },
+			{ userId: strangerId, organizationId: orgId },
+			{ userId: shareOnlyId, organizationId: orgId },
 		],
 		spaces: [],
 		space_members: [],
@@ -311,6 +321,48 @@ function mockClient(): RecallClient {
 
 beforeEach(() => {
 	seedMeeting();
+});
+
+describe("canUserAccessMeetingBot", () => {
+	it("allows the bot owner", async () => {
+		await expect(canUserAccessMeetingBot(meetingBotId, ownerId)).resolves.toBe(
+			true,
+		);
+	});
+
+	it("allows a user who owns a shared recording row", async () => {
+		await expect(
+			canUserAccessMeetingBot(meetingBotId, sharedOwnerId),
+		).resolves.toBe(true);
+	});
+
+	it("allows a calendar attendee matched by email", async () => {
+		const client = mockClient();
+		await expect(
+			canUserAccessMeetingBot(meetingBotId, calendarUserId, { client }),
+		).resolves.toBe(true);
+	});
+
+	it("allows a user with a video_shares row", async () => {
+		rows.video_shares = [
+			{
+				videoId,
+				userId: shareOnlyId,
+				sharedByUserId: ownerId,
+				source: "manual",
+			},
+		];
+		await expect(
+			canUserAccessMeetingBot(meetingBotId, shareOnlyId),
+		).resolves.toBe(true);
+	});
+
+	it("denies a stranger", async () => {
+		const client = mockClient();
+		await expect(
+			canUserAccessMeetingBot(meetingBotId, strangerId, { client }),
+		).resolves.toBe(false);
+	});
 });
 
 describe("meeting visibility", () => {

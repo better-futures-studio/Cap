@@ -19,7 +19,10 @@ import {
 } from "./client";
 import { botImageUrlForOrg, DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
-import { buildLiveRecordingConfig } from "./realtime-config";
+import {
+	buildLiveRecordingConfig,
+	withRecordingRetention,
+} from "./realtime-config";
 
 export const SUPPORTED_MEETING_HOSTS = [
 	/zoom\.us$/,
@@ -331,7 +334,10 @@ export async function scheduleManualMeetingBot(
 				config ?? { botName, liveAgent: false, agentTrigger: "/nt" },
 			),
 			...(automaticVideoOutput ? { automaticVideoOutput } : {}),
-			...(config ? { recordingConfig: buildLiveRecordingConfig(config) } : {}),
+			recordingConfig: withRecordingRetention(
+				config,
+				config ? buildLiveRecordingConfig(config) : undefined,
+			),
 		});
 		await db()
 			.update(meetingBots)

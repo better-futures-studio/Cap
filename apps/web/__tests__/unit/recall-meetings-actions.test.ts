@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
 	db: vi.fn(),
 	getCurrentUser: vi.fn(),
 	requireOrganizationAccess: vi.fn(),
+	getOrganizationAccess: vi.fn(),
 	parseMeetingUrl: vi.fn(),
 	scheduleManualMeetingBot: vi.fn(),
 	cancelMeetingBot: vi.fn(),
@@ -38,6 +39,9 @@ vi.mock("@cap/database/schema", () => {
 			"status",
 			"errorMessage",
 			"videoId",
+			"recallBotId",
+			"calendarEventId",
+			"statusSubCode",
 			"chatSyncedAt",
 			"createdAt",
 		]),
@@ -72,6 +76,7 @@ vi.mock("drizzle-orm", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/actions/organization/authorization", () => ({
 	requireOrganizationAccess: mocks.requireOrganizationAccess,
+	getOrganizationAccess: mocks.getOrganizationAccess,
 }));
 vi.mock("@/lib/recall/config", () => ({
 	isRecallConfigured: () => true,
@@ -107,6 +112,27 @@ vi.mock("@/lib/recall/recap", () => ({
 			? value
 			: "self",
 }));
+vi.mock("@/lib/recall/visibility", () => ({
+	meetingBotIdsAccessibleToUser: vi.fn(async () => new Set()),
+	canUserAccessMeetingBot: vi.fn(async () => false),
+}));
+vi.mock("@/lib/recall/media-retention", () => ({
+	maybeDeleteRecallMediaIfUnused: vi.fn(),
+}));
+vi.mock("@/lib/permissions/roles", () => ({
+	canManageOrganizationSettings: (role: string | null | undefined) =>
+		role === "owner" || role === "admin",
+}));
+vi.mock("@/lib/server", () => ({
+	runPromise: vi.fn(),
+}));
+vi.mock("@cap/web-backend", () => ({
+	Videos: {},
+	makeCurrentUserLayer: vi.fn(),
+}));
+vi.mock("effect", () => ({
+	Effect: { gen: vi.fn(), provide: vi.fn() },
+}));
 
 const { listMeetingBots, scheduleMeetingBot } = await import(
 	"@/actions/meetings"
@@ -118,7 +144,14 @@ const userId = "user" as User.UserId;
 beforeEach(() => {
 	vi.clearAllMocks();
 	mocks.getCurrentUser.mockResolvedValue({ id: userId });
-	mocks.requireOrganizationAccess.mockResolvedValue({ id: orgId });
+	mocks.requireOrganizationAccess.mockResolvedValue({
+		id: orgId,
+		role: "owner",
+	});
+	mocks.getOrganizationAccess.mockResolvedValue({
+		id: orgId,
+		role: "owner",
+	});
 });
 
 describe("scheduleMeetingBot", () => {

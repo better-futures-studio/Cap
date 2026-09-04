@@ -189,8 +189,8 @@ function RecapCard({
 					className="w-48"
 				/>
 				<p className="text-xs text-gray-10">
-					Sent after the summary is ready. "Me + attendees" emails everyone on
-					the calendar invite.
+					Sent after the summary is ready. "Me + attendees" emails attendees who
+					are members of this organization.
 				</p>
 			</div>
 		</Card>

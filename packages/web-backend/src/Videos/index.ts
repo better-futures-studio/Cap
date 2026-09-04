@@ -46,6 +46,39 @@ type ScreenshotCandidate = {
 	suffixIndex: number;
 	lastModified: number | null;
 };
+async function deleteRecallMediaBestEffort(recallBotIds: string[]) {
+	const env = serverEnv();
+	if (!env.RECALL_API_KEY || env.RECALL_DELETE_MEDIA_AFTER_IMPORT === false) {
+		return;
+	}
+	const region = env.RECALL_REGION || "us-west-2";
+	for (const recallBotId of recallBotIds) {
+		try {
+			const response = await fetch(
+				`https://${region}.recall.ai/api/v1/bot/${recallBotId}/delete_media/`,
+				{
+					method: "POST",
+					headers: {
+						Authorization: env.RECALL_API_KEY,
+						accept: "application/json",
+					},
+				},
+			);
+			if (!response.ok && response.status !== 404) {
+				console.error("[recall] delete_media failed", {
+					recallBotId,
+					status: response.status,
+				});
+			}
+		} catch (error) {
+			console.error("[recall] delete_media failed", {
+				recallBotId,
+				error: error instanceof Error ? error.message : "unknown",
+			});
+		}
+	}
+}
+
 const getScreenshotObjectTime = (value: ScreenshotObject["LastModified"]) => {
 	if (value == null) return null;
 	const time =
@@ -342,7 +375,10 @@ export class Videos extends Effect.Service<Videos>()("Videos", {
 						);
 					}
 				} while (continuationToken);
-				yield* repo.delete(video.id, video.ownerId);
+				const unusedRecallBotIds = yield* repo.delete(video.id, video.ownerId);
+				yield* Effect.promise(() =>
+					deleteRecallMediaBestEffort(unusedRecallBotIds),
+				);
 				yield* Effect.log(`Deleted video ${video.id}`);
 			}),
 

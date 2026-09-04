@@ -14,6 +14,8 @@ const config: RecallConfig = {
 	agentTrigger: "/nt",
 	transcriptionProvider: "recallai",
 	calendarGoogle: null,
+	mediaRetentionHours: 168,
+	deleteMediaAfterImport: true,
 };
 
 describe("buildLiveRecordingConfig", () => {
@@ -55,7 +57,7 @@ describe("buildLiveRecordingConfig", () => {
 			buildLiveRecordingConfig({
 				...config,
 				transcriptionProvider: "assemblyai",
-			})?.transcript.provider,
+			})?.transcript?.provider,
 		).toEqual({
 			assembly_ai_v3_streaming: {
 				speech_model: "universal-streaming-multilingual",

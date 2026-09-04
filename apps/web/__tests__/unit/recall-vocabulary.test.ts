@@ -80,6 +80,26 @@ vi.mock("@/lib/recall/recap", () => ({
 			? value
 			: "self",
 }));
+vi.mock("@/lib/recall/visibility", () => ({
+	meetingBotIdsAccessibleToUser: vi.fn(async () => new Set()),
+	canUserAccessMeetingBot: vi.fn(async () => false),
+}));
+vi.mock("@/lib/recall/media-retention", () => ({
+	maybeDeleteRecallMediaIfUnused: vi.fn(),
+}));
+vi.mock("@/lib/permissions/roles", () => ({
+	canManageOrganizationSettings: () => false,
+}));
+vi.mock("@/lib/server", () => ({
+	runPromise: vi.fn(),
+}));
+vi.mock("@cap/web-backend", () => ({
+	Videos: {},
+	makeCurrentUserLayer: vi.fn(),
+}));
+vi.mock("effect", () => ({
+	Effect: { gen: vi.fn(), provide: vi.fn() },
+}));
 
 const { addMeetingVocabulary, listMeetingVocabulary, removeMeetingVocabulary } =
 	await import("@/actions/meetings");

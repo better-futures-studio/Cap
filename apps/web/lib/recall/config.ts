@@ -4,6 +4,7 @@ type ServerEnv = ReturnType<typeof serverEnv>;
 
 const DEFAULT_REGION = "us-west-2";
 export const DEFAULT_BOT_NAME = "Meeting Notetaker";
+export const DEFAULT_MEDIA_RETENTION_HOURS = 168;
 
 export type RecallTranscriptionProvider = "recallai" | "assemblyai";
 
@@ -19,6 +20,8 @@ export type RecallConfig = {
 	agentTrigger: string;
 	transcriptionProvider: RecallTranscriptionProvider;
 	calendarGoogle: { clientId: string; clientSecret: string } | null;
+	mediaRetentionHours: number;
+	deleteMediaAfterImport: boolean;
 };
 
 function stripTrailingSlash(url: string): string {
@@ -72,6 +75,9 @@ export function getRecallConfig(
 						clientSecret: env.RECALL_CALENDAR_GOOGLE_CLIENT_SECRET,
 					}
 				: null,
+		mediaRetentionHours:
+			env.RECALL_MEDIA_RETENTION_HOURS ?? DEFAULT_MEDIA_RETENTION_HOURS,
+		deleteMediaAfterImport: env.RECALL_DELETE_MEDIA_AFTER_IMPORT ?? true,
 	};
 }
 

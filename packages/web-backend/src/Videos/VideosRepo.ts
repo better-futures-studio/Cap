@@ -79,7 +79,19 @@ export class VideosRepo extends Effect.Service<VideosRepo>()("VideosRepo", {
 
 		const delete_ = (id: Video.VideoId, ownerId?: User.UserId) =>
 			db.use(async (db) => {
+				const unusedRecallBotIds: string[] = [];
 				await db.transaction(async (db) => {
+					const bots = await db
+						.select({ recallBotId: Db.meetingBots.recallBotId })
+						.from(Db.meetingBots)
+						.where(Dz.eq(Db.meetingBots.videoId, id));
+					const recallBotIds = [
+						...new Set(
+							bots
+								.map((bot) => bot.recallBotId)
+								.filter((botId): botId is string => Boolean(botId)),
+						),
+					];
 					await db
 						.delete(Db.videoProcessingJobs)
 						.where(Dz.eq(Db.videoProcessingJobs.videoId, id));
@@ -99,8 +111,27 @@ export class VideosRepo extends Effect.Service<VideosRepo>()("VideosRepo", {
 						db
 							.delete(Db.videoUploads)
 							.where(Dz.eq(Db.videoUploads.videoId, id)),
+						db.delete(Db.videoShares).where(Dz.eq(Db.videoShares.videoId, id)),
+						db.delete(Db.meetingBots).where(Dz.eq(Db.meetingBots.videoId, id)),
 					]);
+					if (recallBotIds.length > 0) {
+						const remaining = await db
+							.select({ recallBotId: Db.meetingBots.recallBotId })
+							.from(Db.meetingBots)
+							.where(Dz.inArray(Db.meetingBots.recallBotId, recallBotIds));
+						const stillUsed = new Set(
+							remaining
+								.map((row) => row.recallBotId)
+								.filter((botId): botId is string => Boolean(botId)),
+						);
+						for (const recallBotId of recallBotIds) {
+							if (!stillUsed.has(recallBotId)) {
+								unusedRecallBotIds.push(recallBotId);
+							}
+						}
+					}
 				});
+				return unusedRecallBotIds;
 			});
 
 		const create = (data: CreateVideoInput, options?: { id: Video.VideoId }) =>
