@@ -58,7 +58,10 @@ export async function createMeetingTranscript(
 		.from(meetingBots)
 		.where(eq(meetingBots.id, meetingBotId))
 		.limit(1);
-	if (row?.recallTranscriptId) {
+	if (
+		row?.recallTranscriptId &&
+		(row.status === "transcribing" || row.status === "complete")
+	) {
 		return {
 			transcriptId: row.recallTranscriptId,
 			startCompletion: false,
