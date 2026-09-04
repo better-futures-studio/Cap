@@ -94,6 +94,8 @@ jobs:
       - run: pnpm web exec next typegen
 
       - name: Typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm typecheck
 
   web-unit-tests:
@@ -135,6 +137,8 @@ jobs:
       - run: pnpm web exec next typegen
 
       - name: Web build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm --filter @cap/web run build:web
 
   mobile:
