@@ -74,7 +74,7 @@ from a pasted link to a recap email.
 - **Recall media retention.** Bots are created with timed Recall retention
   (`RECALL_MEDIA_RETENTION_HOURS`, default 168 hours) and, once Cap has
   imported the recording and transcript, the Recall-stored media is deleted
-  (`RECALL_DELETE_MEDIA_AFTER_IMPORT`, default on).
+  (`RECALL_DELETE_MEDIA_AFTER_IMPORT`, default off; Recall's timed retention expires the media anyway).
 - **Meeting deletion.** A meeting's owner can delete it — the meeting row,
   its recording, transcript, and summary go away for everyone it was shared
   with, and any pending Recall bot is cancelled first.
@@ -187,7 +187,7 @@ database, and general Cap AI provider variables not listed here.
 | `RECALL_AGENT_TRIGGER` | optional | Chat command that invokes the live meeting agent. Defaults to `/nt`. |
 | `RECALL_TRANSCRIPTION_PROVIDER` | optional | `recallai` (default) or `assemblyai`; see Features above. |
 | `RECALL_MEDIA_RETENTION_HOURS` | optional | Hours Recall keeps bot media. Defaults to `168` (7 days). |
-| `RECALL_DELETE_MEDIA_AFTER_IMPORT` | optional | After Cap imports the recording and transcript, delete Recall-stored media. Defaults to `true`. |
+| `RECALL_DELETE_MEDIA_AFTER_IMPORT` | optional | After Cap imports the recording and transcript, delete Recall-stored media right away. Defaults to `false`; the timed retention still expires it. |
 
 **Recall Calendar V2 (Google Calendar scheduling)**
 

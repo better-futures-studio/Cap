@@ -40,10 +40,10 @@ describe("getRecallConfig", () => {
 		);
 	});
 
-	it("defaults media retention to 7 days and deletes after import", () => {
+	it("defaults media retention to 7 days and keeps media until it expires", () => {
 		const config = getRecallConfig(env());
 		expect(config?.mediaRetentionHours).toBe(168);
-		expect(config?.deleteMediaAfterImport).toBe(true);
+		expect(config?.deleteMediaAfterImport).toBe(false);
 	});
 
 	it("reads RECALL_MEDIA_RETENTION_HOURS and RECALL_DELETE_MEDIA_AFTER_IMPORT", () => {
