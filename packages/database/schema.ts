@@ -211,6 +211,8 @@ export const organizations = mysqlTable(
 			shareableLinkUseOrganizationIcon?: boolean;
 			aiGenerationLanguage?: AiGenerationLanguage;
 			defaultPlaybackSpeed?: number;
+			recapFromName?: string;
+			recapFromAddress?: string;
 		}>(),
 		iconUrl: varchar("iconUrl", {
 			length: 1024,

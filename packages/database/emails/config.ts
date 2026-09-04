@@ -7,6 +7,44 @@ import { Resend } from "resend";
 export const resend = () =>
 	serverEnv().RESEND_API_KEY ? new Resend(serverEnv().RESEND_API_KEY) : null;
 
+export function parseEmailFromAddress(from: string): string | null {
+	const angled = from.match(/<([^>]+)>/);
+	const address = (angled?.[1] ?? from).trim();
+	return address.includes("@") ? address : null;
+}
+
+export function isAllowedFromDomain(
+	address: string,
+	allowedDomain: string,
+): boolean {
+	const domain = parseEmailFromAddress(address)?.split("@")[1]?.toLowerCase();
+	const allowed = allowedDomain.trim().toLowerCase().replace(/^\./, "");
+	if (!domain || !allowed) return false;
+	return domain === allowed || domain.endsWith(`.${allowed}`);
+}
+
+function defaultFromAddress(marketing?: boolean): string {
+	if (marketing) return "Richie from Cap <richie@send.cap.so>";
+	if (buildEnv.NEXT_PUBLIC_IS_CAP) return "Cap Auth <no-reply@auth.cap.so>";
+	return `auth@${serverEnv().RESEND_FROM_DOMAIN}`;
+}
+
+function resolveFromAddress(
+	fromOverride: string | undefined,
+	marketing?: boolean,
+): string {
+	if (!fromOverride) return defaultFromAddress(marketing);
+	const allowedDomain = serverEnv().RESEND_FROM_DOMAIN?.trim() ?? "";
+	if (!allowedDomain || isAllowedFromDomain(fromOverride, allowedDomain)) {
+		return fromOverride;
+	}
+	const domain = parseEmailFromAddress(fromOverride)?.split("@")[1] ?? "";
+	if (domain) {
+		console.warn("[email] from override domain is not allowed", { domain });
+	}
+	return defaultFromAddress(marketing);
+}
+
 export const sendEmail = async ({
 	email,
 	subject,
@@ -44,13 +82,7 @@ export const sendEmail = async ({
 	}
 
 	if (marketing && !buildEnv.NEXT_PUBLIC_IS_CAP) return;
-	let from: string;
-
-	if (fromOverride) from = fromOverride;
-	else if (marketing) from = "Richie from Cap <richie@send.cap.so>";
-	else if (buildEnv.NEXT_PUBLIC_IS_CAP)
-		from = "Cap Auth <no-reply@auth.cap.so>";
-	else from = `auth@${serverEnv().RESEND_FROM_DOMAIN}`;
+	const from = resolveFromAddress(fromOverride, marketing);
 
 	if (!r && postmarkToken) {
 		const html = await render(react);

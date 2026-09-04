@@ -106,9 +106,17 @@ export async function updateOrganizationSettings(
 				}
 			: settings;
 
-	const nextSettings = userIsPro(user)
-		? sanitizedSettings
-		: preserveProSettings(sanitizedSettings, organization.settings);
+	const nextSettings = {
+		...(userIsPro(user)
+			? sanitizedSettings
+			: preserveProSettings(sanitizedSettings, organization.settings)),
+		...(organization.settings?.recapFromName
+			? { recapFromName: organization.settings.recapFromName }
+			: {}),
+		...(organization.settings?.recapFromAddress
+			? { recapFromAddress: organization.settings.recapFromAddress }
+			: {}),
+	};
 
 	await db()
 		.update(organizations)

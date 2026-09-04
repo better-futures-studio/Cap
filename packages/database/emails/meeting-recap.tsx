@@ -1,4 +1,3 @@
-import { CAP_LOGO_URL } from "@cap/utils";
 import {
 	Body,
 	Container,
@@ -26,6 +25,7 @@ export function MeetingRecap({
 	recapMode = "self",
 	botName = "",
 	organizationName = "",
+	logoUrl = null,
 }: {
 	email: string;
 	url: string;
@@ -38,6 +38,7 @@ export function MeetingRecap({
 	recapMode: string;
 	botName: string;
 	organizationName: string;
+	logoUrl?: string | null;
 }) {
 	return (
 		<Html>
@@ -47,13 +48,19 @@ export function MeetingRecap({
 				<Body className="mx-auto my-auto bg-gray-1 font-sans">
 					<Container className="mx-auto my-10 max-w-[500px] rounded border border-solid border-gray-200 px-10 py-5">
 						<Section className="mt-8">
-							<Img
-								src={CAP_LOGO_URL}
-								width="40"
-								height="40"
-								alt="Cap"
-								className="mx-auto my-0"
-							/>
+							{logoUrl ? (
+								<Img
+									src={logoUrl}
+									alt={organizationName || "Organization"}
+									height="120"
+									className="mx-auto my-0"
+									style={{ maxHeight: "120px", width: "auto" }}
+								/>
+							) : (
+								<Text className="mx-auto my-0 text-center text-base font-semibold text-black">
+									{organizationName}
+								</Text>
+							)}
 						</Section>
 						<Heading className="mx-0 my-7 p-0 text-center text-xl font-semibold text-black">
 							{title}

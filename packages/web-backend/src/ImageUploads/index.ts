@@ -51,11 +51,18 @@ export class ImageUploads extends Effect.Service<ImageUploads>()(
 
 			const resolveImageUrl = Effect.fn(function* (
 				urlOrKey: ImageUpload.ImageUrlOrKey,
+				options?: { expiresIn?: number },
 			) {
 				const key = ImageUpload.extractFileKey(urlOrKey, s3.isPathStyle);
 
 				return yield* Option.match(key, {
-					onSome: (key) => s3.getSignedObjectUrl(key),
+					onSome: (key) =>
+						s3.getSignedObjectUrl(
+							key,
+							options?.expiresIn != null
+								? { expiresIn: options.expiresIn }
+								: undefined,
+						),
 					onNone: () => Effect.succeed(urlOrKey),
 				}).pipe(Effect.map(ImageUpload.ImageUrl.make));
 			});

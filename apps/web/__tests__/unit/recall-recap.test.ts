@@ -4,6 +4,7 @@ import type { RecallClient } from "@/lib/recall/client";
 import {
 	isRecapReady,
 	resolveRecapRecipients,
+	resolveRecapSender,
 	sendMeetingRecap,
 } from "@/lib/recall/recap";
 
@@ -13,7 +14,21 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@cap/database", () => ({ db: mocks.db }));
-vi.mock("@cap/database/emails/config", () => ({ sendEmail: mocks.sendEmail }));
+vi.mock("server-only", () => ({}));
+vi.mock("@cap/database/emails/config", () => ({
+	sendEmail: mocks.sendEmail,
+	isAllowedFromDomain: (address: string, allowedDomain: string) => {
+		const domain = address.split("@")[1]?.toLowerCase() ?? "";
+		const allowed = allowedDomain.toLowerCase();
+		return domain === allowed || domain.endsWith(`.${allowed}`);
+	},
+}));
+vi.mock("@cap/web-backend", () => ({ ImageUploads: {} }));
+vi.mock("@/lib/server", () => ({
+	runPromise: () => {
+		throw new Error("logo signing should not run without an icon");
+	},
+}));
 vi.mock("@cap/database/emails/meeting-recap", () => ({
 	MeetingRecap: (props: unknown) => props,
 }));
@@ -37,7 +52,12 @@ vi.mock("@cap/database/schema", () => {
 			"status",
 		]),
 		meetingPreferences: table("meeting_preferences", ["userId", "recapMode"]),
-		organizations: table("organizations", ["id", "name"]),
+		organizations: table("organizations", [
+			"id",
+			"name",
+			"iconUrl",
+			"settings",
+		]),
 		users: table("users", ["id", "email"]),
 		videos: table("videos", [
 			"id",
@@ -55,7 +75,10 @@ vi.mock("drizzle-orm", () => ({
 	isNull: (column: string) => ({ op: "isNull", column }),
 }));
 vi.mock("@cap/env", () => ({
-	serverEnv: () => ({ WEB_URL: "https://cap.example.com" }),
+	serverEnv: () => ({
+		WEB_URL: "https://cap.example.com",
+		RESEND_FROM_DOMAIN: "boca.pro",
+	}),
 }));
 vi.mock("@/lib/recall/config", () => ({
 	DEFAULT_BOT_NAME: "Meeting Notetaker",
@@ -141,6 +164,10 @@ function seedReadyMeeting(
 		summary?: string;
 		transcriptionStatus?: string;
 		calendarEventId?: string | null;
+		settings?: {
+			recapFromName?: string;
+			recapFromAddress?: string;
+		} | null;
 	} = {},
 ) {
 	rows = {
@@ -158,7 +185,14 @@ function seedReadyMeeting(
 				status: "complete",
 			},
 		],
-		organizations: [{ id: "org_1", name: "Acme" }],
+		organizations: [
+			{
+				id: "org_1",
+				name: "Acme",
+				iconUrl: null,
+				settings: overrides.settings ?? null,
+			},
+		],
 		videos: [
 			{
 				id: videoId,
@@ -238,6 +272,61 @@ describe("resolveRecapRecipients", () => {
 	});
 });
 
+describe("resolveRecapSender", () => {
+	const botName = "Meeting Notetaker";
+	const allowedDomain = "boca.pro";
+
+	it("defaults to the bot name and no-reply address", () => {
+		expect(
+			resolveRecapSender({ settings: null, botName, allowedDomain }),
+		).toEqual({
+			from: "Meeting Notetaker <no-reply@boca.pro>",
+			name: "Meeting Notetaker",
+			address: "no-reply@boca.pro",
+		});
+	});
+
+	it("uses the organization name and address override", () => {
+		expect(
+			resolveRecapSender({
+				settings: {
+					recapFromName: "Boca Pro",
+					recapFromAddress: "notes@mail.boca.pro",
+				},
+				botName,
+				allowedDomain,
+			}),
+		).toEqual({
+			from: "Boca Pro <notes@mail.boca.pro>",
+			name: "Boca Pro",
+			address: "notes@mail.boca.pro",
+		});
+	});
+
+	it("falls back when the override domain is not allowed", () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		expect(
+			resolveRecapSender({
+				settings: {
+					recapFromName: "Boca Pro",
+					recapFromAddress: "notes@evil.example",
+				},
+				botName,
+				allowedDomain,
+			}),
+		).toEqual({
+			from: "Boca Pro <no-reply@boca.pro>",
+			name: "Boca Pro",
+			address: "no-reply@boca.pro",
+		});
+		expect(warn).toHaveBeenCalledWith(
+			"[recall] recap from address domain is not allowed",
+			{ domain: "evil.example" },
+		);
+		warn.mockRestore();
+	});
+});
+
 describe("isRecapReady", () => {
 	it("requires a real summary and a complete transcript", () => {
 		expect(
@@ -289,12 +378,41 @@ describe("sendMeetingRecap", () => {
 		expect(mocks.sendEmail.mock.calls[0]?.[0]).toMatchObject({
 			email: "ada@example.com",
 			subject: "Recap: Standup",
+			fromOverride: "Meeting Notetaker <no-reply@boca.pro>",
 			react: {
 				botName: "Meeting Notetaker",
 				organizationName: "Acme",
+				logoUrl: null,
 			},
 		});
 		expect(rows.meeting_bots?.[0]?.recapSentAt).toBeInstanceOf(Date);
+	});
+
+	it("uses the organization sender override and signed logo URL", async () => {
+		seedReadyMeeting({
+			settings: {
+				recapFromName: "Boca Pro",
+				recapFromAddress: "notes@boca.pro",
+			},
+		});
+		const organizations = rows.organizations ?? [];
+		if (organizations[0])
+			organizations[0].iconUrl = "organizations/org_1/1.png";
+		const client = mockClient();
+
+		await expect(
+			sendMeetingRecap("mb_1", {
+				client,
+				resolveLogoUrl: async () =>
+					"https://signed.example/organizations/org_1/1.png",
+			}),
+		).resolves.toEqual({ sent: true, recipients: 1 });
+		expect(mocks.sendEmail.mock.calls[0]?.[0]).toMatchObject({
+			fromOverride: "Boca Pro <notes@boca.pro>",
+			react: {
+				logoUrl: "https://signed.example/organizations/org_1/1.png",
+			},
+		});
 	});
 
 	it("includes calendar attendees when the mode is attendees", async () => {

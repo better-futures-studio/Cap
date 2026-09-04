@@ -1,5 +1,5 @@
 import { db } from "@cap/database";
-import { sendEmail } from "@cap/database/emails/config";
+import { isAllowedFromDomain, sendEmail } from "@cap/database/emails/config";
 import { MeetingRecap } from "@cap/database/emails/meeting-recap";
 import {
 	type MeetingRecapMode,
@@ -11,8 +11,11 @@ import {
 } from "@cap/database/schema";
 import type { MeetingActionItem, VideoMetadata } from "@cap/database/types";
 import { serverEnv } from "@cap/env";
-import type { User } from "@cap/web-domain";
+import { ImageUploads } from "@cap/web-backend";
+import type { ImageUpload, User } from "@cap/web-domain";
 import { and, eq, isNull } from "drizzle-orm";
+import { Effect } from "effect";
+import { runPromise } from "@/lib/server";
 import { parseMeetingActionItems } from "./action-items";
 import type {
 	RecallCalendarEvent,
@@ -25,6 +28,73 @@ import { formatTalkTimeLine, parseMeetingSpeakerStats } from "./speaker-stats";
 import { shareMeetingRecordingWithAttendees } from "./visibility";
 
 export type { MeetingRecapMode };
+
+export const RECAP_FROM_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const RECAP_LOGO_URL_EXPIRES_SECONDS = 7 * 24 * 60 * 60;
+
+export function parseRecapFromAddress(value: string): string | null {
+	const address = value.trim().toLowerCase();
+	if (!RECAP_FROM_ADDRESS_PATTERN.test(address)) return null;
+	return address;
+}
+
+export function recapAllowedFromDomain(
+	env: { RESEND_FROM_DOMAIN?: string } = serverEnv(),
+): string {
+	return env.RESEND_FROM_DOMAIN?.trim() ?? "";
+}
+
+export function defaultRecapFromAddress(allowedDomain: string): string {
+	return `no-reply@${allowedDomain}`;
+}
+
+export function resolveRecapSender({
+	settings,
+	botName,
+	allowedDomain,
+}: {
+	settings?: {
+		recapFromName?: string;
+		recapFromAddress?: string;
+	} | null;
+	botName: string;
+	allowedDomain: string;
+}): { from: string; name: string; address: string } {
+	const name = settings?.recapFromName?.trim() || botName;
+	const defaultAddress = defaultRecapFromAddress(allowedDomain);
+	const overrideAddress = settings?.recapFromAddress?.trim();
+	let address = defaultAddress;
+	if (overrideAddress) {
+		if (allowedDomain && isAllowedFromDomain(overrideAddress, allowedDomain)) {
+			address = overrideAddress;
+		} else {
+			const domain = overrideAddress.split("@")[1] ?? "";
+			if (domain) {
+				console.warn("[recall] recap from address domain is not allowed", {
+					domain,
+				});
+			}
+		}
+	}
+	return { from: `${name} <${address}>`, name, address };
+}
+
+async function resolveOrganizationLogoUrl(
+	iconUrl: string,
+): Promise<string | null> {
+	if (/^https?:\/\//i.test(iconUrl)) return iconUrl;
+	try {
+		return await Effect.gen(function* () {
+			const imageUploads = yield* ImageUploads;
+			return yield* imageUploads.resolveImageUrl(
+				iconUrl as ImageUpload.ImageUrlOrKey,
+				{ expiresIn: RECAP_LOGO_URL_EXPIRES_SECONDS },
+			);
+		}).pipe(runPromise);
+	} catch {
+		return null;
+	}
+}
 
 const LEGACY_AI_SUMMARY_FALLBACK =
 	"The AI was unable to generate a proper summary for this content.";
@@ -197,7 +267,10 @@ async function loadAttendeeEmails({
 
 export async function sendMeetingRecap(
 	meetingBotId: string,
-	deps: { client?: RecallClient } = {},
+	deps: {
+		client?: RecallClient;
+		resolveLogoUrl?: (iconUrl: string) => Promise<string | null>;
+	} = {},
 ): Promise<{ sent: boolean; recipients: number }> {
 	const [row] = await db()
 		.select()
@@ -234,7 +307,11 @@ export async function sendMeetingRecap(
 	const mode = parseRecapMode(preference?.recapMode);
 
 	const [org] = await db()
-		.select({ name: organizations.name })
+		.select({
+			name: organizations.name,
+			iconUrl: organizations.iconUrl,
+			settings: organizations.settings,
+		})
 		.from(organizations)
 		.where(eq(organizations.id, row.orgId))
 		.limit(1);
@@ -242,6 +319,14 @@ export async function sendMeetingRecap(
 	const client = deps.client ?? getDefaultRecallClient();
 	const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
 	const organizationName = org?.name?.trim() || "";
+	const sender = resolveRecapSender({
+		settings: org?.settings,
+		botName,
+		allowedDomain: recapAllowedFromDomain(),
+	});
+	const logoUrl = org?.iconUrl
+		? await (deps.resolveLogoUrl ?? resolveOrganizationLogoUrl)(org.iconUrl)
+		: null;
 	const attendeeEmails =
 		mode === "attendees"
 			? await loadAttendeeEmails({ row, client, botName })
@@ -280,6 +365,7 @@ export async function sendMeetingRecap(
 			await sendEmail({
 				email,
 				subject: `Recap: ${title}`,
+				fromOverride: sender.from,
 				react: MeetingRecap({
 					email,
 					url,
@@ -292,6 +378,7 @@ export async function sendMeetingRecap(
 					recapMode: mode,
 					botName,
 					organizationName,
+					logoUrl,
 				}),
 			});
 		}
