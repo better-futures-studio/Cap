@@ -15,6 +15,7 @@ import type { Organisation } from "@cap/web-domain";
 import { and, asc, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
 import { Effect } from "effect";
 import { revalidatePath } from "next/cache";
+import { start } from "workflow/api";
 import { requireOrganizationAccess } from "@/actions/organization/authorization";
 import { getMeetingActionItems } from "@/lib/recall/action-items";
 import {
@@ -23,6 +24,7 @@ import {
 	scheduleManualMeetingBot,
 } from "@/lib/recall/bots";
 import {
+	autoRecordSyncWindow,
 	disconnectCalendar,
 	getUserCalendar,
 	listUpcomingCalendarEvents,
@@ -44,6 +46,7 @@ import {
 	removeMeetingVocabularyTerm,
 } from "@/lib/recall/vocabulary";
 import { runPromise } from "@/lib/server";
+import { syncCalendarEventsWorkflow } from "@/workflows/recall-calendar-sync";
 
 const MEETINGS_PATH = "/dashboard/meetings";
 
@@ -273,7 +276,19 @@ export async function setCalendarAutoRecordAction({
 	autoRecord: boolean;
 }) {
 	const user = await requireUser(orgId);
-	await setCalendarAutoRecord({ calendarRowId, userId: user.id, autoRecord });
+	const calendar = await setCalendarAutoRecord({
+		calendarRowId,
+		userId: user.id,
+		autoRecord,
+	});
+	if (autoRecord) {
+		await start(syncCalendarEventsWorkflow, [
+			{
+				recallCalendarId: calendar.recallCalendarId,
+				...autoRecordSyncWindow(new Date()),
+			},
+		]);
+	}
 	revalidatePath(MEETINGS_PATH);
 }
 

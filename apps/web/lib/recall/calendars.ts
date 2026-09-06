@@ -28,6 +28,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTO_RECORD_SYNC_WINDOW_MS = 28 * DAY_MS;
 const UPCOMING_EVENTS_WINDOW_MS = 14 * DAY_MS;
 
+export function autoRecordSyncWindow(now: Date) {
+	return {
+		startTimeGte: now.toISOString(),
+		startTimeLte: new Date(
+			now.getTime() + AUTO_RECORD_SYNC_WINDOW_MS,
+		).toISOString(),
+		isDeleted: false,
+	};
+}
+
 const TERMINAL_MEETING_BOT_STATUSES: readonly MeetingBotStatus[] = [
 	"fatal",
 	"failed",
@@ -359,45 +369,17 @@ export async function setCalendarAutoRecord({
 	calendarRowId,
 	userId,
 	autoRecord,
-	client = getDefaultRecallClient(),
-	now = () => new Date(),
 }: {
 	calendarRowId: string;
 	userId: User.UserId;
 	autoRecord: boolean;
-	client?: RecallClient;
-	now?: () => Date;
-}): Promise<void> {
+}): Promise<MeetingCalendarRow> {
 	const calendar = await requireOwnedCalendar(calendarRowId, userId);
 	await db()
 		.update(meetingCalendars)
 		.set({ autoRecord })
 		.where(eq(meetingCalendars.id, calendar.id));
-	if (!autoRecord) return;
-
-	const nowDate = now();
-	const events = await client.listCalendarEvents({
-		calendarId: calendar.recallCalendarId,
-		startTimeGte: nowDate.toISOString(),
-		startTimeLte: new Date(
-			nowDate.getTime() + AUTO_RECORD_SYNC_WINDOW_MS,
-		).toISOString(),
-		isDeleted: false,
-	});
-	await applyCalendarEventDecisions({
-		calendar: {
-			id: calendar.id,
-			orgId: calendar.orgId,
-			userId: calendar.userId,
-			autoRecord,
-		},
-		events,
-		now: nowDate,
-	});
-	await db()
-		.update(meetingCalendars)
-		.set({ lastSyncedAt: nowDate })
-		.where(eq(meetingCalendars.id, calendar.id));
+	return { ...calendar, autoRecord };
 }
 
 export async function toggleCalendarEventRecording({
@@ -579,11 +561,7 @@ export async function setCalendarSeriesRule({
 	const nowDate = now();
 	const upcoming = await client.listCalendarEvents({
 		calendarId: calendar.recallCalendarId,
-		startTimeGte: nowDate.toISOString(),
-		startTimeLte: new Date(
-			nowDate.getTime() + AUTO_RECORD_SYNC_WINDOW_MS,
-		).toISOString(),
-		isDeleted: false,
+		...autoRecordSyncWindow(nowDate),
 	});
 	await applyCalendarEventDecisions({
 		calendar: {
