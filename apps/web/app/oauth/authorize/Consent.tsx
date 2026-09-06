@@ -1,9 +1,8 @@
 "use client";
 
 import { Button, Logo } from "@cap/ui";
-import { useQuery } from "@tanstack/react-query";
 import { signOut } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
 	approveAuthorization,
@@ -43,11 +42,19 @@ export function OAuthConsent({
 		null,
 	);
 
-	const { data: pendingAuthorization } = useQuery({
-		queryKey: ["pending-authorization", requestId],
-		queryFn: () => getPendingAuthorization({ requestId }),
-		initialData: initialPendingAuthorization,
-	});
+	const [pendingAuthorization, setPendingAuthorization] =
+		useState<PendingAuthorization | null>(initialPendingAuthorization);
+	useEffect(() => {
+		let cancelled = false;
+		getPendingAuthorization({ requestId })
+			.then((pending) => {
+				if (!cancelled) setPendingAuthorization(pending);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [requestId]);
 
 	if (!pendingAuthorization) {
 		return (
