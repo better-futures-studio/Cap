@@ -48,7 +48,11 @@ export async function POST(request: Request) {
 	}
 
 	const result = await registerOauthClient(db(), body);
-	return Response.json(result.body, {
+	// RFC 7591 optional fields are omitted, not null: MCP clients validate them as strings.
+	const responseBody = Object.fromEntries(
+		Object.entries(result.body).filter(([, value]) => value !== null),
+	);
+	return Response.json(responseBody, {
 		status: result.status,
 		headers: oauthJsonHeaders,
 	});
