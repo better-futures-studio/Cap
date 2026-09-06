@@ -21,17 +21,21 @@ async function loadCalendarRow(
 	return row ?? null;
 }
 
+type CalendarEventFilter = {
+	updatedAtGte?: string;
+	startTimeGte?: string;
+	startTimeLte?: string;
+	isDeleted?: boolean;
+};
+
 async function fetchUpdatedEvents(
 	recallCalendarId: string,
-	updatedAtGte: string | undefined,
+	filter: CalendarEventFilter,
 ): Promise<RecallCalendarEvent[]> {
 	"use step";
 
 	const client = getDefaultRecallClient();
-	return client.listCalendarEvents({
-		calendarId: recallCalendarId,
-		updatedAtGte,
-	});
+	return client.listCalendarEvents({ calendarId: recallCalendarId, ...filter });
 }
 
 async function applyEvents(
@@ -61,19 +65,20 @@ async function markCalendarSynced(calendarRowId: string): Promise<void> {
 		.where(eq(meetingCalendars.id, calendarRowId));
 }
 
-export async function syncCalendarEventsWorkflow({
-	recallCalendarId,
-	updatedAtGte,
-}: {
-	recallCalendarId: string;
-	updatedAtGte?: string;
-}): Promise<void> {
+export async function syncCalendarEventsWorkflow(
+	input: { recallCalendarId: string } & CalendarEventFilter,
+): Promise<void> {
 	"use workflow";
 
-	const calendar = await loadCalendarRow(recallCalendarId);
+	const calendar = await loadCalendarRow(input.recallCalendarId);
 	if (!calendar) return;
 
-	const events = await fetchUpdatedEvents(recallCalendarId, updatedAtGte);
+	const events = await fetchUpdatedEvents(input.recallCalendarId, {
+		updatedAtGte: input.updatedAtGte,
+		startTimeGte: input.startTimeGte,
+		startTimeLte: input.startTimeLte,
+		isDeleted: input.isDeleted,
+	});
 	await applyEvents(calendar, events);
 	await markCalendarSynced(calendar.id);
 }
