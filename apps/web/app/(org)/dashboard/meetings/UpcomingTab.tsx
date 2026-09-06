@@ -50,7 +50,6 @@ function UpcomingCalendarRow({
 					eventId: event.id,
 					record,
 				});
-				router.refresh();
 			} catch (error) {
 				toast.error(
 					error instanceof Error ? error.message : "Failed to update the event",
