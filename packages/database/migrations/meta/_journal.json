@@ -351,6 +351,13 @@
 			"when": 1788527343285,
 			"tag": "0049_fixed_gladiator",
 			"breakpoints": true
+		},
+		{
+			"idx": 50,
+			"version": "5",
+			"when": 1788693721598,
+			"tag": "0050_clammy_gwen_stacy",
+			"breakpoints": true
 		}
 	]
 }

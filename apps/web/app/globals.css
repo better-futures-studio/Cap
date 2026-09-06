@@ -874,6 +874,31 @@ footer a {
 	}
 }
 
+@keyframes sidebar-glow-pulse {
+	0%,
+	100% {
+		box-shadow:
+			0 0 0 2px var(--blue-9),
+			0 0 8px 2px var(--blue-9);
+	}
+	50% {
+		box-shadow:
+			0 0 0 2px var(--blue-9),
+			0 0 2px 0 transparent;
+	}
+}
+
+.sidebar-glow {
+	animation: sidebar-glow-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sidebar-glow {
+		animation: none;
+		box-shadow: 0 0 0 2px var(--blue-9);
+	}
+}
+
 .media-player video::-webkit-media-text-track-display {
 	@apply !bottom-12 !top-auto !mb-0;
 }

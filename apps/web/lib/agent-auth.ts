@@ -3,6 +3,7 @@ import type { Agent } from "@cap/web-domain";
 
 export const agentScopes = [
 	"caps:read",
+	"meetings:read",
 	"caps:comment",
 	"caps:write",
 	"profile:read",
@@ -118,6 +119,11 @@ export const isAgentCodeChallenge = (value: string) =>
 export const isAgentCodeVerifier = (value: string) =>
 	value.length >= 43 && value.length <= 128 && /^[A-Za-z0-9._~-]+$/.test(value);
 
+export const mcpDefaultScopes = [
+	"caps:read",
+	"meetings:read",
+] as const satisfies readonly Agent.AgentScope[];
+
 export const parseAgentScopes = (value: string) => {
 	const requested = value.split(" ").filter(Boolean);
 	if (
@@ -132,6 +138,66 @@ export const parseAgentScopes = (value: string) => {
 	}
 	return agentScopes.filter((scope) => requested.includes(scope));
 };
+
+export const parseOauthScopes = (value: string | undefined) => {
+	if (!value || value.trim().length === 0) {
+		return agentScopes.filter((scope) =>
+			(mcpDefaultScopes as readonly Agent.AgentScope[]).includes(scope),
+		);
+	}
+	const requested = value.split(" ").filter(Boolean);
+	if (
+		requested.length === 0 ||
+		new Set(requested).size !== requested.length ||
+		requested.some((scope) => !agentScopes.includes(scope as Agent.AgentScope))
+	) {
+		return null;
+	}
+	return agentScopes.filter((scope) => requested.includes(scope));
+};
+
+export const isOauthRedirectUri = (value: string) => {
+	try {
+		const url = new URL(value);
+		if (
+			url.username.length > 0 ||
+			url.password.length > 0 ||
+			url.hash.length > 0
+		) {
+			return false;
+		}
+		if (url.protocol === "https:") return true;
+		if (url.protocol === "http:") {
+			return (
+				url.hostname === "127.0.0.1" ||
+				url.hostname === "localhost" ||
+				url.hostname === "[::1]"
+			);
+		}
+		return /^[a-z][a-z0-9+.-]*:$/i.test(url.protocol);
+	} catch {
+		return false;
+	}
+};
+
+export const buildOauthCallbackUrl = (
+	redirectUri: string,
+	params: { state?: string; code?: string; error?: string },
+) => {
+	if (!isOauthRedirectUri(redirectUri)) return null;
+	if ((params.code ? 1 : 0) + (params.error ? 1 : 0) !== 1) return null;
+	const url = new URL(redirectUri);
+	if (params.state) url.searchParams.set("state", params.state);
+	if (params.code) url.searchParams.set("code", params.code);
+	if (params.error) url.searchParams.set("error", params.error);
+	return url.toString();
+};
+
+export const createOauthRefreshToken = () =>
+	`cap_rt_${randomBytes(32).toString("base64url")}`;
+
+export const createOauthClientSecret = () =>
+	`cap_cs_${randomBytes(32).toString("base64url")}`;
 
 export const parseAgentAuthorizationRequest = (
 	params: AuthorizationParams,

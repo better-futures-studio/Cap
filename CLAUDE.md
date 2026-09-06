@@ -131,6 +131,10 @@ Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
   become timeline comments after the call. General questions use OpenAI web
   search (Responses API built-in tool). Live view:
   `/dashboard/meetings/<id>`. Zoom, Meet, Teams only (no chat on Webex/Slack).
+- Remote MCP for AI agents: `POST /api/mcp` (OAuth 2.1 + PKCE, dynamic
+  client registration). Metadata at `/.well-known/oauth-authorization-server`
+  and `/.well-known/oauth-protected-resource/api/mcp`. Default scopes
+  `meetings:read caps:read`. Users revoke connections in Settings → AI agents.
 - Recall MCP server (`recall-ai`, https://us-west-2.recall.ai/mcp) is
   registered at user scope; use it for bot logs and webhook deliveries.
 - Add `recall-reconcile` to the `cron` service loop in Railway when changing

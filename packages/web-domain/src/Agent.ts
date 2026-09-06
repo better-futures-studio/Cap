@@ -21,6 +21,7 @@ import { VideoId } from "./Video.ts";
 
 export const AgentScope = Schema.Literal(
 	"caps:read",
+	"meetings:read",
 	"caps:comment",
 	"caps:write",
 	"profile:read",

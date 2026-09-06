@@ -70,6 +70,7 @@ const Top = () => {
 		"/dashboard/settings/organization/members": "Organization Settings",
 		"/dashboard/settings/account": "Account Settings",
 		"/dashboard/settings/notifications": "Notification Settings",
+		"/dashboard/settings/agents": "AI agents",
 		"/dashboard/spaces": "Spaces",
 		"/dashboard/spaces/browse": "Browse Spaces",
 		"/dashboard/analytics": "Analytics",

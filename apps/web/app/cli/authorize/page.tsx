@@ -18,6 +18,7 @@ type AuthorizeSearchParams = Record<string, string | string[] | undefined>;
 
 const scopeDescriptions: Record<string, string> = {
 	"caps:read": "Read Caps, transcripts, and activity",
+	"meetings:read": "Read meetings, transcripts, summaries, and action items",
 	"caps:comment": "Post comments and reactions",
 	"caps:write": "Change Cap titles, visibility, and settings",
 	"profile:read": "Read your Cap profile",

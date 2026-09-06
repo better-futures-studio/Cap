@@ -24,6 +24,7 @@ import {
 	int,
 	json,
 	longtext,
+	mediumtext,
 	mysqlTable,
 	primaryKey,
 	text,
@@ -931,6 +932,7 @@ export const agentApiKeys = mysqlTable(
 		tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
 		name: varchar("name", { length: 100 }).notNull().default("Cap CLI"),
 		scopes: json("scopes").notNull().$type<Agent.AgentScope[]>(),
+		oauthClientId: nanoIdNullable("oauthClientId"),
 		expiresAt: timestamp("expiresAt").notNull(),
 		revokedAt: timestamp("revokedAt"),
 		createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -940,6 +942,7 @@ export const agentApiKeys = mysqlTable(
 		uniqueIndex("token_hash_idx").on(table.tokenHash),
 		index("user_created_at_idx").on(table.userId, table.createdAt),
 		index("expires_at_idx").on(table.expiresAt),
+		index("oauth_client_id_idx").on(table.oauthClientId),
 	],
 );
 
@@ -982,6 +985,7 @@ export const agentApiAuthorizationCodes = mysqlTable(
 		codeChallenge: varchar("codeChallenge", { length: 64 }).notNull(),
 		redirectUri: varchar("redirectUri", { length: 512 }).notNull(),
 		scopes: json("scopes").notNull().$type<Agent.AgentScope[]>(),
+		clientId: varchar("clientId", { length: 64 }),
 		expiresAt: timestamp("expiresAt").notNull(),
 		consumedAt: timestamp("consumedAt"),
 		createdAt: timestamp("createdAt").notNull().defaultNow(),
@@ -990,6 +994,7 @@ export const agentApiAuthorizationCodes = mysqlTable(
 		uniqueIndex("code_hash_idx").on(table.codeHash),
 		index("expires_at_idx").on(table.expiresAt),
 		index("user_created_at_idx").on(table.userId, table.createdAt),
+		index("client_id_idx").on(table.clientId),
 	],
 );
 
@@ -1969,5 +1974,90 @@ export const slackHuddleTeams = mysqlTable(
 		uniqueIndex("slack_huddle_teams_recall_slack_team_id_idx").on(
 			table.recallSlackTeamId,
 		),
+	],
+);
+
+export const oauthClients = mysqlTable(
+	"oauth_clients",
+	{
+		id: nanoId("id").notNull().primaryKey(),
+		clientSecretHash: varchar("clientSecretHash", { length: 64 }),
+		name: varchar("name", { length: 255 }).notNull(),
+		clientUri: varchar("clientUri", { length: 2048 }),
+		logoUri: varchar("logoUri", { length: 2048 }),
+		redirectUris: json("redirectUris").notNull().$type<string[]>(),
+		tokenEndpointAuthMethod: varchar("tokenEndpointAuthMethod", {
+			length: 32,
+			enum: ["none", "client_secret_post"],
+		})
+			.notNull()
+			.default("none"),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+		lastUsedAt: timestamp("lastUsedAt"),
+	},
+	(table) => [index("oauth_clients_created_at_idx").on(table.createdAt)],
+);
+
+export const oauthAuthorizationRequests = mysqlTable(
+	"oauth_authorization_requests",
+	{
+		id: nanoId("id").notNull().primaryKey(),
+		clientId: nanoId("clientId").notNull(),
+		userId: nanoIdNullable("userId").$type<User.UserId>(),
+		redirectUri: varchar("redirectUri", { length: 2048 }).notNull(),
+		scope: varchar("scope", { length: 1024 }),
+		state: varchar("state", { length: 256 }),
+		codeChallenge: varchar("codeChallenge", { length: 128 }).notNull(),
+		resource: varchar("resource", { length: 2048 }),
+		status: varchar("status", {
+			length: 16,
+			enum: ["pending", "approved", "denied"],
+		})
+			.notNull()
+			.default("pending"),
+		expiresAt: timestamp("expiresAt").notNull(),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+	},
+	(table) => [
+		index("oauth_authz_requests_client_id_idx").on(table.clientId),
+		index("oauth_authz_requests_expires_at_idx").on(table.expiresAt),
+	],
+);
+
+export const oauthRefreshTokens = mysqlTable(
+	"oauth_refresh_tokens",
+	{
+		id: nanoId("id").notNull().primaryKey(),
+		tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
+		accessTokenId: nanoId("accessTokenId").notNull(),
+		clientId: nanoId("clientId").notNull(),
+		userId: nanoId("userId").notNull().$type<User.UserId>(),
+		scopes: json("scopes").notNull().$type<Agent.AgentScope[]>(),
+		expiresAt: timestamp("expiresAt").notNull(),
+		revokedAt: timestamp("revokedAt"),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+	},
+	(table) => [
+		uniqueIndex("oauth_refresh_token_hash_idx").on(table.tokenHash),
+		index("oauth_refresh_access_token_id_idx").on(table.accessTokenId),
+		index("oauth_refresh_expires_at_idx").on(table.expiresAt),
+	],
+);
+
+export const videoSearch = mysqlTable(
+	"video_search",
+	{
+		videoId: nanoId("videoId").notNull().primaryKey().$type<Video.VideoId>(),
+		orgId: nanoId("orgId").notNull().$type<Organisation.OrganisationId>(),
+		ownerId: nanoId("ownerId").notNull().$type<User.UserId>(),
+		title: varchar("title", { length: 255 }).notNull(),
+		summary: text("summary"),
+		transcriptText: mediumtext("transcriptText"),
+		participants: text("participants"),
+		updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+	},
+	(table) => [
+		index("video_search_org_id_idx").on(table.orgId),
+		index("video_search_owner_id_idx").on(table.ownerId),
 	],
 );

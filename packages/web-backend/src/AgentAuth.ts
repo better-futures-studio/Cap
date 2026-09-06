@@ -56,6 +56,7 @@ export const shouldRefreshAgentLastUsedAt = (
 
 const agentScopes = new Set<Agent.AgentScope>([
 	"caps:read",
+	"meetings:read",
 	"caps:comment",
 	"caps:write",
 	"profile:read",
@@ -86,7 +87,9 @@ const parseScopes = (value: unknown) => {
 		(scope): scope is Agent.AgentScope =>
 			typeof scope === "string" && agentScopes.has(scope as Agent.AgentScope),
 	);
-	return scopes.length === value.length && scopes.includes("caps:read")
+	return scopes.length === value.length &&
+		scopes.length > 0 &&
+		(scopes.includes("caps:read") || scopes.includes("meetings:read"))
 		? new Set(scopes)
 		: null;
 };

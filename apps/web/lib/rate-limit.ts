@@ -99,4 +99,8 @@ export const RATE_LIMIT_IDS = {
 	DOCS_ASK: "rl_docs_ask",
 	/** Share-page Ask questions about a recording (AI cost). Suggested: 30 / 10m per user or IP. */
 	ASK_VIDEO: "rl_ask_video",
+	/** Unauthed OAuth dynamic client registration. Suggested: 20 / 10m per IP. */
+	OAUTH_REGISTER: "rl_oauth_register",
+	/** OAuth token exchange and refresh. Suggested: 30 / 10m per IP. */
+	OAUTH_TOKEN: "rl_oauth_token",
 } as const;

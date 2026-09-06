@@ -113,6 +113,14 @@ Transcription language is a separate setting (`aiGenerationLanguage`,
 typically Auto-detect for mixed English and Arabic). Recap emails send the
 stored summary without translating it.
 
+### Connect an AI agent
+
+Point Claude, ChatGPT, Cursor, Codex, or any MCP client at
+`https://<your-domain>/api/mcp`. OAuth is automatic: the client registers
+itself (RFC 7591), the user approves on `/oauth/authorize`, and the token
+is issued with the default scopes `meetings:read` and `caps:read`. Revoke
+a connection any time in **Settings → AI agents**.
+
 ## Architecture
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full picture:

@@ -79,6 +79,8 @@ export async function proxy(request: NextRequest) {
 				path.startsWith("/verify-otp") ||
 				path.startsWith("/embed/") ||
 				path.startsWith("/.well-known/workflow/") ||
+				path.startsWith("/.well-known/oauth-") ||
+				path.startsWith("/oauth") ||
 				// static assets in /public (e.g. /google.svg)
 				/\.[a-z0-9]+$/i.test(path)
 			) &&

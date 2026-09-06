@@ -38,6 +38,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { listAgentConnections } from "@/actions/oauth";
 import { NewOrganization } from "@/components/forms/NewOrganization";
 import { SignedImageUrl } from "@/components/SignedImageUrl";
 import { Tooltip } from "@/components/Tooltip";
@@ -56,6 +57,7 @@ import {
 	CogIcon,
 	ImportIcon,
 	RecordIcon,
+	SparklesIcon,
 } from "../AnimatedIcons";
 import type { CogIconHandle } from "../AnimatedIcons/Cog";
 import { MemberAvatars } from "./MemberAvatars";
@@ -71,6 +73,31 @@ const AdminNavItems = ({ toggleMobileNav }: Props) => {
 	const pathname = usePathname();
 	const [open, setOpen] = useState(false);
 	const { user, sidebarCollapsed, userCapsCount } = useDashboardContext();
+
+	const [hasAgents, setHasAgents] = useState(true);
+	const [agentsLoading, setAgentsLoading] = useState(true);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		listAgentConnections()
+			.then((connections: unknown[]) => {
+				if (cancelled) return;
+				setHasAgents(connections.length > 0);
+			})
+			.catch(() => {
+				if (cancelled) return;
+				setHasAgents(true);
+			})
+			.finally(() => {
+				if (cancelled) return;
+				setAgentsLoading(false);
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const DEVELOPER_DASHBOARD_ALLOWED_EMAILS = ["richie@cap.so"];
 
@@ -112,6 +139,15 @@ const AdminNavItems = ({ toggleMobileNav }: Props) => {
 			matchChildren: true,
 			icon: <CalendarIcon />,
 			subNav: [],
+		},
+		{
+			name: "AI agents",
+			href: `/dashboard/settings/agents`,
+			matchChildren: true,
+			icon: <SparklesIcon />,
+			subNav: [],
+			glow: !agentsLoading && !hasAgents,
+			glowTitle: "Connect an AI agent to your meetings",
 		},
 		{
 			name: "Organization Settings",
@@ -440,6 +476,8 @@ const AdminNavItems = ({ toggleMobileNav }: Props) => {
 											isPathActive={isPathActive}
 											extraText={item.extraText}
 											matchChildren={item.matchChildren ?? false}
+											glow={item.glow ?? false}
+											glowTitle={item.glowTitle}
 										/>
 									</div>
 								))}
@@ -516,6 +554,8 @@ const NavItem = ({
 	isPathActive,
 	matchChildren,
 	extraText,
+	glow = false,
+	glowTitle,
 }: {
 	name: string;
 	href: string;
@@ -529,12 +569,19 @@ const NavItem = ({
 	isPathActive: (path: string, matchChildren: boolean) => boolean;
 	extraText: number | null | undefined;
 	matchChildren: boolean;
+	glow?: boolean;
+	glowTitle?: string;
 }) => {
 	const iconRef = useRef<CogIconHandle>(null);
 	return (
-		<Tooltip disable={!sidebarCollapsed} content={name} position="right">
+		<Tooltip
+			disable={!sidebarCollapsed && !glow}
+			content={glow ? (glowTitle ?? name) : name}
+			position="right"
+		>
 			<Link
 				href={href}
+				title={glow ? glowTitle : undefined}
 				onClick={() => toggleMobileNav?.()}
 				onMouseEnter={() => {
 					iconRef.current?.startAnimation();
@@ -553,15 +600,21 @@ const NavItem = ({
 						? "bg-transparent pointer-events-none"
 						: "hover:bg-gray-2",
 					"flex overflow-hidden justify-start items-center tracking-tight rounded-xl outline-none",
+					glow && "sidebar-glow",
 				)}
 			>
-				{cloneElement(icon, {
-					ref: iconRef,
-					className: clsx(
-						sidebarCollapsed ? "text-gray-12 mx-auto" : "text-gray-10",
-					),
-					size: sidebarCollapsed ? 18 : 16,
-				})}
+				<span className="relative flex-shrink-0">
+					{cloneElement(icon, {
+						ref: iconRef,
+						className: clsx(
+							sidebarCollapsed ? "text-gray-12 mx-auto" : "text-gray-10",
+						),
+						size: sidebarCollapsed ? 18 : 16,
+					})}
+					{glow && (
+						<span className="absolute -top-0.5 -right-0.5 rounded-full size-1.5 bg-blue-9" />
+					)}
+				</span>
 				<p
 					className={clsx(
 						"text-sm text-gray-12 truncate",

@@ -52,6 +52,7 @@
 		"@hono/zod-validator": "^0.4.3",
 		"@hookform/resolvers": "^3.3.2",
 		"@kubiks/otel-drizzle": "^2.1.0",
+		"@modelcontextprotocol/sdk": "^1.30.0",
 		"@mux/mux-node": "^8.5.1",
 		"@number-flow/react": "^0.5.9",
 		"@octokit/rest": "^20.0.2",

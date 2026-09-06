@@ -13,6 +13,7 @@ import { useDetectPlatform } from "hooks/useDetectPlatform";
 import {
 	BarChart3,
 	Bell,
+	Bot,
 	Building2,
 	CreditCard,
 	FileVideo,
@@ -218,6 +219,14 @@ export function DashboardSearch({
 				href: "/dashboard/settings/notifications",
 				value: "notification settings comments views replies reactions",
 				icon: Bell,
+			},
+			{
+				id: "ai-agents-settings",
+				title: "AI agents",
+				subtitle: "Connect Claude, ChatGPT, Cursor, and Codex over MCP",
+				href: "/dashboard/settings/agents",
+				value: "ai agents mcp claude chatgpt cursor codex connect",
+				icon: Bot,
 			},
 			...(canViewSettings
 				? [
