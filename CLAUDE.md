@@ -69,8 +69,9 @@ Browser checks as the logged-in owner: `agent-browser` with the real Chrome
   `.recording/outputs/`, not at `screenshot/screen-capture.jpg`.
 - Serverless sleeping is on for Cap Web and the media server; the first
   request after idle wakes the container.
-- Cap Web memory is 1 GB on Railway; recording imports stream through the
-  container's disk, never memory.
+- Cap Web runs with 4 GB / 4 vCPU and the media server with 8 GB / 8 vCPU
+  (Railway limit overrides). Recording imports stream through the container's
+  disk, never memory, so recording length is not a memory concern.
 - The workflow Local World keeps the queue in memory; a redeploy kills
   in-flight runs (including long recording imports). Set
   `WORKFLOW_POSTGRES_URL` so the Postgres World persists them.
