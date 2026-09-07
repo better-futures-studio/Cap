@@ -30,6 +30,8 @@ const nextConfig = {
 			"./node_modules/@workflow/world-postgres/**/*",
 			"./node_modules/@workflow/world-postgres/bin/**/*",
 			"./node_modules/@workflow/world-postgres/src/drizzle/migrations/**/*",
+			"./node_modules/graphile-worker/**/*",
+			"./node_modules/pg/**/*",
 		],
 		"/.well-known/workflow/v1/step": ffmpegTracingIncludes,
 		"/api/tools/loom-download": ffmpegTracingIncludes,

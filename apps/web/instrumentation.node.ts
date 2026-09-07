@@ -25,8 +25,19 @@ export async function register() {
 	console.log(`Workflow world: ${workflowWorld}`);
 
 	if (isPostgresWorkflowWorld(process.env)) {
-		await bootstrapPostgresWorkflowWorld();
-		await startSelectedWorkflowWorld();
+		try {
+			await bootstrapPostgresWorkflowWorld();
+			await startSelectedWorkflowWorld();
+			console.log("Workflow world ready: postgres");
+		} catch (error) {
+			// Never let the workflow runtime keep the app from serving; fall back
+			// to the local world so the site stays up and the failure is visible.
+			console.error(
+				"Postgres workflow world failed to start; using local",
+				error,
+			);
+			delete process.env.WORKFLOW_TARGET_WORLD;
+		}
 	}
 
 	console.log("Waiting 5 seconds to run migrations");
