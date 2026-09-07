@@ -1,0 +1,15 @@
+# Workflow worker: polls the Postgres world's queue and executes steps by
+# calling Cap Web over the private network. No Next.js build needed.
+FROM node:22-alpine
+WORKDIR /app
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+RUN mkdir -p /app/workflow-world && cd /app/workflow-world \
+	&& npm init -y > /dev/null \
+	&& npm install --no-package-lock --omit=dev --ignore-scripts \
+		@workflow/world-postgres@4.3.0 graphile-worker@0.16.6 pg@8.20.0 \
+	&& chown -R nextjs:nodejs /app/workflow-world
+ENV NODE_PATH=/app/workflow-world/node_modules
+ENV NODE_ENV=production
+COPY --chown=nextjs:nodejs apps/web/workflow-worker.mjs ./apps/web/workflow-worker.mjs
+USER nextjs
+CMD ["node", "apps/web/workflow-worker.mjs"]
