@@ -30,6 +30,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 COPY --from=builder --chown=nextjs:nodejs /app/packages/database/migrations ./apps/web/migrations
+# The workflow runtime loads its world by package name at runtime, which
+# Next's file tracing cannot follow. Install the Postgres world with its own
+# dependency tree beside the app and expose it through NODE_PATH.
+RUN mkdir -p /app/workflow-world && cd /app/workflow-world \
+	&& npm init -y > /dev/null \
+	&& npm install --no-package-lock --omit=dev --ignore-scripts \
+		@workflow/world-postgres@4.3.0 graphile-worker@0.16.6 pg@8.20.0 \
+	&& chown -R nextjs:nodejs /app/workflow-world
+ENV NODE_PATH=/app/workflow-world/node_modules
 
 
 USER nextjs
