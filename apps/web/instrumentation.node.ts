@@ -10,9 +10,24 @@ import {
 } from "@aws-sdk/client-s3";
 import { migrateDb } from "@cap/database/migrate";
 import { buildEnv, serverEnv } from "@cap/env";
+import {
+	applyWorkflowWorldSelection,
+	bootstrapPostgresWorkflowWorld,
+	isPostgresWorkflowWorld,
+	startSelectedWorkflowWorld,
+} from "@/lib/workflow-world";
 
 export async function register() {
 	if (process.env.NEXT_PUBLIC_IS_CAP) return;
+
+	applyWorkflowWorldSelection(process.env);
+	const workflowWorld = process.env.WORKFLOW_TARGET_WORLD ?? "local";
+	console.log(`Workflow world: ${workflowWorld}`);
+
+	if (isPostgresWorkflowWorld(process.env)) {
+		await bootstrapPostgresWorkflowWorld();
+		await startSelectedWorkflowWorld();
+	}
 
 	console.log("Waiting 5 seconds to run migrations");
 	// Function to trigger migrations with retry logic

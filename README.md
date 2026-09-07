@@ -168,6 +168,12 @@ at the application level.
 - **Migrations at boot**: database migrations run automatically at app
   startup (`apps/web/instrumentation.node.ts`), retrying with backoff —
   there's no separate migration step to run in the deploy.
+- **Durable workflows**: recording imports and other `"use workflow"`
+  jobs need a durable runtime in production. Set `WORKFLOW_POSTGRES_URL`
+  so Cap uses the Postgres World (schema bootstrap and the
+  graphile-worker subscriber start in `instrumentation.node.ts` at boot).
+  When unset, Cap keeps the development Local World — an in-memory queue
+  whose in-flight runs disappear on restart or redeploy.
 - **Cron service loop**: run something that hits these endpoints on a
   schedule (every few minutes), authenticated with a bearer `CRON_SECRET`:
   - `/api/cron/recover-failed-video-processing`
@@ -219,6 +225,12 @@ database, and general Cap AI provider variables not listed here.
 | `RECALL_CALENDAR_GOOGLE_CLIENT_ID` | required for calendar sync | Google OAuth web client id, dedicated to the Recall Calendar V2 flow. |
 | `RECALL_CALENDAR_GOOGLE_CLIENT_SECRET` | required for calendar sync | Matching client secret. |
 | `RECALL_CALENDAR_SETUP_CALLBACK_URI` | optional | Recall regional callback URL the hosted calendar setup forwarder redirects to. Derived from `RECALL_REGION` when unset. |
+
+**Workflows**
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `WORKFLOW_POSTGRES_URL` | optional (recommended for production) | Postgres URL for the durable workflow runtime. When unset, the development Local World is used. |
 
 **Monitoring (optional)**
 

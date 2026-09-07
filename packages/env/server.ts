@@ -273,6 +273,14 @@ function createServerEnv() {
 			OPENPANEL_CLIENT_SECRET: z.string().optional(),
 			DUB_API_KEY: z.string().optional(),
 
+			/// Workflows
+			WORKFLOW_POSTGRES_URL: z
+				.string()
+				.optional()
+				.describe(
+					"Postgres URL for the durable workflow runtime; when unset the development Local World is used",
+				),
+
 			/// Media Server
 			MEDIA_SERVER_URL: z
 				.string()

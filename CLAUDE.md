@@ -11,7 +11,8 @@ https://cap.boca.pro. Upstream is `CapSoftware/Cap` (remote `upstream`).
 
 - Railway project `cap` (id `1e969601-2fb9-4ade-b85b-34c48406ea3f`), env `production`.
   Services: `Cap Web` (Next.js, port 3000), `capsoftware/cap-media-server:latest`
-  (FFmpeg mux, port 3456), `MySQL`, `cron` (recovery endpoints every 5 min),
+  (FFmpeg mux, port 3456), `MySQL`, `Postgres` (workflow runtime),
+  `cron` (recovery endpoints every 5 min),
   `db-backup` (nightly 03:00 UTC mysqldump to R2).
 - Video storage: Cloudflare R2 bucket `cap-boca` on the Boca Pro account
   (id `e4415d983441474fb88e8325ca67506a`). Signed URLs; bucket stays private.
@@ -70,6 +71,9 @@ Browser checks as the logged-in owner: `agent-browser` with the real Chrome
   request after idle wakes the container.
 - Cap Web memory is 1 GB on Railway; recording imports stream through the
   container's disk, never memory.
+- The workflow Local World keeps the queue in memory; a redeploy kills
+  in-flight runs (including long recording imports). Set
+  `WORKFLOW_POSTGRES_URL` so the Postgres World persists them.
 - Local typecheck: `apps/web` uses project references. On TS6305 run
   `pnpm exec tsc -b --force packages/database packages/env packages/web-backend packages/web-domain packages/utils`
   from the repo root. Never run a package's `build` script (tsdown) to fix
