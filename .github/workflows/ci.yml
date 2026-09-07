@@ -205,7 +205,9 @@ jobs:
   clippy:
     name: Clippy
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    # GitHub-hosted macOS/Windows runners bill at 10x/2x; the desktop app is
+    # untouched on this fork, so these only run when dispatched by hand.
+    if: github.event_name == 'workflow_dispatch' && needs.changes.outputs.rust == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -278,7 +280,7 @@ jobs:
   build-desktop:
     name: Build Desktop
     needs: changes
-    if: needs.changes.outputs.desktop == 'true'
+    if: github.event_name == 'workflow_dispatch' && needs.changes.outputs.desktop == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -405,7 +407,7 @@ jobs:
   rust-cache:
     name: Rust cache
     needs: changes
-    if: needs.changes.outputs.branch == 'main' && needs.changes.outputs.rust == 'true'
+    if: github.event_name == 'workflow_dispatch' && needs.changes.outputs.rust == 'true'
     strategy:
       fail-fast: false
       matrix:
