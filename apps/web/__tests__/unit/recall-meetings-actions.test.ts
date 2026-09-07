@@ -42,6 +42,7 @@ vi.mock("@cap/database/schema", () => {
 			"recallBotId",
 			"calendarEventId",
 			"statusSubCode",
+			"attendeeEmails",
 			"chatSyncedAt",
 			"createdAt",
 		]),
@@ -263,5 +264,47 @@ describe("listMeetingBots", () => {
 		expect(past.find((row) => row.id === "bot_1")?.videoReady).toBe(true);
 		expect(past.find((row) => row.id === "bot_2")?.videoReady).toBe(false);
 		expect(past[0]).not.toHaveProperty("pendingUploadVideoId");
+	});
+
+	it("collapses upcoming rows that share meetingUrl and joinAt", async () => {
+		const joinAt = new Date("2026-09-10T15:00:00.000Z");
+		const meetingUrl = "https://meet.google.com/abc-defg-hij";
+		const upcomingRows = [
+			{
+				id: "other_bot",
+				ownerId: "user_other",
+				title: "Standup",
+				meetingUrl,
+				joinAt,
+				source: "calendar",
+				status: "scheduled",
+				errorMessage: null,
+				videoId: null,
+				createdAt: joinAt,
+				pendingUploadVideoId: null,
+			},
+			{
+				id: "owned_bot",
+				ownerId: userId,
+				title: "Standup",
+				meetingUrl,
+				joinAt,
+				source: "calendar",
+				status: "scheduled",
+				errorMessage: null,
+				videoId: null,
+				createdAt: joinAt,
+				pendingUploadVideoId: null,
+			},
+		];
+		const select = vi
+			.fn()
+			.mockReturnValueOnce(buildQuery(upcomingRows))
+			.mockReturnValueOnce(buildQuery([]));
+		mocks.db.mockReturnValue({ select });
+
+		const { upcoming } = await listMeetingBots({ orgId });
+		expect(upcoming).toHaveLength(1);
+		expect(upcoming[0]?.id).toBe("owned_bot");
 	});
 });

@@ -15,15 +15,15 @@ import { serverEnv } from "@cap/env";
 import type { Organisation, User } from "@cap/web-domain";
 import { and, eq, isNull } from "drizzle-orm";
 import { parseMeetingActionItems } from "./action-items";
-import type {
-	RecallCalendarEvent,
-	RecallClient,
-	RecallParticipantEvent,
-} from "./client";
+import type { RecallClient, RecallParticipantEvent } from "./client";
 import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 import { formatTalkTimeLine, parseMeetingSpeakerStats } from "./speaker-stats";
-import { shareMeetingRecordingWithAttendees } from "./visibility";
+import {
+	hydrateCalendarAttendees,
+	shareMeetingRecordingWithAttendees,
+	storedStringArray,
+} from "./visibility";
 
 export type { MeetingRecapMode };
 
@@ -187,33 +187,6 @@ export async function filterEmailsToOrganizationMembers({
 	return kept;
 }
 
-function calendarAttendeeEmails(
-	event: RecallCalendarEvent,
-	botName: string,
-): string[] {
-	const raw = event.raw;
-	if (!raw || typeof raw !== "object" || !("attendees" in raw)) return [];
-	const attendees = (raw as { attendees?: unknown }).attendees;
-	if (!Array.isArray(attendees)) return [];
-	const bot = botName.trim().toLowerCase();
-	return attendees.flatMap((attendee) => {
-		if (!attendee || typeof attendee !== "object") return [];
-		const row = attendee as {
-			email?: string;
-			resource?: boolean;
-			displayName?: string;
-		};
-		if (isResourceAttendee(row)) return [];
-		const email = row.email?.trim() ?? "";
-		if (!email) return [];
-		const display = (row.displayName ?? "").trim().toLowerCase();
-		if (bot && (display === bot || email.toLowerCase().includes(bot))) {
-			return [];
-		}
-		return [email];
-	});
-}
-
 function participantEmails(
 	events: RecallParticipantEvent[],
 	botName: string,
@@ -262,13 +235,15 @@ async function loadAttendeeEmails({
 	client: RecallClient;
 	botName: string;
 }): Promise<string[]> {
+	const stored = storedStringArray(row.attendeeEmails);
+	if (stored) return stored;
 	if (row.calendarEventId) {
-		try {
-			const event = await client.getCalendarEvent(row.calendarEventId);
-			return calendarAttendeeEmails(event, botName);
-		} catch {
-			return [];
-		}
+		const hydrated = await hydrateCalendarAttendees({
+			meetingBotId: row.id,
+			calendarEventId: row.calendarEventId,
+			client,
+		});
+		if (hydrated) return hydrated.attendeeEmails;
 	}
 	if (!row.recallRecordingId) return [];
 	try {

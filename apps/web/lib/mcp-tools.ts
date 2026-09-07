@@ -14,13 +14,16 @@ import type {
 import { serverEnv } from "@cap/env";
 import type { Video } from "@cap/web-domain";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import { DEFAULT_BOT_NAME, getRecallConfig } from "@/lib/recall/config";
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
-import { meetingPlatformLabel } from "@/lib/recall/meetings-view";
+import {
+	dedupeUpcomingMeetings,
+	meetingPlatformLabel,
+} from "@/lib/recall/meetings-view";
 import { parseMeetingActionItems } from "@/lib/recall/parse-action-items";
 import {
-	calendarInviteEmails,
+	hydrateCalendarAttendees,
 	meetingBotIdsAccessibleToUser,
+	storedStringArray,
 } from "@/lib/recall/visibility";
 import { listAccessibleVideoIds, loadViewableVideo } from "./mcp-access";
 import { askRecordingForUser, loadTranscriptVtt } from "./mcp-ask";
@@ -93,7 +96,12 @@ function parseIsoDate(value?: string) {
 async function attendeesForVideo(
 	videoId: Video.VideoId,
 	metadata: VideoMetadata,
-	calendarEventId: string | null,
+	bot: {
+		id: string;
+		calendarEventId: string | null;
+		attendeeEmails: string[] | null;
+		attendeeNames: string[] | null;
+	} | null,
 ) {
 	const names = new Set(attendeesFromMetadata(metadata));
 	const shares = await db()
@@ -106,17 +114,22 @@ async function attendeesForVideo(
 		if (row.name?.trim()) names.add(row.name.trim());
 		if (row.email?.trim()) names.add(row.email.trim());
 	}
-	if (calendarEventId) {
-		try {
-			const event =
-				await getDefaultRecallClient().getCalendarEvent(calendarEventId);
-			const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
-			for (const email of calendarInviteEmails(event, botName)) {
-				names.add(email);
-			}
-		} catch {
-			return [...names];
-		}
+	let emails = storedStringArray(bot?.attendeeEmails);
+	let storedNames = storedStringArray(bot?.attendeeNames);
+	if (emails == null && bot?.calendarEventId) {
+		const hydrated = await hydrateCalendarAttendees({
+			meetingBotId: bot.id,
+			calendarEventId: bot.calendarEventId,
+			client: getDefaultRecallClient(),
+		});
+		emails = hydrated?.attendeeEmails ?? null;
+		storedNames = hydrated?.attendeeNames ?? storedNames;
+	}
+	for (const name of storedNames ?? []) {
+		if (name.trim()) names.add(name.trim());
+	}
+	for (const email of emails ?? []) {
+		if (email.trim()) names.add(email.trim());
 	}
 	return [...names];
 }
@@ -135,6 +148,8 @@ async function loadSearchRows(accessibleIds: string[]) {
 			joinAt: meetingBots.joinAt,
 			source: meetingBots.source,
 			calendarEventId: meetingBots.calendarEventId,
+			attendeeEmails: meetingBots.attendeeEmails,
+			attendeeNames: meetingBots.attendeeNames,
 		})
 		.from(videos)
 		.leftJoin(meetingBots, eq(meetingBots.videoId, videos.id))
@@ -244,6 +259,8 @@ export async function searchMeetings(
 			...row,
 			attendees: [
 				...attendeesFromMetadata(metadataOf(row.metadata)),
+				...(storedStringArray(row.attendeeNames) ?? []),
+				...(storedStringArray(row.attendeeEmails) ?? []),
 				...(await shareEmails(row.id)),
 			],
 		});
@@ -291,11 +308,7 @@ export async function getMeeting(principal: McpPrincipal, id: string) {
 		.from(comments)
 		.where(eq(comments.videoId, video.id));
 	const notetakerComments = await loadNotetakerComments(video.id);
-	const attendees = await attendeesForVideo(
-		video.id,
-		metadata,
-		bot?.calendarEventId ?? null,
-	);
+	const attendees = await attendeesForVideo(video.id, metadata, bot ?? null);
 
 	return {
 		id: video.id,
@@ -409,6 +422,7 @@ export async function listUpcomingMeetings(principal: McpPrincipal, days = 7) {
 			videoId: meetingBots.videoId,
 			calendarEventId: meetingBots.calendarEventId,
 			statusSubCode: meetingBots.statusSubCode,
+			attendeeEmails: meetingBots.attendeeEmails,
 			title: meetingBots.title,
 			joinAt: meetingBots.joinAt,
 			meetingUrl: meetingBots.meetingUrl,
@@ -423,16 +437,17 @@ export async function listUpcomingMeetings(principal: McpPrincipal, days = 7) {
 		bots,
 		userId: principal.id,
 	});
-	return bots
-		.filter((bot) => allowed.has(bot.id))
-		.map((bot) => ({
-			id: bot.id,
-			title: bot.title,
-			joinAt: bot.joinAt.toISOString(),
-			platform: meetingPlatformLabel(bot.meetingUrl, bot.source),
-			meetingUrl: bot.meetingUrl,
-			recordingOn: bot.status !== "opted_out" && bot.status !== "cancelled",
-		}));
+	return dedupeUpcomingMeetings(
+		bots.filter((bot) => allowed.has(bot.id)),
+		principal.id,
+	).map((bot) => ({
+		id: bot.id,
+		title: bot.title,
+		joinAt: bot.joinAt.toISOString(),
+		platform: meetingPlatformLabel(bot.meetingUrl, bot.source),
+		meetingUrl: bot.meetingUrl,
+		recordingOn: bot.status !== "opted_out" && bot.status !== "cancelled",
+	}));
 }
 
 export async function listActionItems(

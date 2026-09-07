@@ -131,6 +131,7 @@ export async function listAccessibleVideoIds(
 			videoId: meetingBots.videoId,
 			calendarEventId: meetingBots.calendarEventId,
 			statusSubCode: meetingBots.statusSubCode,
+			attendeeEmails: meetingBots.attendeeEmails,
 		})
 		.from(meetingBots)
 		.where(or(eq(meetingBots.ownerId, userId), isNotNull(meetingBots.videoId)))
@@ -164,6 +165,7 @@ export async function listAccessibleMeetingBotIds(principal: McpPrincipal) {
 			videoId: meetingBots.videoId,
 			calendarEventId: meetingBots.calendarEventId,
 			statusSubCode: meetingBots.statusSubCode,
+			attendeeEmails: meetingBots.attendeeEmails,
 		})
 		.from(meetingBots)
 		.limit(500);

@@ -11,9 +11,11 @@ import { Storage } from "@cap/web-backend";
 import type { Video } from "@cap/web-domain";
 import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
-import { DEFAULT_BOT_NAME, getRecallConfig } from "@/lib/recall/config";
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
-import { calendarInviteEmails } from "@/lib/recall/visibility";
+import {
+	hydrateCalendarAttendees,
+	storedStringArray,
+} from "@/lib/recall/visibility";
 import { runPromise } from "@/lib/server";
 import { decodeStorageVideo } from "@/lib/video-storage";
 import { vttToPlainText } from "./mcp-transcript";
@@ -29,8 +31,11 @@ export async function upsertVideoSearchRow(videoId: string): Promise<void> {
 	const metadata = (video.metadata ?? {}) as VideoMetadata;
 	const [bot] = await db()
 		.select({
+			id: meetingBots.id,
 			title: meetingBots.title,
 			calendarEventId: meetingBots.calendarEventId,
+			attendeeEmails: meetingBots.attendeeEmails,
+			attendeeNames: meetingBots.attendeeNames,
 		})
 		.from(meetingBots)
 		.where(eq(meetingBots.videoId, video.id))
@@ -46,15 +51,24 @@ export async function upsertVideoSearchRow(videoId: string): Promise<void> {
 	const speakers = (metadata.meetingSpeakerStats?.speakers ?? []).map(
 		(speaker) => speaker.name,
 	);
-	const calendarEmails = bot?.calendarEventId
-		? await loadCalendarParticipantEmails(bot.calendarEventId)
-		: [];
+	let calendarEmails = storedStringArray(bot?.attendeeEmails) ?? [];
+	let calendarNames = storedStringArray(bot?.attendeeNames) ?? [];
+	if (bot && bot.attendeeEmails == null && bot.calendarEventId) {
+		const hydrated = await hydrateCalendarAttendees({
+			meetingBotId: bot.id,
+			calendarEventId: bot.calendarEventId,
+			client: getDefaultRecallClient(),
+		});
+		calendarEmails = hydrated?.attendeeEmails ?? [];
+		calendarNames = hydrated?.attendeeNames ?? [];
+	}
 	const participants = [
 		...new Set(
 			[
 				...speakers,
 				...sharePeople.flatMap((row) => [row.name, row.email]),
 				...calendarEmails,
+				...calendarNames,
 				bot?.title,
 			].filter((value): value is string => Boolean(value?.trim())),
 		),
@@ -98,15 +112,4 @@ export async function upsertVideoSearchRow(videoId: string): Promise<void> {
 				participants: participants || null,
 			},
 		});
-}
-
-async function loadCalendarParticipantEmails(calendarEventId: string) {
-	try {
-		const event =
-			await getDefaultRecallClient().getCalendarEvent(calendarEventId);
-		const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
-		return calendarInviteEmails(event, botName);
-	} catch {
-		return [];
-	}
 }

@@ -89,6 +89,8 @@ function searchRow(id: string, title: string): SearchRow {
 		joinAt: new Date("2026-09-01T12:00:00.000Z"),
 		source: "google_calendar" as const,
 		calendarEventId: null,
+		attendeeEmails: null,
+		attendeeNames: null,
 		attendees: ["ada@boca.pro"],
 	} as unknown as SearchRow;
 }

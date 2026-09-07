@@ -17,12 +17,13 @@ import {
 	type RecallCalendarEvent,
 	type RecallClient,
 } from "./client";
-import { botImageUrlForOrg, getRecallConfig } from "./config";
+import { botImageUrlForOrg, DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
 import {
 	buildLiveRecordingConfig,
 	withRecordingRetention,
 } from "./realtime-config";
+import { attendeesFromCalendarEvent } from "./visibility";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AUTO_RECORD_SYNC_WINDOW_MS = 28 * DAY_MS;
@@ -81,6 +82,11 @@ export function decideCalendarEventAction(
 	return "none";
 }
 
+function attendeesForEvent(event: RecallCalendarEvent) {
+	const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
+	return attendeesFromCalendarEvent(event, botName);
+}
+
 function extractEventTitle(event: RecallCalendarEvent): string | null {
 	const raw = event.raw;
 	if (raw && typeof raw === "object" && "summary" in raw) {
@@ -119,6 +125,8 @@ async function upsertSchedulingRow({
 	const endAt = new Date(event.end_time);
 	const meetingUrl = event.meeting_url ?? "";
 
+	const attendees = attendeesForEvent(event);
+
 	if (existing) {
 		await db()
 			.update(meetingBots)
@@ -129,25 +137,29 @@ async function upsertSchedulingRow({
 				endAt,
 				status: "scheduling",
 				errorMessage: null,
+				...attendees,
 			})
 			.where(eq(meetingBots.id, existing.id));
 		return existing.id;
 	}
 
 	const id = nanoId();
-	await db().insert(meetingBots).values({
-		id,
-		orgId: calendar.orgId,
-		ownerId: calendar.userId,
-		source: "calendar",
-		meetingUrl,
-		title,
-		joinAt,
-		endAt,
-		calendarId: calendar.id,
-		calendarEventId: event.id,
-		status: "scheduling",
-	});
+	await db()
+		.insert(meetingBots)
+		.values({
+			id,
+			orgId: calendar.orgId,
+			ownerId: calendar.userId,
+			source: "calendar",
+			meetingUrl,
+			title,
+			joinAt,
+			endAt,
+			calendarId: calendar.id,
+			calendarEventId: event.id,
+			status: "scheduling",
+			...attendees,
+		});
 	return id;
 }
 
@@ -451,6 +463,7 @@ export async function toggleCalendarEventRecording({
 			calendarId: calendar.id,
 			calendarEventId: eventId,
 			status: "opted_out",
+			...attendeesForEvent(event),
 		});
 }
 

@@ -5,11 +5,18 @@ import { start } from "workflow/api";
 import { importRecallRecordingWorkflow } from "@/workflows/recall-meeting";
 import { reconcileStaleSchedulingRows } from "./bots";
 import { importMeetingChatComments } from "./chat-comments";
-import { RecallApiError } from "./client";
-import { isRecallConfigured } from "./config";
+import { RecallApiError, type RecallClient } from "./client";
+import {
+	DEFAULT_BOT_NAME,
+	getRecallConfig,
+	isRecallConfigured,
+} from "./config";
 import { getDefaultRecallClient } from "./default-client";
 import { sendMeetingRecap } from "./recap";
-import { migrateMeetingSpacesToVideoShares } from "./visibility";
+import {
+	attendeesFromCalendarEvent,
+	migrateMeetingSpacesToVideoShares,
+} from "./visibility";
 
 const MISSED_RECORDING_MS = 15 * 60 * 1000;
 
@@ -116,11 +123,59 @@ async function sendPendingRecapEmails(): Promise<number> {
 	return recapEmails;
 }
 
+const ATTENDEE_BACKFILL_LIMIT = 50;
+const ATTENDEE_BACKFILL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+
+export async function backfillCalendarAttendeeEmails(
+	client: RecallClient = getDefaultRecallClient(),
+	now = new Date(),
+): Promise<number> {
+	const cutoff = new Date(now.getTime() - ATTENDEE_BACKFILL_LOOKBACK_MS);
+	const rows = await db()
+		.select({
+			id: meetingBots.id,
+			calendarEventId: meetingBots.calendarEventId,
+		})
+		.from(meetingBots)
+		.where(
+			and(
+				eq(meetingBots.source, "calendar"),
+				isNull(meetingBots.attendeeEmails),
+				isNotNull(meetingBots.calendarEventId),
+				gte(meetingBots.joinAt, cutoff),
+			),
+		)
+		.orderBy(asc(meetingBots.joinAt))
+		.limit(ATTENDEE_BACKFILL_LIMIT);
+
+	const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
+	let filled = 0;
+	for (const row of rows) {
+		if (!row.calendarEventId) continue;
+		try {
+			const event = await client.getCalendarEvent(row.calendarEventId);
+			const attendees = attendeesFromCalendarEvent(event, botName);
+			await db()
+				.update(meetingBots)
+				.set(attendees)
+				.where(eq(meetingBots.id, row.id));
+			filled += 1;
+		} catch (error) {
+			console.error("[recall] attendee backfill failed", {
+				meetingBotId: row.id,
+				status: error instanceof RecallApiError ? error.status : undefined,
+			});
+		}
+	}
+	return filled;
+}
+
 export async function reconcileRecallMeetingBots(): Promise<{
 	staleScheduling: number;
 	missedRecordings: number;
 	chatBackfill: number;
 	recapEmails: number;
+	attendeeBackfill: number;
 	spacesMigrated: number;
 	videosPrivatized: number;
 } | null> {
@@ -130,12 +185,14 @@ export async function reconcileRecallMeetingBots(): Promise<{
 		missedRecordings,
 		chatBackfill,
 		recapEmails,
+		attendeeBackfill,
 		shareMigration,
 	] = await Promise.all([
 		reconcileStaleSchedulingRows(getDefaultRecallClient()),
 		reconcileMissedDoneRows(),
 		backfillChatComments(),
 		sendPendingRecapEmails(),
+		backfillCalendarAttendeeEmails(),
 		migrateMeetingSpacesToVideoShares(),
 	]);
 	return {
@@ -143,6 +200,7 @@ export async function reconcileRecallMeetingBots(): Promise<{
 		missedRecordings,
 		chatBackfill,
 		recapEmails,
+		attendeeBackfill,
 		spacesMigrated: shareMigration.spacesMigrated,
 		videosPrivatized: shareMigration.videosPrivatized,
 	};

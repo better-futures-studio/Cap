@@ -31,6 +31,8 @@ vi.mock("@cap/database/schema", () => {
 			"calendarEventId",
 			"recallBotId",
 			"statusSubCode",
+			"attendeeEmails",
+			"attendeeNames",
 		]),
 		users: table("users", ["id", "email"]),
 		organizationMembers: table("organization_members", [
@@ -266,6 +268,8 @@ function seedMeeting() {
 				calendarEventId: "evt_1",
 				recallBotId: "recall_1",
 				statusSubCode: null,
+				attendeeEmails: null,
+				attendeeNames: null,
 			},
 			{
 				id: "shared_1",
@@ -277,6 +281,8 @@ function seedMeeting() {
 				calendarEventId: "evt_1",
 				recallBotId: "recall_1",
 				statusSubCode: `shared:${meetingBotId}`,
+				attendeeEmails: null,
+				attendeeNames: null,
 			},
 		],
 		users: [
@@ -334,6 +340,29 @@ describe("canUserAccessMeetingBot", () => {
 		await expect(
 			canUserAccessMeetingBot(meetingBotId, sharedOwnerId),
 		).resolves.toBe(true);
+	});
+
+	it("allows a calendar attendee from stored emails without calling Recall", async () => {
+		const primary = rows.meeting_bots?.[0];
+		if (primary) primary.attendeeEmails = ["bea@example.com"];
+		const client = mockClient();
+		await expect(
+			canUserAccessMeetingBot(meetingBotId, calendarUserId, { client }),
+		).resolves.toBe(true);
+		expect(client.getCalendarEvent).not.toHaveBeenCalled();
+	});
+
+	it("fetches and stores attendees when attendeeEmails is null", async () => {
+		const client = mockClient();
+		await expect(
+			canUserAccessMeetingBot(meetingBotId, calendarUserId, { client }),
+		).resolves.toBe(true);
+		expect(client.getCalendarEvent).toHaveBeenCalledWith("evt_1");
+		expect(rows.meeting_bots?.[0]?.attendeeEmails).toEqual([
+			"ada@example.com",
+			"bea@example.com",
+			"zoe@example.com",
+		]);
 	});
 
 	it("allows a calendar attendee matched by email", async () => {

@@ -51,6 +51,8 @@ vi.mock("@cap/database/schema", () => {
 			"videoId",
 			"recapSentAt",
 			"status",
+			"attendeeEmails",
+			"attendeeNames",
 		]),
 		meetingPreferences: table("meeting_preferences", ["userId", "recapMode"]),
 		organizations: table("organizations", [
@@ -94,9 +96,14 @@ vi.mock("@/lib/recall/default-client", () => ({
 		throw new Error("default Recall client should not be used in tests");
 	},
 }));
-vi.mock("@/lib/recall/visibility", () => ({
-	shareMeetingRecordingWithAttendees: vi.fn(async () => undefined),
-}));
+vi.mock("@/lib/recall/visibility", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("@/lib/recall/visibility")>();
+	return {
+		...actual,
+		shareMeetingRecordingWithAttendees: vi.fn(async () => undefined),
+	};
+});
 
 type Row = Record<string, unknown>;
 type Table = { table: string };

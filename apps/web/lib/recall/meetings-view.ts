@@ -21,6 +21,26 @@ export function meetingPlatformLabel(url: string, source?: string): string {
 	return "Meeting";
 }
 
+export function dedupeUpcomingMeetings<
+	T extends { ownerId: string; meetingUrl: string; joinAt: Date },
+>(rows: T[], userId: string): T[] {
+	const chosen = new Map<string, T>();
+	const order: string[] = [];
+	for (const row of rows) {
+		const key = `${row.meetingUrl}\0${row.joinAt.getTime()}`;
+		const existing = chosen.get(key);
+		if (!existing) {
+			chosen.set(key, row);
+			order.push(key);
+			continue;
+		}
+		if (existing.ownerId !== userId && row.ownerId === userId) {
+			chosen.set(key, row);
+		}
+	}
+	return order.map((key) => chosen.get(key)).filter((row): row is T => !!row);
+}
+
 export function meetingUrlLabel(url: string): string {
 	try {
 		const parsed = new URL(url);

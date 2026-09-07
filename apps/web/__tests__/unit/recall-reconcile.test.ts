@@ -1,0 +1,192 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { RecallClient } from "@/lib/recall/client";
+
+const mocks = vi.hoisted(() => ({
+	db: vi.fn(),
+}));
+
+vi.mock("@cap/database", () => ({ db: mocks.db }));
+vi.mock("@cap/database/schema", () => {
+	const table = (name: string, fields: string[]) =>
+		Object.fromEntries([
+			["table", name],
+			...fields.map((field) => [field, `${name}.${field}`]),
+		]);
+	return {
+		meetingBots: table("meeting_bots", [
+			"id",
+			"source",
+			"calendarEventId",
+			"attendeeEmails",
+			"attendeeNames",
+			"joinAt",
+		]),
+	};
+});
+vi.mock("drizzle-orm", () => ({
+	and: (...args: unknown[]) => ({ op: "and", args }),
+	eq: (column: string, value: unknown) => ({ op: "eq", column, value }),
+	gte: (column: string, value: unknown) => ({ op: "gte", column, value }),
+	isNull: (column: string) => ({ op: "isNull", column }),
+	isNotNull: (column: string) => ({ op: "isNotNull", column }),
+	asc: (column: string) => column,
+	inArray: (column: string, values: unknown[]) => ({
+		op: "inArray",
+		column,
+		values,
+	}),
+	lt: (column: string, value: unknown) => ({ op: "lt", column, value }),
+}));
+vi.mock("@/lib/recall/config", () => ({
+	DEFAULT_BOT_NAME: "Meeting Notetaker",
+	getRecallConfig: () => ({ botName: "Meeting Notetaker" }),
+	isRecallConfigured: () => true,
+}));
+vi.mock("@/lib/recall/default-client", () => ({
+	getDefaultRecallClient: () => {
+		throw new Error("default Recall client should not be used in tests");
+	},
+}));
+vi.mock("workflow/api", () => ({ start: vi.fn() }));
+vi.mock("@/workflows/recall-meeting", () => ({
+	importRecallRecordingWorkflow: {},
+}));
+vi.mock("@/lib/recall/bots", () => ({
+	reconcileStaleSchedulingRows: vi.fn(async () => 0),
+}));
+vi.mock("@/lib/recall/chat-comments", () => ({
+	importMeetingChatComments: vi.fn(),
+}));
+vi.mock("@/lib/recall/recap", () => ({
+	sendMeetingRecap: vi.fn(),
+}));
+vi.mock("@/lib/recall/visibility", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("@/lib/recall/visibility")>();
+	return {
+		...actual,
+		migrateMeetingSpacesToVideoShares: vi.fn(async () => ({
+			spacesMigrated: 0,
+			videosPrivatized: 0,
+		})),
+	};
+});
+
+type Row = Record<string, unknown>;
+type Table = { table: string };
+type Condition = {
+	op: string;
+	args?: (Condition | undefined)[];
+	column?: string;
+	value?: unknown;
+};
+
+let rows: Record<string, Row[]>;
+
+function matches(row: Row, condition?: Condition): boolean {
+	if (!condition) return true;
+	if (condition.op === "and") {
+		return (condition.args ?? []).every((part) => matches(row, part));
+	}
+	const key = condition.column?.split(".")[1] ?? "";
+	if (condition.op === "eq") return row[key] === condition.value;
+	if (condition.op === "isNull") return row[key] == null;
+	if (condition.op === "isNotNull") return row[key] != null;
+	if (condition.op === "gte") {
+		const value = row[key];
+		return value instanceof Date && condition.value instanceof Date
+			? value >= condition.value
+			: false;
+	}
+	return true;
+}
+
+function createClient() {
+	return {
+		select() {
+			let table = "";
+			let condition: Condition | undefined;
+			const run = () =>
+				(rows[table] ?? []).filter((row) => matches(row, condition));
+			const query = {
+				from(value: Table) {
+					table = value.table;
+					return query;
+				},
+				where(value: Condition) {
+					condition = value;
+					return query;
+				},
+				orderBy() {
+					return query;
+				},
+				limit: async (limit: number) => run().slice(0, limit),
+			};
+			return query;
+		},
+		update(table: Table) {
+			return {
+				set: (values: Row) => ({
+					where: async (condition: Condition) => {
+						for (const row of rows[table.table] ?? []) {
+							if (matches(row, condition)) Object.assign(row, values);
+						}
+					},
+				}),
+			};
+		},
+	};
+}
+
+const { backfillCalendarAttendeeEmails } = await import(
+	"@/lib/recall/reconcile"
+);
+
+beforeEach(() => {
+	rows = { meeting_bots: [] };
+	mocks.db.mockReturnValue(createClient());
+});
+
+describe("backfillCalendarAttendeeEmails", () => {
+	it("fills attendeeEmails for calendar rows missing them", async () => {
+		const joinAt = new Date("2026-09-01T10:00:00.000Z");
+		rows.meeting_bots = [
+			{
+				id: "mb_1",
+				source: "calendar",
+				calendarEventId: "evt_1",
+				attendeeEmails: null,
+				joinAt,
+			},
+			{
+				id: "mb_manual",
+				source: "manual",
+				calendarEventId: null,
+				attendeeEmails: null,
+				joinAt,
+			},
+		];
+		const client = {
+			getCalendarEvent: vi.fn(async () => ({
+				id: "evt_1",
+				raw: {
+					attendees: [
+						{ email: "Ada@example.com", displayName: "Ada" },
+						{ email: "bea@example.com", displayName: "Bea" },
+					],
+				},
+			})),
+		} as unknown as RecallClient;
+
+		await expect(
+			backfillCalendarAttendeeEmails(client, new Date("2026-09-07T00:00:00Z")),
+		).resolves.toBe(1);
+		expect(client.getCalendarEvent).toHaveBeenCalledWith("evt_1");
+		expect(rows.meeting_bots[0]?.attendeeEmails).toEqual([
+			"ada@example.com",
+			"bea@example.com",
+		]);
+		expect(rows.meeting_bots[0]?.attendeeNames).toEqual(["Ada", "Bea"]);
+		expect(rows.meeting_bots[1]?.attendeeEmails).toBeNull();
+	});
+});

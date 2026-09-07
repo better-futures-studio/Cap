@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	dedupeUpcomingMeetings,
 	groupByDay,
 	meetingPlatformLabel,
 	meetingUrlLabel,
@@ -42,6 +43,27 @@ describe("meetingUrlLabel", () => {
 
 	it("returns just the host when there is no path", () => {
 		expect(meetingUrlLabel("https://zoom.us")).toBe("zoom.us");
+	});
+});
+
+describe("dedupeUpcomingMeetings", () => {
+	const joinAt = new Date("2026-09-10T15:00:00.000Z");
+	const meetingUrl = "https://meet.google.com/abc-defg-hij";
+
+	it("keeps the row the user owns when two people scheduled the same meeting", () => {
+		const rows = [
+			{ id: "a", ownerId: "other", meetingUrl, joinAt },
+			{ id: "b", ownerId: "me", meetingUrl, joinAt },
+		];
+		expect(dedupeUpcomingMeetings(rows, "me")).toEqual([rows[1]]);
+	});
+
+	it("keeps the first row when the user owns neither", () => {
+		const rows = [
+			{ id: "a", ownerId: "other", meetingUrl, joinAt },
+			{ id: "b", ownerId: "also", meetingUrl, joinAt },
+		];
+		expect(dedupeUpcomingMeetings(rows, "me")).toEqual([rows[0]]);
 	});
 });
 

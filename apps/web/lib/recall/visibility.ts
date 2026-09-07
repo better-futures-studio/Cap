@@ -32,10 +32,17 @@ export function meetingSpaceName(title: string | null, date: Date): string {
 	return `Meeting - ${formattedDate}`.slice(0, 255);
 }
 
-export function calendarInviteEmails(
+const ATTENDEE_FALLBACK_FETCH_LIMIT = 20;
+
+type CalendarInviteAttendee = {
+	email: string;
+	name: string | null;
+};
+
+function calendarInviteAttendeeRows(
 	event: RecallCalendarEvent,
 	botName: string,
-): string[] {
+): CalendarInviteAttendee[] {
 	const raw = event.raw;
 	if (!raw || typeof raw !== "object" || !("attendees" in raw)) return [];
 	const attendees = (raw as { attendees?: unknown }).attendees;
@@ -59,23 +66,138 @@ export function calendarInviteEmails(
 		) {
 			return [];
 		}
-		const display = (row.displayName ?? "").trim().toLowerCase();
-		if (bot && (display === bot || email.toLowerCase().includes(bot))) {
+		const display = (row.displayName ?? "").trim();
+		if (
+			bot &&
+			(display.toLowerCase() === bot || email.toLowerCase().includes(bot))
+		) {
 			return [];
 		}
-		return [email.toLowerCase()];
+		return [{ email: email.toLowerCase(), name: display || null }];
 	});
+}
+
+export function calendarInviteEmails(
+	event: RecallCalendarEvent,
+	botName: string,
+): string[] {
+	return calendarInviteAttendeeRows(event, botName).map(
+		(attendee) => attendee.email,
+	);
+}
+
+export function calendarInviteNames(
+	event: RecallCalendarEvent,
+	botName: string,
+): string[] {
+	const names: string[] = [];
+	const seen = new Set<string>();
+	for (const attendee of calendarInviteAttendeeRows(event, botName)) {
+		if (!attendee.name) continue;
+		const key = attendee.name.toLowerCase();
+		if (seen.has(key)) continue;
+		seen.add(key);
+		names.push(attendee.name);
+	}
+	return names;
+}
+
+export function attendeesFromCalendarEvent(
+	event: RecallCalendarEvent,
+	botName: string,
+): { attendeeEmails: string[]; attendeeNames: string[] } {
+	return {
+		attendeeEmails: calendarInviteEmails(event, botName),
+		attendeeNames: calendarInviteNames(event, botName),
+	};
+}
+
+export function storedStringArray(value: unknown): string[] | null {
+	if (value == null) return null;
+	if (!Array.isArray(value)) return null;
+	return value.filter((item): item is string => typeof item === "string");
+}
+
+export async function persistCalendarAttendees({
+	meetingBotId,
+	event,
+	botName,
+}: {
+	meetingBotId: string;
+	event: RecallCalendarEvent;
+	botName: string;
+}): Promise<{ attendeeEmails: string[]; attendeeNames: string[] }> {
+	const attendees = attendeesFromCalendarEvent(event, botName);
+	await db()
+		.update(meetingBots)
+		.set(attendees)
+		.where(eq(meetingBots.id, meetingBotId));
+	return attendees;
+}
+
+export async function hydrateCalendarAttendees({
+	meetingBotId,
+	calendarEventId,
+	client,
+}: {
+	meetingBotId: string;
+	calendarEventId: string;
+	client: RecallClient;
+}): Promise<{ attendeeEmails: string[]; attendeeNames: string[] } | null> {
+	try {
+		const event = await client.getCalendarEvent(calendarEventId);
+		const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
+		return persistCalendarAttendees({ meetingBotId, event, botName });
+	} catch {
+		return null;
+	}
+}
+
+export async function resolveStoredOrFetchedAttendees({
+	meetingBotId,
+	calendarEventId,
+	attendeeEmails,
+	attendeeNames,
+	client,
+}: {
+	meetingBotId: string;
+	calendarEventId: string | null;
+	attendeeEmails?: string[] | null;
+	attendeeNames?: string[] | null;
+	client?: RecallClient;
+}): Promise<{
+	attendeeEmails: string[] | null;
+	attendeeNames: string[] | null;
+}> {
+	const storedEmails = storedStringArray(attendeeEmails);
+	const storedNames = storedStringArray(attendeeNames);
+	if (storedEmails != null) {
+		return { attendeeEmails: storedEmails, attendeeNames: storedNames };
+	}
+	if (!calendarEventId) {
+		return { attendeeEmails: storedEmails, attendeeNames: storedNames };
+	}
+	const recall = client ?? getDefaultRecallClient();
+	const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
+	try {
+		const event = await recall.getCalendarEvent(calendarEventId);
+		return persistCalendarAttendees({ meetingBotId, event, botName });
+	} catch {
+		return { attendeeEmails: storedEmails, attendeeNames: storedNames };
+	}
 }
 
 export async function resolveMeetingAttendeeUserIds({
 	meetingBotId,
 	orgId,
 	calendarEventId,
+	attendeeEmails,
 	client,
 }: {
 	meetingBotId: string;
 	orgId: Organisation.OrganisationId;
 	calendarEventId: string | null;
+	attendeeEmails?: string[] | null;
 	client?: RecallClient;
 }): Promise<User.UserId[]> {
 	const ids = new Set<User.UserId>();
@@ -87,18 +209,24 @@ export async function resolveMeetingAttendeeUserIds({
 		.limit(200);
 	for (const row of sharedOwners) ids.add(row.ownerId);
 
-	if (!calendarEventId) return [...ids];
-
-	const recall = client ?? getDefaultRecallClient();
-	const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
-	let emails: string[] = [];
-	try {
-		const event = await recall.getCalendarEvent(calendarEventId);
-		emails = calendarInviteEmails(event, botName);
-	} catch {
-		return [...ids];
+	let emails = storedStringArray(attendeeEmails);
+	if (emails == null && calendarEventId) {
+		const recall = client ?? getDefaultRecallClient();
+		const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
+		try {
+			const event = await recall.getCalendarEvent(calendarEventId);
+			emails = (
+				await persistCalendarAttendees({
+					meetingBotId,
+					event,
+					botName,
+				})
+			).attendeeEmails;
+		} catch {
+			return [...ids];
+		}
 	}
-	if (emails.length === 0) return [...ids];
+	if (!emails || emails.length === 0) return [...ids];
 
 	const members = await db()
 		.select({ userId: users.id, email: users.email })
@@ -120,6 +248,7 @@ type MeetingAccessRow = {
 	videoId: Video.VideoId | null;
 	calendarEventId: string | null;
 	statusSubCode: string | null;
+	attendeeEmails?: string[] | null;
 };
 
 export async function meetingBotIdsAccessibleToUser({
@@ -256,21 +385,44 @@ export async function meetingBotIdsAccessibleToUser({
 	const email = user?.email.trim().toLowerCase() ?? "";
 	if (!email) return allowed;
 
+	const missing: MeetingAccessRow[] = [];
+	for (const bot of calendarBots) {
+		const emails = storedStringArray(bot.attendeeEmails);
+		if (emails) {
+			if (emails.includes(email)) allowed.add(bot.id);
+			continue;
+		}
+		missing.push(bot);
+	}
+	if (missing.length === 0) return allowed;
+
 	const recall = client ?? getDefaultRecallClient();
 	const botName = getRecallConfig()?.botName ?? DEFAULT_BOT_NAME;
 	const eventIds = [
 		...new Set(
-			calendarBots
+			missing
 				.map((bot) => bot.calendarEventId)
 				.filter((id): id is string => Boolean(id)),
 		),
-	];
+	].slice(0, ATTENDEE_FALLBACK_FETCH_LIMIT);
 	const attendeeEvents = new Set<string>();
 	await Promise.all(
 		eventIds.map(async (eventId) => {
 			try {
 				const event = await recall.getCalendarEvent(eventId);
-				if (calendarInviteEmails(event, botName).includes(email)) {
+				const attendees = attendeesFromCalendarEvent(event, botName);
+				const matching = missing.filter(
+					(bot) => bot.calendarEventId === eventId,
+				);
+				await Promise.all(
+					matching.map((bot) =>
+						db()
+							.update(meetingBots)
+							.set(attendees)
+							.where(eq(meetingBots.id, bot.id)),
+					),
+				);
+				if (attendees.attendeeEmails.includes(email)) {
 					attendeeEvents.add(eventId);
 				}
 			} catch {
@@ -278,7 +430,7 @@ export async function meetingBotIdsAccessibleToUser({
 			}
 		}),
 	);
-	for (const bot of calendarBots) {
+	for (const bot of missing) {
 		if (bot.calendarEventId && attendeeEvents.has(bot.calendarEventId)) {
 			allowed.add(bot.id);
 		}
@@ -299,6 +451,7 @@ export async function canUserAccessMeetingBot(
 			videoId: meetingBots.videoId,
 			calendarEventId: meetingBots.calendarEventId,
 			statusSubCode: meetingBots.statusSubCode,
+			attendeeEmails: meetingBots.attendeeEmails,
 		})
 		.from(meetingBots)
 		.where(eq(meetingBots.id, botId))
@@ -344,6 +497,7 @@ export async function shareMeetingRecordingWithAttendees(
 				orgId: meetingBots.orgId,
 				videoId: meetingBots.videoId,
 				calendarEventId: meetingBots.calendarEventId,
+				attendeeEmails: meetingBots.attendeeEmails,
 			})
 			.from(meetingBots)
 			.where(eq(meetingBots.id, meetingBotId))
@@ -354,6 +508,7 @@ export async function shareMeetingRecordingWithAttendees(
 			meetingBotId,
 			orgId: primary.orgId,
 			calendarEventId: primary.calendarEventId,
+			attendeeEmails: primary.attendeeEmails,
 			client: deps.client,
 		});
 		await insertMeetingShares({

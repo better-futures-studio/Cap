@@ -93,6 +93,10 @@ Everything lives under `apps/web/lib/recall/`, `apps/web/workflows/recall-*.ts`,
 - Two ways in: paste a meeting URL on the Meetings page, or connect Google
   Calendar (Recall Calendar V2) and opt in per event or via the per-calendar
   auto-record switch. Nothing records until the user opts in.
+- Calendar invite `attendeeEmails` / `attendeeNames` are stored on the
+  `meeting_bots` row at schedule/sync time. Page loads and MCP list/search
+  read those columns; `recall-reconcile` backfills up to 50 recent calendar
+  rows per run where they are still null.
 - Flow: `recording.done` webhook → copy `video_mixed` MP4 into R2 as
   `raw-upload.mp4` → normal media-server processing → Recall async
   transcription (`recallai_async`) written to `transcription.vtt` with speaker

@@ -35,6 +35,7 @@ import {
 	isRecallConfigured,
 } from "@/lib/recall/config";
 import { maybeDeleteRecallMediaIfUnused } from "@/lib/recall/media-retention";
+import { dedupeUpcomingMeetings } from "@/lib/recall/meetings-view";
 import { parseRecapMode } from "@/lib/recall/recap";
 import { getMeetingSpeakerStats } from "@/lib/recall/speaker-stats";
 import { meetingBotIdsAccessibleToUser } from "@/lib/recall/visibility";
@@ -79,6 +80,7 @@ const MEETING_BOT_COLUMNS = {
 	recallBotId: meetingBots.recallBotId,
 	calendarEventId: meetingBots.calendarEventId,
 	statusSubCode: meetingBots.statusSubCode,
+	attendeeEmails: meetingBots.attendeeEmails,
 	createdAt: meetingBots.createdAt,
 	pendingUploadVideoId: videoUploads.videoId,
 };
@@ -230,7 +232,12 @@ export async function listMeetingBots({
 		userId: user.id,
 	});
 	return {
-		upcoming: withVideoReady(upcomingRows.filter((row) => allowed.has(row.id))),
+		upcoming: withVideoReady(
+			dedupeUpcomingMeetings(
+				upcomingRows.filter((row) => allowed.has(row.id)),
+				user.id,
+			),
+		),
 		past: withVideoReady(pastRows.filter((row) => allowed.has(row.id))),
 	};
 }
