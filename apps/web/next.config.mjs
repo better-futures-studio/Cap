@@ -27,18 +27,11 @@ const nextConfig = {
 	],
 	outputFileTracingIncludes: {
 		"/*": [
-			"./node_modules/@workflow/world-postgres/**/*",
-			"./node_modules/@workflow/world-postgres/bin/**/*",
+			// Only the migration SQL needs an explicit include: the package itself
+			// and its dependencies are traced from the import in lib/workflow-world.ts.
+			// Globbing the whole package here copied it without its pnpm siblings,
+			// which shadowed the traced copy and broke module resolution.
 			"./node_modules/@workflow/world-postgres/src/drizzle/migrations/**/*",
-			"./node_modules/graphile-worker/**/*",
-			"./node_modules/pg/**/*",
-			"./node_modules/@workflow/world/**/*",
-			"./node_modules/@workflow/world-local/**/*",
-			"./node_modules/@workflow/errors/**/*",
-			"./node_modules/@workflow/utils/**/*",
-			"./node_modules/@vercel/queue/**/*",
-			"./node_modules/cbor-x/**/*",
-			"./node_modules/ulid/**/*",
 		],
 		"/.well-known/workflow/v1/step": ffmpegTracingIncludes,
 		"/api/tools/loom-download": ffmpegTracingIncludes,
