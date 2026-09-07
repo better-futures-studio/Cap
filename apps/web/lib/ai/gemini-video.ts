@@ -177,13 +177,13 @@ export async function describeVideoWithGemini({
 	const model = getGeminiVideoModel();
 	const languageInstruction = getVideoDescriptionLanguageInstruction(language);
 	const duration = Math.max(0, durationSeconds);
-	const prompt = `This is a screen recording with no narration. Describe what the user does. ${languageInstruction}
+	const prompt = `This is a screen recording I made with no narration. Write everything in the first person, from my perspective as the person recording: "I open the settings page and change the status", never "the user opens". Do not refer to "the user", "the recorder", or "the video". ${languageInstruction}
 
 The video is ${duration} seconds long. Return JSON with:
 - title: a concise title, max 80 characters, no quotation marks
-- summary: 2-4 short paragraphs describing what happens on screen
-- chapters: 4-10 chapters spanning the recording, each with start (seconds from 0 to ${duration}) and title
-- actionItems: optional list of concrete follow-ups visible in the recording
+- summary: 2-4 short paragraphs, first person, describing what I do and show on screen
+- chapters: 4-10 chapters spanning the recording, each with start (seconds from 0 to ${duration}) and a short title
+- actionItems: optional list of concrete follow-ups visible in the recording, phrased as tasks
 
 All chapter start values MUST be between 0 and ${duration} seconds.`;
 
