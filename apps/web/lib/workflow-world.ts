@@ -27,8 +27,11 @@ export async function bootstrapPostgresWorkflowWorld(): Promise<void> {
 	const { makeWorkerUtils } = await import("graphile-worker");
 
 	const require = createRequire(join(process.cwd(), "index.js"));
+	// The package's exports map hides package.json; resolve the entry point
+	// (dist/index.js) and walk up to the shipped migration SQL.
 	const migrationsFolder = join(
-		dirname(require.resolve("@workflow/world-postgres/package.json")),
+		dirname(require.resolve("@workflow/world-postgres")),
+		"..",
 		"src",
 		"drizzle",
 		"migrations",
