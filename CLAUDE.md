@@ -11,7 +11,10 @@ https://cap.boca.pro. Upstream is `CapSoftware/Cap` (remote `upstream`).
 
 - Railway project `cap` (id `1e969601-2fb9-4ade-b85b-34c48406ea3f`), env `production`.
   Services: `Cap Web` (Next.js, port 3000), `capsoftware/cap-media-server:latest`
-  (FFmpeg mux, port 3456), `MySQL`, `Postgres` (workflow runtime),
+  (FFmpeg mux, port 3456), `MySQL`, `Postgres` (workflow runtime), `Cap Worker`
+  (polls the workflow queue and calls Cap Web over the private network; built
+  from `apps/web/Dockerfile.worker`; Cap Web runs with
+  `WORKFLOW_WORKER_EXTERNAL=true` so it can sleep when idle),
   `cron` (recovery endpoints every 5 min),
   `db-backup` (nightly 03:00 UTC mysqldump to R2).
 - Video storage: Cloudflare R2 bucket `cap-boca` on the Boca Pro account

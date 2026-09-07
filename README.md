@@ -170,6 +170,7 @@ at the application level.
   there's no separate migration step to run in the deploy.
 - **Durable workflows**: recording imports and other `"use workflow"`
   jobs need a durable runtime in production. Set `WORKFLOW_POSTGRES_URL`
+| `WORKFLOW_WORKER_EXTERNAL` | optional | Set to `true` when a separate service runs `apps/web/workflow-worker.mjs` (see `apps/web/Dockerfile.worker`), so the web app does not poll the queue and can sleep when idle. |
   so Cap uses the Postgres World (schema bootstrap and the
   graphile-worker subscriber start in `instrumentation.node.ts` at boot).
   When unset, Cap keeps the development Local World — an in-memory queue
