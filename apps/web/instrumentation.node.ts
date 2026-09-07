@@ -27,8 +27,12 @@ export async function register() {
 	if (isPostgresWorkflowWorld(process.env)) {
 		try {
 			await bootstrapPostgresWorkflowWorld();
-			await startSelectedWorkflowWorld();
-			console.log("Workflow world ready: postgres");
+			if (process.env.WORKFLOW_WORKER_EXTERNAL === "true") {
+				console.log("Workflow world ready: postgres (worker runs elsewhere)");
+			} else {
+				await startSelectedWorkflowWorld();
+				console.log("Workflow world ready: postgres");
+			}
 		} catch (error) {
 			// Never let the workflow runtime keep the app from serving; fall back
 			// to the local world so the site stays up and the failure is visible.

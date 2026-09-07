@@ -280,6 +280,12 @@ function createServerEnv() {
 				.describe(
 					"Postgres URL for the durable workflow runtime; when unset the development Local World is used",
 				),
+			WORKFLOW_WORKER_EXTERNAL: z
+				.string()
+				.optional()
+				.describe(
+					"Set to true when a separate service runs the workflow worker so the web app does not poll the queue",
+				),
 
 			/// Media Server
 			MEDIA_SERVER_URL: z
