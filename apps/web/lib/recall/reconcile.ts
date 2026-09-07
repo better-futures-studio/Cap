@@ -14,14 +14,19 @@ import {
 import { getDefaultRecallClient } from "./default-client";
 import { sendMeetingRecap } from "./recap";
 import {
+	findActiveImportSibling,
+	markMeetingBotShared,
+} from "./shared-recording";
+import {
 	attendeesFromCalendarEvent,
 	migrateMeetingSpacesToVideoShares,
 } from "./visibility";
 
 const MISSED_RECORDING_MS = 15 * 60 * 1000;
 
-async function reconcileMissedDoneRows(): Promise<number> {
-	const client = getDefaultRecallClient();
+export async function reconcileMissedDoneRows(
+	client: RecallClient = getDefaultRecallClient(),
+): Promise<number> {
 	const cutoff = new Date(Date.now() - MISSED_RECORDING_MS);
 	const rows = await db()
 		.select()
@@ -39,6 +44,16 @@ async function reconcileMissedDoneRows(): Promise<number> {
 	for (const row of rows) {
 		if (!row.recallBotId) continue;
 		try {
+			const siblings = await db()
+				.select()
+				.from(meetingBots)
+				.where(eq(meetingBots.recallBotId, row.recallBotId));
+			const owner = findActiveImportSibling(row.id, siblings);
+			if (owner) {
+				await markMeetingBotShared(row.id, owner.id);
+				continue;
+			}
+
 			const bot = await client.getBot(row.recallBotId);
 			const recordingId = bot.recordings[0]?.id;
 			if (!recordingId) continue;

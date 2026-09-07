@@ -3,6 +3,7 @@ import type { RecallClient } from "@/lib/recall/client";
 
 const mocks = vi.hoisted(() => ({
 	db: vi.fn(),
+	start: vi.fn(),
 }));
 
 vi.mock("@cap/database", () => ({ db: mocks.db }));
@@ -20,6 +21,12 @@ vi.mock("@cap/database/schema", () => {
 			"attendeeEmails",
 			"attendeeNames",
 			"joinAt",
+			"recallBotId",
+			"recallRecordingId",
+			"videoId",
+			"status",
+			"statusSubCode",
+			"updatedAt",
 		]),
 	};
 });
@@ -47,7 +54,7 @@ vi.mock("@/lib/recall/default-client", () => ({
 		throw new Error("default Recall client should not be used in tests");
 	},
 }));
-vi.mock("workflow/api", () => ({ start: vi.fn() }));
+vi.mock("workflow/api", () => ({ start: mocks.start }));
 vi.mock("@/workflows/recall-meeting", () => ({
 	importRecallRecordingWorkflow: {},
 }));
@@ -79,6 +86,7 @@ type Condition = {
 	args?: (Condition | undefined)[];
 	column?: string;
 	value?: unknown;
+	values?: unknown[];
 };
 
 let rows: Record<string, Row[]>;
@@ -98,6 +106,17 @@ function matches(row: Row, condition?: Condition): boolean {
 			? value >= condition.value
 			: false;
 	}
+	if (condition.op === "lt") {
+		const value = row[key];
+		return value instanceof Date && condition.value instanceof Date
+			? value < condition.value
+			: false;
+	}
+	if (condition.op === "inArray") {
+		return (
+			Array.isArray(condition.values) && condition.values.includes(row[key])
+		);
+	}
 	return true;
 }
 
@@ -111,17 +130,20 @@ function createClient() {
 			const query = {
 				from(value: Table) {
 					table = value.table;
-					return query;
+					return thenable();
 				},
 				where(value: Condition) {
 					condition = value;
-					return query;
+					return thenable();
 				},
 				orderBy() {
-					return query;
+					return thenable();
 				},
 				limit: async (limit: number) => run().slice(0, limit),
 			};
+			function thenable() {
+				return Object.assign(Promise.resolve().then(run), query);
+			}
 			return query;
 		},
 		update(table: Table) {
@@ -138,13 +160,13 @@ function createClient() {
 	};
 }
 
-const { backfillCalendarAttendeeEmails } = await import(
-	"@/lib/recall/reconcile"
-);
+const { backfillCalendarAttendeeEmails, reconcileMissedDoneRows } =
+	await import("@/lib/recall/reconcile");
 
 beforeEach(() => {
 	rows = { meeting_bots: [] };
 	mocks.db.mockReturnValue(createClient());
+	mocks.start.mockReset();
 });
 
 describe("backfillCalendarAttendeeEmails", () => {
@@ -188,5 +210,72 @@ describe("backfillCalendarAttendeeEmails", () => {
 		]);
 		expect(rows.meeting_bots[0]?.attendeeNames).toEqual(["Ada", "Bea"]);
 		expect(rows.meeting_bots[1]?.attendeeEmails).toBeNull();
+	});
+});
+
+describe("reconcileMissedDoneRows", () => {
+	const stale = new Date(Date.now() - 30 * 60 * 1000);
+
+	it("marks a late row shared when a sibling is already importing", async () => {
+		rows.meeting_bots = [
+			{
+				id: "mb_primary",
+				recallBotId: "bot_1",
+				recallRecordingId: "rec_1",
+				videoId: "vid_1",
+				status: "importing",
+				statusSubCode: null,
+				updatedAt: stale,
+			},
+			{
+				id: "mb_late",
+				recallBotId: "bot_1",
+				recallRecordingId: null,
+				videoId: null,
+				status: "done",
+				statusSubCode: null,
+				updatedAt: stale,
+			},
+		];
+		const client = {
+			getBot: vi.fn(),
+		} as unknown as RecallClient;
+
+		await expect(reconcileMissedDoneRows(client)).resolves.toBe(0);
+		expect(client.getBot).not.toHaveBeenCalled();
+		expect(mocks.start).not.toHaveBeenCalled();
+		expect(rows.meeting_bots[1]?.statusSubCode).toBe("shared:mb_primary");
+	});
+
+	it("promotes a shared row when the primary import failed", async () => {
+		rows.meeting_bots = [
+			{
+				id: "mb_primary",
+				recallBotId: "bot_1",
+				recallRecordingId: "rec_1",
+				videoId: "vid_1",
+				status: "failed",
+				statusSubCode: null,
+				updatedAt: stale,
+			},
+			{
+				id: "mb_shared",
+				recallBotId: "bot_1",
+				recallRecordingId: null,
+				videoId: null,
+				status: "done",
+				statusSubCode: "shared:mb_primary",
+				updatedAt: stale,
+			},
+		];
+		const client = {
+			getBot: vi.fn(async () => ({ recordings: [{ id: "rec_1" }] })),
+		} as unknown as RecallClient;
+
+		await expect(reconcileMissedDoneRows(client)).resolves.toBe(1);
+		expect(client.getBot).toHaveBeenCalledWith("bot_1");
+		expect(mocks.start).toHaveBeenCalledWith({}, [
+			{ meetingBotId: "mb_shared", recordingId: "rec_1" },
+		]);
 	});
 });

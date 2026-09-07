@@ -17,6 +17,7 @@ import { start } from "workflow/api";
 import { startAiGeneration } from "@/lib/generate-ai";
 import { importMeetingChatComments } from "@/lib/recall/chat-comments";
 import { RecallApiError } from "@/lib/recall/client";
+import { copyRemoteVideoToPresignedPut } from "@/lib/recall/copy-recording";
 import {
 	applyCapTranscriptionFallback,
 	createMeetingTranscript,
@@ -24,6 +25,10 @@ import {
 import { getDefaultRecallClient } from "@/lib/recall/default-client";
 import { readLiveTranscript } from "@/lib/recall/live-transcript";
 import { maybeDeleteImportedRecallMedia } from "@/lib/recall/media-retention";
+import {
+	claimMeetingBotImport,
+	sharedMeetingSubCode,
+} from "@/lib/recall/shared-recording";
 import { computeSpeakerStats } from "@/lib/recall/speaker-stats";
 import {
 	type RecallTranscriptPart,
@@ -38,10 +43,6 @@ import { decodeStorageVideo } from "@/lib/video-storage";
 import { runWorkflowPromise } from "@/lib/workflow-runtime";
 
 const PRESIGNED_PUT_EXPIRES_SECONDS = 3 * 60 * 60;
-
-function sharedSubCode(meetingBotId: string): string {
-	return `shared:${meetingBotId}`;
-}
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -68,7 +69,7 @@ async function completeSharedRows(
 			videoId,
 			...(message ? { errorMessage: message } : {}),
 		})
-		.where(eq(meetingBots.statusSubCode, sharedSubCode(meetingBotId)));
+		.where(eq(meetingBots.statusSubCode, sharedMeetingSubCode(meetingBotId)));
 
 	if (status === "complete") {
 		await shareMeetingRecordingWithAttendees(meetingBotId);
@@ -84,28 +85,11 @@ async function claimImport({
 }): Promise<boolean> {
 	"use step";
 
-	const [row] = await db()
-		.select()
-		.from(meetingBots)
-		.where(eq(meetingBots.id, meetingBotId))
-		.limit(1);
-	if (!row) {
-		throw new FatalError("Meeting bot not found");
+	try {
+		return await claimMeetingBotImport({ meetingBotId, recordingId });
+	} catch (error) {
+		throw new FatalError(errorMessage(error));
 	}
-	if (row.recallRecordingId || row.videoId || row.status === "complete") {
-		return false;
-	}
-
-	await db()
-		.update(meetingBots)
-		.set({
-			status: "importing",
-			statusSubCode: null,
-			recallRecordingId: recordingId,
-			errorMessage: null,
-		})
-		.where(eq(meetingBots.id, meetingBotId));
-	return true;
 }
 
 async function createVideoRow(meetingBotId: string): Promise<{
@@ -246,21 +230,6 @@ async function copyRecordingToStorage({
 		throw new FatalError("Recording download URL is missing");
 	}
 
-	const download = await fetch(downloadUrl);
-	if (!download.ok) {
-		throw new FatalError(`Recording download failed (${download.status})`);
-	}
-
-	const contentType = download.headers.get("content-type") ?? "";
-	if (
-		contentType.includes("text/html") ||
-		contentType.includes("application/json")
-	) {
-		throw new FatalError(
-			`Recording download returned non-video content (${contentType.split(";")[0]})`,
-		);
-	}
-
 	const [video] = await db()
 		.select()
 		.from(videos)
@@ -281,32 +250,10 @@ async function copyRecordingToStorage({
 		)
 		.pipe(runWorkflowPromise);
 
-	const contentLength = download.headers.get("content-length");
-	let upload: Response;
-	if (contentLength && download.body) {
-		upload = await fetch(putUrl, {
-			method: "PUT",
-			headers: {
-				"Content-Type": "video/mp4",
-				"Content-Length": contentLength,
-			},
-			body: download.body,
-			duplex: "half",
-		} as RequestInit);
-	} else {
-		const buffer = Buffer.from(await download.arrayBuffer());
-		upload = await fetch(putUrl, {
-			method: "PUT",
-			headers: {
-				"Content-Type": "video/mp4",
-				"Content-Length": String(buffer.length),
-			},
-			body: buffer,
-		});
-	}
-
-	if (!upload.ok) {
-		throw new FatalError(`Recording upload failed (${upload.status})`);
+	try {
+		await copyRemoteVideoToPresignedPut({ downloadUrl, putUrl });
+	} catch (error) {
+		throw new FatalError(errorMessage(error));
 	}
 }
 

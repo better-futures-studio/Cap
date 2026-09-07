@@ -20,6 +20,11 @@ import {
 import { applyBotStatusEvent } from "./bots";
 import { DEFAULT_BOT_NAME, getRecallConfig } from "./config";
 import { getDefaultRecallClient } from "./default-client";
+import {
+	hasStartedRecordingImport,
+	isActiveRecordingImport,
+	markMeetingBotShared,
+} from "./shared-recording";
 import { shouldStartTranscriptCompletion } from "./transcript-reuse";
 
 const TERMINAL_STATUSES: MeetingBotStatus[] = [
@@ -56,10 +61,6 @@ function asRecord(
 	if (!isRecord(value)) return undefined;
 	const nested = value[key];
 	return isRecord(nested) ? nested : undefined;
-}
-
-function sharedSubCode(meetingBotId: string): string {
-	return `shared:${meetingBotId}`;
 }
 
 async function handleBotEvent(data: unknown): Promise<void> {
@@ -113,24 +114,24 @@ async function handleRecordingDone(data: unknown): Promise<void> {
 		? rows.find((row) => row.calendarEventId === calendarEventId)
 		: undefined;
 
-	const importStarted = (row: (typeof rows)[number]) =>
-		row.recallRecordingId !== null || row.videoId !== null;
-	const alreadyStarted = rows.find(importStarted);
+	const alreadyActive = rows.find(isActiveRecordingImport);
 	const eligible = rows
 		.filter(
-			(row) => !TERMINAL_STATUSES.includes(row.status) && !importStarted(row),
+			(row) =>
+				!TERMINAL_STATUSES.includes(row.status) &&
+				!hasStartedRecordingImport(row),
 		)
 		.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
 	const primary =
-		alreadyStarted ??
+		alreadyActive ??
 		(preferred && eligible.some((row) => row.id === preferred.id)
 			? preferred
 			: undefined) ??
 		eligible[0];
 	if (!primary) return;
 
-	if (!importStarted(primary)) {
+	if (!hasStartedRecordingImport(primary)) {
 		await start(importRecallRecordingWorkflow, [
 			{ meetingBotId: primary.id, recordingId },
 		]);
@@ -144,11 +145,8 @@ async function handleRecordingDone(data: unknown): Promise<void> {
 	for (const row of rows) {
 		if (row.id === primary.id) continue;
 		if (TERMINAL_STATUSES.includes(row.status)) continue;
-		if (importStarted(row)) continue;
-		await db()
-			.update(meetingBots)
-			.set({ statusSubCode: sharedSubCode(primary.id) })
-			.where(eq(meetingBots.id, row.id));
+		if (hasStartedRecordingImport(row)) continue;
+		await markMeetingBotShared(row.id, primary.id);
 	}
 }
 

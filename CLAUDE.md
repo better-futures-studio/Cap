@@ -66,6 +66,8 @@ Browser checks as the logged-in owner: `agent-browser` with the real Chrome
   `.recording/outputs/`, not at `screenshot/screen-capture.jpg`.
 - Serverless sleeping is on for Cap Web and the media server; the first
   request after idle wakes the container.
+- Cap Web memory is 1 GB on Railway; recording imports stream through the
+  container's disk, never memory.
 - Local typecheck: `apps/web` uses project references. On TS6305 run
   `pnpm exec tsc -b --force packages/database packages/env packages/web-backend packages/web-domain packages/utils`
   from the repo root. Never run a package's `build` script (tsdown) to fix
