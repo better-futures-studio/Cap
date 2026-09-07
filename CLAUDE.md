@@ -74,6 +74,12 @@ Browser checks as the logged-in owner: `agent-browser` with the real Chrome
 - The workflow Local World keeps the queue in memory; a redeploy kills
   in-flight runs (including long recording imports). Set
   `WORKFLOW_POSTGRES_URL` so the Postgres World persists them.
+- Next's file tracing cannot follow `@workflow/world-postgres` (the runtime
+  loads it by name), and globbing it into `outputFileTracingIncludes` copies
+  it without its pnpm siblings. The runner image installs it separately under
+  `/app/workflow-world` and exposes it with `NODE_PATH` (see the Dockerfile).
+  A world that fails to start is logged and the app falls back to the Local
+  World rather than refusing to serve.
 - Local typecheck: `apps/web` uses project references. On TS6305 run
   `pnpm exec tsc -b --force packages/database packages/env packages/web-backend packages/web-domain packages/utils`
   from the repo root. Never run a package's `build` script (tsdown) to fix
