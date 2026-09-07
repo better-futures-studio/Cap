@@ -137,7 +137,9 @@ jobs:
       - name: Web build
         env:
           NODE_OPTIONS: --max-old-space-size=8192
-        run: pnpm --filter @cap/web run build:web
+        # Turbopack occasionally fails evaluating the PostCSS loader on a cold
+        # build (__turbopack_context__.a is not a function); a second run passes.
+        run: pnpm --filter @cap/web run build:web || pnpm --filter @cap/web run build:web
 
   mobile:
     name: Mobile
