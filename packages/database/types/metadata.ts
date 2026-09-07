@@ -63,6 +63,7 @@ export interface VideoMetadata {
 		| "COMPLETE"
 		| "ERROR"
 		| "SKIPPED";
+	aiSource?: "transcript" | "video";
 	/**
 	 * Progress of the provisional live transcription that runs while an
 	 * instant-mode recording is still uploading. The transcript content lives

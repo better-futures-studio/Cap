@@ -4,6 +4,7 @@ const mockDb = vi.fn();
 const mockStart = vi.fn();
 const mockTranscribeVideo = vi.fn();
 const mockStartAiGeneration = vi.fn();
+const mockStartDescribeSilentVideo = vi.fn();
 
 vi.mock("@cap/database", () => ({
 	db: mockDb,
@@ -77,6 +78,10 @@ vi.mock("@/lib/generate-ai", () => ({
 	startAiGeneration: mockStartAiGeneration,
 }));
 
+vi.mock("@/lib/describe-video", () => ({
+	startDescribeSilentVideo: mockStartDescribeSilentVideo,
+}));
+
 vi.mock("@/workflows/process-video", () => ({
 	processVideoWorkflow: vi.fn(),
 }));
@@ -134,6 +139,10 @@ beforeEach(() => {
 	mockStartAiGeneration.mockResolvedValue({
 		success: true,
 		message: "AI generation workflow started",
+	});
+	mockStartDescribeSilentVideo.mockResolvedValue({
+		success: true,
+		message: "Video description workflow started",
 	});
 });
 
@@ -283,5 +292,102 @@ describe("recoverStalledVideoPipeline", () => {
 
 		expect(mockStartAiGeneration).toHaveBeenCalledWith("video-ai", "user-1");
 		expect(result.ai.statuses).toEqual({ started: 1 });
+	});
+
+	it("starts video description for processed silent videos with no transcript", async () => {
+		const silentCandidate = {
+			videoId: "video-silent",
+			userId: "user-1",
+			metadata: null,
+			updatedAt: staleAt,
+			transcriptionStatus: null,
+			duration: 42,
+			isScreenshot: false,
+			stripeSubscriptionStatus: "active",
+			thirdPartyStripeSubscriptionId: null,
+		};
+
+		let dbCall = 0;
+		mockDb.mockImplementation(() => {
+			dbCall++;
+			if (dbCall < 3) return makeSelectChain([]);
+			return makeSelectChain([silentCandidate]);
+		});
+
+		const { recoverStalledVideoPipeline } = await import(
+			"@/lib/video-pipeline-recovery"
+		);
+		const result = await recoverStalledVideoPipeline({ now, concurrency: 1 });
+
+		expect(mockStartDescribeSilentVideo).toHaveBeenCalledWith(
+			"video-silent",
+			"user-1",
+		);
+		expect(mockStartAiGeneration).not.toHaveBeenCalled();
+		expect(result.ai.statuses).toEqual({ started: 1 });
+	});
+});
+
+describe("isSilentVideoAiCandidate", () => {
+	it("selects processed videos with no speech and no summary", async () => {
+		const { isSilentVideoAiCandidate } = await import(
+			"@/lib/video-pipeline-recovery"
+		);
+
+		expect(
+			isSilentVideoAiCandidate({
+				transcriptionStatus: null,
+				duration: 42,
+				isScreenshot: false,
+				metadata: null,
+			}),
+		).toBe(true);
+		expect(
+			isSilentVideoAiCandidate({
+				transcriptionStatus: "NO_AUDIO",
+				duration: 12,
+				isScreenshot: false,
+				metadata: {},
+			}),
+		).toBe(true);
+	});
+
+	it("rejects screenshots, short clips, spoken videos, and videos that already have a summary", async () => {
+		const { isSilentVideoAiCandidate } = await import(
+			"@/lib/video-pipeline-recovery"
+		);
+
+		expect(
+			isSilentVideoAiCandidate({
+				transcriptionStatus: null,
+				duration: 42,
+				isScreenshot: true,
+				metadata: null,
+			}),
+		).toBe(false);
+		expect(
+			isSilentVideoAiCandidate({
+				transcriptionStatus: null,
+				duration: 4,
+				isScreenshot: false,
+				metadata: null,
+			}),
+		).toBe(false);
+		expect(
+			isSilentVideoAiCandidate({
+				transcriptionStatus: "COMPLETE",
+				duration: 42,
+				isScreenshot: false,
+				metadata: null,
+			}),
+		).toBe(false);
+		expect(
+			isSilentVideoAiCandidate({
+				transcriptionStatus: "NO_AUDIO",
+				duration: 42,
+				isScreenshot: false,
+				metadata: { summary: "Already described" },
+			}),
+		).toBe(false);
 	});
 });

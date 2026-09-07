@@ -14,6 +14,10 @@ import { generateText } from "ai";
 import { and, eq, sql } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { FatalError } from "workflow";
+import {
+	isTranscriptTooShort,
+	isVideoUnderstandingEnabled,
+} from "@/lib/ai/gemini-video";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { AiUnavailableError, runWithAiProviders } from "@/lib/ai/run";
 import { loadCapturedActionItemComments } from "@/lib/recall/action-items";
@@ -114,6 +118,12 @@ export async function generateAiWorkflow(payload: GenerateAiWorkflowPayload) {
 		const transcript = await fetchTranscript(videoId, userId, videoData.video);
 
 		if (!transcript) {
+			if (await enqueueSilentVideoDescription(videoId, userId)) {
+				return {
+					success: true,
+					message: "Transcript empty - started video description",
+				};
+			}
 			await markSkipped(videoId);
 			return {
 				success: true,
@@ -227,7 +237,7 @@ async function fetchTranscript(
 		.join(" ")
 		.trim();
 
-	if (text.length < 10) {
+	if (isTranscriptTooShort(text)) {
 		return null;
 	}
 
@@ -252,6 +262,27 @@ async function markError(videoId: string): Promise<void> {
 				)`,
 			),
 		);
+}
+
+async function enqueueSilentVideoDescription(
+	videoId: string,
+	userId: string,
+): Promise<boolean> {
+	"use step";
+
+	if (!isVideoUnderstandingEnabled()) return false;
+
+	const { startDescribeSilentVideo } = await import("@/lib/describe-video");
+	const result = await startDescribeSilentVideo(
+		videoId as Video.VideoId,
+		userId,
+	);
+	return (
+		result.success &&
+		(result.message === "Video description workflow started" ||
+			result.message === "Video description already in progress" ||
+			result.message === "AI metadata already generated")
+	);
 }
 
 async function markSkipped(videoId: string): Promise<void> {

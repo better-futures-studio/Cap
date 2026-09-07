@@ -22,6 +22,10 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { Either, Option, Schema } from "effect";
 import { FatalError } from "workflow";
 import { start } from "workflow/api";
+import {
+	isTranscriptTooShort,
+	transcriptTextFromVtt,
+} from "@/lib/ai/gemini-video";
 import { getAssemblyAITranscriptionOptions } from "@/lib/assemblyai";
 import {
 	ENHANCED_AUDIO_CONTENT_TYPE,
@@ -29,6 +33,7 @@ import {
 	enhanceAudioFromUrl,
 } from "@/lib/audio-enhance";
 import { checkHasAudioTrack, extractAudioFromUrl } from "@/lib/audio-extract";
+import { startDescribeSilentVideo } from "@/lib/describe-video";
 import {
 	createEditTranscript,
 	editTranscriptWordsToCaptionVtt,
@@ -101,6 +106,8 @@ export async function transcribeVideoWorkflow(
 		return { success: true, message: "Transcription disabled - skipped" };
 	}
 
+	let savedTranscriptVtt = "";
+
 	try {
 		let audioUrl: string | null;
 		let videoDurationMs = Math.max(0, (videoData.video.duration ?? 0) * 1000);
@@ -114,6 +121,9 @@ export async function transcribeVideoWorkflow(
 
 			if (segments.status === "no-audio") {
 				await markNoAudio(videoId);
+				if (aiGenerationEnabled) {
+					await queueSilentVideoDescription(videoId, userId);
+				}
 				return {
 					success: true,
 					message: "Video has no audio track - skipped transcription",
@@ -147,6 +157,9 @@ export async function transcribeVideoWorkflow(
 
 		if (!audioUrl) {
 			await markNoAudio(videoId);
+			if (aiGenerationEnabled) {
+				await queueSilentVideoDescription(videoId, userId);
+			}
 			return {
 				success: true,
 				message: "Video has no audio track - skipped transcription",
@@ -160,6 +173,7 @@ export async function transcribeVideoWorkflow(
 		);
 
 		await saveTranscription(videoId, userId, videoData.video, transcription);
+		savedTranscriptVtt = transcription.vtt;
 	} catch (error) {
 		if (
 			error instanceof Error &&
@@ -167,6 +181,9 @@ export async function transcribeVideoWorkflow(
 		) {
 			await markNoAudio(videoId);
 			await cleanupTempAudio(videoId, userId, videoData.video);
+			if (aiGenerationEnabled) {
+				await queueSilentVideoDescription(videoId, userId);
+			}
 			return {
 				success: true,
 				message: "Video has no spoken audio - skipped transcription",
@@ -181,7 +198,7 @@ export async function transcribeVideoWorkflow(
 	await cleanupTempAudio(videoId, userId, videoData.video);
 
 	if (aiGenerationEnabled) {
-		await queueAiGeneration(videoId, userId);
+		await queuePostTranscriptionAi(videoId, userId, savedTranscriptVtt);
 	}
 
 	return { success: true, message: "Transcription completed successfully" };
@@ -1051,13 +1068,28 @@ async function cleanupTempAudio(
 	}
 }
 
-async function queueAiGeneration(
+async function queuePostTranscriptionAi(
+	videoId: string,
+	userId: string,
+	vtt: string,
+): Promise<void> {
+	"use step";
+
+	if (isTranscriptTooShort(transcriptTextFromVtt(vtt))) {
+		await startDescribeSilentVideo(videoId as Video.VideoId, userId);
+		return;
+	}
+
+	await startAiGeneration(videoId as Video.VideoId, userId);
+}
+
+async function queueSilentVideoDescription(
 	videoId: string,
 	userId: string,
 ): Promise<void> {
 	"use step";
 
-	await startAiGeneration(videoId as Video.VideoId, userId);
+	await startDescribeSilentVideo(videoId as Video.VideoId, userId);
 }
 
 async function _markEnhancedAudioProcessing(videoId: string): Promise<void> {

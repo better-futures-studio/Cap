@@ -14,6 +14,11 @@ vi.mock("@/lib/ai/provider", () => ({
 	isAiConfigured: vi.fn(() => true),
 }));
 
+vi.mock("@/lib/ai/gemini-video", () => ({
+	isTranscriptTooShort: (text: string) => text.trim().length < 10,
+	isVideoUnderstandingEnabled: () => false,
+}));
+
 vi.mock("@cap/database", () => ({
 	db: vi.fn(),
 }));

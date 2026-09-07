@@ -46,6 +46,9 @@ from a pasted link to a recap email.
   pipeline automatically.
 - **AI summary and action items.** Cap's AI pipeline runs against the
   transcript and produces a summary plus a structured action item list.
+- **Silent screen recordings.** Recordings with no speech still get an AI
+  title, summary, and chapters from Gemini video understanding
+  (`GOOGLE_GENERATIVE_AI_API_KEY`).
 - **Ask about a recording.** An Ask tab on every share page answers
   questions from the final transcript, summary, chapters, action items, and
   meeting chat, citing moments as clickable timestamps. Works for meetings
@@ -177,6 +180,13 @@ All variables are read through `packages/env/server.ts`; this table covers
 what a self-hoster running meeting features needs to look at, grouped by
 concern. See that file (and the upstream self-hosting guide) for storage,
 database, and general Cap AI provider variables not listed here.
+
+**AI**
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | optional | Gemini API key for title, summary, and chapters on silent recordings (no usable speech). Leave unset to disable. |
+| `GEMINI_VIDEO_MODEL` | optional | Gemini model for silent-recording video understanding. Defaults to `gemini-3.5-flash`. |
 
 **Login and organization**
 

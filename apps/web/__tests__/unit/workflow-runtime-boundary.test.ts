@@ -7,6 +7,7 @@ const workflowEntries = [
 	"workflows/finalize-desktop-recording.ts",
 	"workflows/transcribe.ts",
 	"workflows/generate-ai.ts",
+	"workflows/describe-video.ts",
 	"workflows/edit-video.ts",
 	"workflows/admin-reprocess-video.ts",
 	"workflows/import-loom-video.ts",

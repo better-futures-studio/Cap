@@ -19,7 +19,9 @@ https://cap.boca.pro. Upstream is `CapSoftware/Cap` (remote `upstream`).
 - Email: Postmark HTTP API (`POSTMARK_SERVER_TOKEN`). Railway Hobby blocks
   outbound SMTP, so `SMTP_URL` does not work there.
 - AI: OpenAI via the Responses API (`AI_PROVIDER=openai`, `AI_MODEL`),
-  transcription requires `ASSEMBLY_API_KEY`.
+  transcription requires `ASSEMBLY_API_KEY`. Silent screen recordings
+  (no usable speech) use Gemini video understanding
+  (`GOOGLE_GENERATIVE_AI_API_KEY`, optional `GEMINI_VIDEO_MODEL`).
 - Login: Google only. `CAP_DISABLE_EMAIL_LOGIN=true`,
   `CAP_ALLOWED_SIGNUP_DOMAINS=boca.pro`, `CAP_DEFAULT_ORG_ID` = the Boca Pro org,
   `CAP_DISABLE_ORG_CREATION=true`.

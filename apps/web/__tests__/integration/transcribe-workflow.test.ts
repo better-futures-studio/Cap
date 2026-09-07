@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
 	deleteObject: vi.fn(),
 	getInternalSignedObjectUrl: vi.fn(),
 	startAiGeneration: vi.fn(),
+	startDescribeSilentVideo: vi.fn(),
 	updates: [] as Record<string, unknown>[],
 }));
 
@@ -166,6 +167,10 @@ vi.mock("@/lib/generate-ai", () => ({
 	startAiGeneration: mocks.startAiGeneration,
 }));
 
+vi.mock("@/lib/describe-video", () => ({
+	startDescribeSilentVideo: mocks.startDescribeSilentVideo,
+}));
+
 function pipeValue(value: unknown) {
 	return { pipe: (runner: (input: unknown) => unknown) => runner(value) };
 }
@@ -184,6 +189,10 @@ describe("transcribeVideoWorkflow", () => {
 			pipeValue("https://storage.test/object"),
 		);
 		mocks.startAiGeneration.mockResolvedValue({ success: true, message: "ok" });
+		mocks.startDescribeSilentVideo.mockResolvedValue({
+			success: true,
+			message: "Video description workflow started",
+		});
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(async () => ({
@@ -268,6 +277,10 @@ describe("transcribeVideoWorkflow", () => {
 		expect(mocks.updates).toContainEqual({ transcriptionStatus: "NO_AUDIO" });
 		expect(mocks.updates).not.toContainEqual({ transcriptionStatus: "ERROR" });
 		expect(mocks.startAiGeneration).not.toHaveBeenCalled();
+		expect(mocks.startDescribeSilentVideo).toHaveBeenCalledWith(
+			"video-123",
+			"user-456",
+		);
 	});
 
 	it("preserves transcription failures unrelated to missing speech", async () => {

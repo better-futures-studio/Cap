@@ -148,6 +148,19 @@ function createServerEnv() {
 				.string()
 				.optional()
 				.describe("Replicate API token for audio enhancement"),
+			GOOGLE_GENERATIVE_AI_API_KEY: z
+				.string()
+				.optional()
+				.describe(
+					"Gemini API key for video understanding on silent recordings",
+				),
+			GEMINI_VIDEO_MODEL: z
+				.string()
+				.optional()
+				.default("gemini-3.5-flash")
+				.describe(
+					"Gemini model for silent-recording title, summary, and chapters",
+				),
 			SUPERMEMORY_API_KEY: z.string().optional(),
 			SUPERMEMORY_KNOWLEDGE_TAG: z.string().optional(),
 

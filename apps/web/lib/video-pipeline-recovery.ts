@@ -22,6 +22,7 @@ import {
 } from "drizzle-orm";
 import { start } from "workflow/api";
 import { isAiGenerationEnabledForUser } from "@/lib/ai-generation-entitlement";
+import { startDescribeSilentVideo } from "@/lib/describe-video";
 import { startAiGeneration } from "@/lib/generate-ai";
 import { transcribeVideo } from "@/lib/transcribe";
 import { importLoomVideoWorkflow } from "@/workflows/import-loom-video";
@@ -32,6 +33,7 @@ export const STALLED_PIPELINE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 export const STALLED_MEDIA_RECOVERY_BATCH_SIZE = 50;
 export const STALLED_TRANSCRIPTION_RECOVERY_BATCH_SIZE = 50;
 export const STALLED_AI_RECOVERY_BATCH_SIZE = 25;
+export const MIN_SILENT_VIDEO_DURATION_SECONDS = 5;
 
 const STALLED_MEDIA_PROCESSING_MESSAGES = [
 	"Starting video processing...",
@@ -241,9 +243,38 @@ type AiCandidate = {
 	userId: string;
 	metadata: VideoMetadata | null;
 	updatedAt: Date;
+	transcriptionStatus: string | null;
+	duration: number | null;
+	isScreenshot: boolean;
 	stripeSubscriptionStatus: string | null;
 	thirdPartyStripeSubscriptionId: string | null;
 };
+
+const LEGACY_AI_SUMMARY_FALLBACK =
+	"The AI was unable to generate a proper summary for this content.";
+
+export function isSilentVideoAiCandidate(candidate: {
+	isScreenshot?: boolean | null;
+	duration?: number | null;
+	transcriptionStatus?: string | null;
+	metadata?: VideoMetadata | null;
+}): boolean {
+	if (candidate.isScreenshot) return false;
+	if (
+		candidate.duration != null &&
+		candidate.duration < MIN_SILENT_VIDEO_DURATION_SECONDS
+	) {
+		return false;
+	}
+
+	const summary = candidate.metadata?.summary?.trim();
+	if (summary && summary !== LEGACY_AI_SUMMARY_FALLBACK) return false;
+
+	return (
+		candidate.transcriptionStatus === null ||
+		candidate.transcriptionStatus === "NO_AUDIO"
+	);
+}
 
 async function recoverAiCandidate(
 	candidate: AiCandidate,
@@ -270,9 +301,12 @@ async function recoverAiCandidate(
 		if (getAffectedRows(claimResult) === 0) return "already-claimed";
 	}
 
-	const result = await startAiGeneration(candidate.videoId, candidate.userId);
+	const result = isSilentVideoAiCandidate(candidate)
+		? await startDescribeSilentVideo(candidate.videoId, candidate.userId)
+		: await startAiGeneration(candidate.videoId, candidate.userId);
 	if (!result.success) return "failed";
-	return result.message === "AI generation workflow started"
+	return result.message === "AI generation workflow started" ||
+		result.message === "Video description workflow started"
 		? "started"
 		: "already-claimed";
 }
@@ -365,6 +399,9 @@ export async function recoverStalledVideoPipeline({
 				userId: videos.ownerId,
 				metadata: videos.metadata,
 				updatedAt: videos.updatedAt,
+				transcriptionStatus: videos.transcriptionStatus,
+				duration: videos.duration,
+				isScreenshot: videos.isScreenshot,
 				stripeSubscriptionStatus: users.stripeSubscriptionStatus,
 				thirdPartyStripeSubscriptionId: users.thirdPartyStripeSubscriptionId,
 			})
@@ -375,8 +412,6 @@ export async function recoverStalledVideoPipeline({
 				and(
 					isNull(videoUploads.videoId),
 					eq(videos.isScreenshot, false),
-					eq(videos.transcriptionStatus, "COMPLETE"),
-					gte(videos.createdAt, recentBefore),
 					lte(videos.updatedAt, staleBefore),
 					or(
 						isNull(
@@ -384,10 +419,26 @@ export async function recoverStalledVideoPipeline({
 						),
 						inArray(
 							sql<string>`JSON_UNQUOTE(JSON_EXTRACT(${videos.metadata}, '$.aiGenerationStatus'))`,
-							["QUEUED", "PROCESSING"],
+							["QUEUED", "PROCESSING", "SKIPPED"],
 						),
 					),
-					sql`(${videos.metadata} IS NULL OR JSON_EXTRACT(${videos.metadata}, '$.summary') IS NULL OR JSON_EXTRACT(${videos.metadata}, '$.chapters') IS NULL)`,
+					sql`(${videos.metadata} IS NULL OR JSON_EXTRACT(${videos.metadata}, '$.summary') IS NULL OR JSON_EXTRACT(${videos.metadata}, '$.chapters') IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(${videos.metadata}, '$.summary')) = ${LEGACY_AI_SUMMARY_FALLBACK})`,
+					or(
+						and(
+							eq(videos.transcriptionStatus, "COMPLETE"),
+							gte(videos.createdAt, recentBefore),
+						),
+						and(
+							or(
+								isNull(videos.transcriptionStatus),
+								eq(videos.transcriptionStatus, "NO_AUDIO"),
+							),
+							or(
+								isNull(videos.duration),
+								sql`${videos.duration} >= ${MIN_SILENT_VIDEO_DURATION_SECONDS}`,
+							),
+						),
+					),
 				),
 			)
 			.orderBy(asc(videos.updatedAt))
