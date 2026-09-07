@@ -89,6 +89,7 @@
 		"@vercel/firewall": "^1.1.2",
 		"@vercel/functions": "^3.1.0",
 		"@vercel/otel": "^2.0.1",
+		"@vercel/queue": "0.3.1 cbor-x@1.6.0 drizzle-orm@0.45.2 ulid@~3.0.1 @workflow/errors@4.1.4 @workflow/utils@4.1.3 @workflow/world@4.2.1 @workflow/world-local@4.2.1",
 		"@virtual-grid/react": "^2.0.3",
 		"@workflow/world-postgres": "4.3.0",
 		"@workos-inc/node": "^7.34.0",

@@ -827,6 +827,9 @@ importers:
       '@vercel/otel':
         specifier: ^2.0.1
         version: 2.1.3(@opentelemetry/api-logs@0.220.0)(@opentelemetry/api@1.9.1)(@opentelemetry/instrumentation@0.220.0(@opentelemetry/api@1.9.1))(@opentelemetry/resources@2.11.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.206.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.1.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.11.0(@opentelemetry/api@1.9.1))
+      '@vercel/queue':
+        specifier: 0.3.1 cbor-x@1.6.0 drizzle-orm@0.45.2 ulid@~3.0.1 @workflow/errors@4.1.4 @workflow/utils@4.1.3 @workflow/world@4.2.1 @workflow/world-local@4.2.1
+        version: 0.3.1
       '@virtual-grid/react':
         specifier: ^2.0.3
         version: 2.0.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
