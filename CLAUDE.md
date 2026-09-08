@@ -15,7 +15,7 @@ https://cap.boca.pro. Upstream is `CapSoftware/Cap` (remote `upstream`).
   (polls the workflow queue and calls Cap Web over the private network; built
   from `apps/web/Dockerfile.worker`; Cap Web runs with
   `WORKFLOW_WORKER_EXTERNAL=true` so it can sleep when idle),
-  `cron` (recovery endpoints every 5 min),
+  `cron` (recovery endpoints every 15 min; anything more frequent keeps Cap Web from sleeping),
   `db-backup` (nightly 03:00 UTC mysqldump to R2).
 - Video storage: Cloudflare R2 bucket `cap-boca` on the Boca Pro account
   (id `e4415d983441474fb88e8325ca67506a`). Signed URLs; bucket stays private.
