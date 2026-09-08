@@ -39,6 +39,9 @@ Cap Web builds in ~3 minutes (pnpm store cached via a Railway cache mount id).
 Do not add `pnpm-lock.yaml` or `bun.lock` back to `.gitignore`; `railway up`
 honours it and the build breaks.
 Optional Sentry: set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` on Cap Web (plus `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` to upload source maps).
+Standing up a new company instance follows `deploy/railway/README.md`.
+HeyJet.ai is the second instance (`clips.heyjet.ai`), running in its own
+HeyJet Railway workspace, operated from this machine with a workspace token.
 
 ### Checking and operating (Railway CLI, logged in as pro@boca.pro)
 

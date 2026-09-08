@@ -1,0 +1,7 @@
+{
+	"name": "cap-railway-iac",
+	"private": true,
+	"dependencies": {
+		"railway": "^3.11.0"
+	}
+}

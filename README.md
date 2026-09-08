@@ -156,6 +156,10 @@ Railway is the tested path — the current `Dockerfile`s and cron setup
 assume it — but any Docker host works, since nothing here is Railway-specific
 at the application level.
 
+Running this fork for a separate company, in that company's own Railway
+workspace, follows a repeatable path with a Railway IaC template — see
+[`deploy/railway/README.md`](deploy/railway/README.md).
+
 - **Services**: the web app (Next.js, listens on `PORT`, default 3000) and
   a media server (`capsoftware/cap-media-server`, mux/processing, port
   3456) as separate services, plus MySQL and object storage.
