@@ -1,7 +1,7 @@
 # Recovery cron: checks MySQL for pending work and calls Cap Web only when
 # needed, so a sleeping Cap Web stays asleep. Runs on Railway's cron schedule.
 FROM alpine:3.20
-RUN apk add --no-cache mariadb-client curl
+RUN apk add --no-cache mariadb-client mariadb-connector-c curl
 COPY apps/web/scripts/cron-check.sh /cron-check.sh
 RUN chmod +x /cron-check.sh
 CMD ["/cron-check.sh"]
