@@ -23,11 +23,13 @@ import {
 } from "./visibility";
 
 const MISSED_RECORDING_MS = 15 * 60 * 1000;
+const NO_RECORDING_MS = 60 * 60 * 1000;
 
 export async function reconcileMissedDoneRows(
 	client: RecallClient = getDefaultRecallClient(),
 ): Promise<number> {
 	const cutoff = new Date(Date.now() - MISSED_RECORDING_MS);
+	const noRecordingCutoff = new Date(Date.now() - NO_RECORDING_MS);
 	const rows = await db()
 		.select()
 		.from(meetingBots)
@@ -56,7 +58,24 @@ export async function reconcileMissedDoneRows(
 
 			const bot = await client.getBot(row.recallBotId);
 			const recordingId = bot.recordings[0]?.id;
-			if (!recordingId) continue;
+			if (!recordingId) {
+				// The call is over and Recall never produced a recording (waiting
+				// room timeout, kicked, nobody joined). Close the row so it stops
+				// being re-checked on every run.
+				if (
+					row.status !== "transcribing" &&
+					row.updatedAt < noRecordingCutoff
+				) {
+					await db()
+						.update(meetingBots)
+						.set({
+							status: "failed",
+							errorMessage: `No recording was produced (${row.statusSubCode ?? row.status})`,
+						})
+						.where(eq(meetingBots.id, row.id));
+				}
+				continue;
+			}
 			await start(importRecallRecordingWorkflow, [
 				{ meetingBotId: row.id, recordingId },
 			]);
