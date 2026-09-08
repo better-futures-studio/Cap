@@ -69,7 +69,6 @@ function CalendarCard({
 					calendarRowId: calendar.id,
 					autoRecord,
 				});
-				router.refresh();
 			} catch (error) {
 				toast.error(
 					error instanceof Error

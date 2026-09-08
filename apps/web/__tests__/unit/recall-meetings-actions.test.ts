@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 	getUserCalendar: vi.fn(),
 	listUpcomingCalendarEvents: vi.fn(),
 	setCalendarAutoRecord: vi.fn(),
+	start: vi.fn(),
 	toggleCalendarEventRecording: vi.fn(),
 	disconnectCalendar: vi.fn(),
 	setCalendarSeriesRule: vi.fn(),
@@ -95,7 +96,16 @@ vi.mock("@/lib/recall/calendars", () => ({
 	toggleCalendarEventRecording: mocks.toggleCalendarEventRecording,
 	disconnectCalendar: mocks.disconnectCalendar,
 	setCalendarSeriesRule: mocks.setCalendarSeriesRule,
+	autoRecordSyncWindow: (now: Date) => ({
+		startTimeGte: now.toISOString(),
+		startTimeLte: new Date(now.getTime() + 1000).toISOString(),
+		isDeleted: false,
+	}),
 }));
+vi.mock("@/workflows/recall-calendar-sync", () => ({
+	syncCalendarEventsWorkflow: { name: "syncCalendarEventsWorkflow" },
+}));
+vi.mock("workflow/api", () => ({ start: mocks.start }));
 vi.mock("@/lib/recall/action-items", () => ({
 	getMeetingActionItems: vi.fn(),
 }));
@@ -138,9 +148,8 @@ vi.mock("effect", () => ({
 	Effect: { gen: vi.fn(), provide: vi.fn() },
 }));
 
-const { listMeetingBots, scheduleMeetingBot } = await import(
-	"@/actions/meetings"
-);
+const { listMeetingBots, scheduleMeetingBot, setCalendarAutoRecordAction } =
+	await import("@/actions/meetings");
 
 const orgId = "org" as Organisation.OrganisationId;
 const userId = "user" as User.UserId;
@@ -306,5 +315,54 @@ describe("listMeetingBots", () => {
 		const { upcoming } = await listMeetingBots({ orgId });
 		expect(upcoming).toHaveLength(1);
 		expect(upcoming[0]?.id).toBe("owned_bot");
+	});
+});
+
+describe("setCalendarAutoRecordAction", () => {
+	it("flips the flag and syncs upcoming events in the background", async () => {
+		mocks.setCalendarAutoRecord.mockResolvedValue({
+			id: "cal_1",
+			recallCalendarId: "recall_cal_1",
+			autoRecord: true,
+		});
+
+		await setCalendarAutoRecordAction({
+			orgId,
+			calendarRowId: "cal_1",
+			autoRecord: true,
+		});
+
+		expect(mocks.setCalendarAutoRecord).toHaveBeenCalledWith({
+			calendarRowId: "cal_1",
+			userId,
+			autoRecord: true,
+		});
+		expect(mocks.start).toHaveBeenCalledWith(
+			{ name: "syncCalendarEventsWorkflow" },
+			[
+				expect.objectContaining({
+					recallCalendarId: "recall_cal_1",
+					isDeleted: false,
+					startTimeGte: expect.any(String),
+					startTimeLte: expect.any(String),
+				}),
+			],
+		);
+	});
+
+	it("does not start a sync when auto-record is turned off", async () => {
+		mocks.setCalendarAutoRecord.mockResolvedValue({
+			id: "cal_1",
+			recallCalendarId: "recall_cal_1",
+			autoRecord: false,
+		});
+
+		await setCalendarAutoRecordAction({
+			orgId,
+			calendarRowId: "cal_1",
+			autoRecord: false,
+		});
+
+		expect(mocks.start).not.toHaveBeenCalled();
 	});
 });
