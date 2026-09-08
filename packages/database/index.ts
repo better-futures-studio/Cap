@@ -10,7 +10,17 @@ function createDrizzle() {
 	if (!url.startsWith("mysql://"))
 		throw new Error("DATABASE_URL is not a MySQL URL");
 
-	return drizzle(url);
+	// Idle connections send TCP keepalives, which Railway counts as outbound
+	// traffic and which keep a serverless service from sleeping. Close idle
+	// connections quickly and let the pool reconnect on the next query.
+	return drizzle({
+		connection: {
+			uri: url,
+			enableKeepAlive: false,
+			idleTimeout: 30_000,
+			maxIdle: 0,
+		},
+	});
 }
 
 let _cached: ReturnType<typeof createDrizzle> | undefined;
