@@ -35,7 +35,8 @@ https://cap.boca.pro. Upstream is `CapSoftware/Cap` (remote `upstream`).
 ### Deploying
 
 Push to `main`. Both app services build from GitHub via the Railway app.
-Cap Web builds in ~3 minutes (pnpm store cached via a Railway cache mount id).
+Cap Web builds in ~4 minutes (no pnpm cache mount: Railway cache ids must name
+the building service literally, and the Dockerfile serves several instances).
 Do not add `pnpm-lock.yaml` or `bun.lock` back to `.gitignore`; `railway up`
 honours it and the build breaks.
 Optional Sentry: set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` on Cap Web (plus `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` to upload source maps).
