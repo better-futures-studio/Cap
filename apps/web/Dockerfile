@@ -6,7 +6,10 @@ WORKDIR /app
 COPY . .
 
 RUN corepack enable pnpm
-RUN --mount=type=cache,id=s/4eb09acd-47d5-4f5b-9028-dfd7185f94ad-pnpm,target=/root/.local/share/pnpm/store pnpm i --frozen-lockfile
+# Railway requires cache ids prefixed with the building service id; it injects
+# RAILWAY_SERVICE_ID as a build arg, so the same Dockerfile works per instance.
+ARG RAILWAY_SERVICE_ID
+RUN --mount=type=cache,id=s/${RAILWAY_SERVICE_ID}-pnpm,target=/root/.local/share/pnpm/store pnpm i --frozen-lockfile
 
 ARG NEXT_PUBLIC_DOCKER_BUILD=true
 ARG NEXT_PUBLIC_SENTRY_DSN
