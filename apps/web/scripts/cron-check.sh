@@ -8,7 +8,7 @@ set -eu
 MYSQLPORT="${MYSQLPORT:-3306}"
 
 query() {
-	mysql -h "$MYSQLHOST" -P "$MYSQLPORT" -u "$MYSQLUSER" -p"$MYSQLPASSWORD" -D "$MYSQLDATABASE" -N -B -e "$1" 2>/dev/null | tr -d '[:space:]'
+	MYSQL_PWD="$MYSQLPASSWORD" mysql --skip-ssl-verify-server-cert -h "$MYSQLHOST" -P "$MYSQLPORT" -u "$MYSQLUSER" -D "$MYSQLDATABASE" -N -B -e "$1" 2>&1 | tr -d '[:space:]' | cut -c1-200
 }
 
 call() {
@@ -60,6 +60,9 @@ SELECT
        AND joinAt > UTC_TIMESTAMP() - INTERVAL 30 DAY)
 ")
 
+case "$video_work$recall_work" in
+	*[!0-9]*|"") echo "pre-check failed: video='$video_work' recall='$recall_work'; running everything"; force=1 ;;
+esac
 echo "pending: video=${video_work:-?} recall=${recall_work:-?} force=$force"
 
 if [ "$force" = 1 ] || [ "${video_work:-1}" != "0" ]; then
