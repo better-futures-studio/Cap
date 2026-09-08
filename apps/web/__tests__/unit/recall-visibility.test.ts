@@ -506,15 +506,12 @@ describe("migrateMeetingSpacesToVideoShares", () => {
 		expect(rows.space_members).toHaveLength(2);
 	});
 
-	it("privatizes public meeting videos and writes attendee shares", async () => {
+	it("leaves a public meeting video alone when it is not in a meeting Space", async () => {
 		rows.videos = [{ id: videoId, ownerId, public: true }];
 		const client = mockClient();
 		const result = await migrateMeetingSpacesToVideoShares({ client });
 
-		expect(result.spacesMigrated).toBe(0);
-		expect(result.videosPrivatized).toBe(1);
-		expect(rows.videos[0]?.public).toBe(false);
-		const shareIds = (rows.video_shares ?? []).map((row) => row.userId).sort();
-		expect(shareIds).toEqual([sharedOwnerId, calendarUserId].sort());
+		expect(result).toEqual({ spacesMigrated: 0, videosPrivatized: 0 });
+		expect(rows.videos[0]?.public).toBe(true);
 	});
 });

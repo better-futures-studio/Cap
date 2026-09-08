@@ -631,19 +631,10 @@ export async function migrateMeetingSpacesToVideoShares(
 		});
 	}
 
-	const publicMeetingVideos = await db()
-		.select({
-			videoId: meetingBots.videoId,
-			ownerId: videos.ownerId,
-			meetingBotId: meetingBots.id,
-			statusSubCode: meetingBots.statusSubCode,
-		})
-		.from(meetingBots)
-		.innerJoin(videos, eq(videos.id, meetingBots.videoId))
-		.where(and(isNotNull(meetingBots.videoId), eq(videos.public, true)))
-		.limit(200);
-
-	if (meetingSpaces.size === 0 && publicMeetingVideos.length === 0) {
+	// Only recordings that came out of a per-meeting Space are made private
+	// here (a one-time migration). Never touch a recording's public flag
+	// otherwise: owners may publish meeting recordings on purpose.
+	if (meetingSpaces.size === 0) {
 		return { spacesMigrated: 0, videosPrivatized: 0 };
 	}
 
@@ -673,35 +664,6 @@ export async function migrateMeetingSpacesToVideoShares(
 				error: error instanceof Error ? error.message : "unknown",
 			});
 		}
-	}
-
-	const publicByVideo = new Map<
-		string,
-		{
-			videoId: Video.VideoId;
-			bots: { id: string; statusSubCode: string | null }[];
-		}
-	>();
-	for (const row of publicMeetingVideos) {
-		if (!row.videoId) continue;
-		const existing = publicByVideo.get(row.videoId);
-		if (existing) {
-			existing.bots.push({
-				id: row.meetingBotId,
-				statusSubCode: row.statusSubCode,
-			});
-			continue;
-		}
-		publicByVideo.set(row.videoId, {
-			videoId: row.videoId,
-			bots: [{ id: row.meetingBotId, statusSubCode: row.statusSubCode }],
-		});
-	}
-
-	for (const row of publicByVideo.values()) {
-		privatizeIds.add(row.videoId);
-		const botId = pickPrimaryMeetingBotId(row.bots);
-		if (botId) shareBotIds.add(botId);
 	}
 
 	if (privatizeIds.size > 0) {
