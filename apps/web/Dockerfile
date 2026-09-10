@@ -15,7 +15,8 @@ ARG NEXT_PUBLIC_SENTRY_DSN
 ENV NEXT_PUBLIC_WEB_URL=http://localhost:3000
 ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 
-RUN pnpm run build:web
+# Turbopack occasionally fails loading postcss.config.js; a second run passes.
+RUN pnpm run build:web || pnpm run build:web
 
 
 # 3. Production image, copy all the files and run next
