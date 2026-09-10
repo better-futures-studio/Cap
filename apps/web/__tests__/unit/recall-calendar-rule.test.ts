@@ -5,9 +5,13 @@ vi.mock("@/lib/recall/bot-image", () => ({
 }));
 
 import {
+	CALENDAR_STATUS_REFRESH_MS,
 	calendarEventSeriesKey,
 	decideCalendarEventAction,
+	refreshConnectedCalendarStatus,
+	shouldRefreshConnectedCalendarStatus,
 } from "@/lib/recall/calendars";
+import type { RecallClient } from "@/lib/recall/client";
 
 const now = new Date("2024-01-01T12:00:00.000Z");
 
@@ -182,5 +186,54 @@ describe("calendarEventSeriesKey", () => {
 				raw: {},
 			}),
 		).toBeNull();
+	});
+});
+
+describe("shouldRefreshConnectedCalendarStatus", () => {
+	const now = new Date("2026-09-10T12:00:00.000Z");
+
+	it("skips when updatedAt is recent", () => {
+		expect(
+			shouldRefreshConnectedCalendarStatus(
+				{
+					status: "connected",
+					updatedAt: new Date(now.getTime() - 60_000),
+				},
+				now,
+			),
+		).toBe(false);
+	});
+
+	it("refreshes a connected calendar older than 5 minutes", () => {
+		expect(
+			shouldRefreshConnectedCalendarStatus(
+				{
+					status: "connected",
+					updatedAt: new Date(now.getTime() - CALENDAR_STATUS_REFRESH_MS),
+				},
+				now,
+			),
+		).toBe(true);
+	});
+});
+
+describe("refreshConnectedCalendarStatus", () => {
+	it("skips the Recall call when updatedAt is recent", async () => {
+		const now = new Date("2026-09-10T12:00:00.000Z");
+		const client = {
+			getCalendar: vi.fn(),
+		} as unknown as RecallClient;
+
+		await refreshConnectedCalendarStatus(
+			{
+				status: "connected",
+				updatedAt: new Date(now.getTime() - 60_000),
+				recallCalendarId: "rc_1",
+			},
+			client,
+			now,
+		);
+
+		expect(client.getCalendar).not.toHaveBeenCalled();
 	});
 });

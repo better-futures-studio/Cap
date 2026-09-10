@@ -136,6 +136,11 @@ function CalendarCard({
 					Disconnect
 				</button>
 			</div>
+			{calendar.disconnectReason ? (
+				<p className="mt-2 text-xs text-gray-10">
+					Recall reported: {calendar.disconnectReason.slice(0, 200)}
+				</p>
+			) : null}
 		</Card>
 	);
 }

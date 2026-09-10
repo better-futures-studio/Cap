@@ -1,9 +1,10 @@
 import { db } from "@cap/database";
-import { meetingBots } from "@cap/database/schema";
+import { meetingBots, meetingCalendars } from "@cap/database/schema";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { start } from "workflow/api";
 import { importRecallRecordingWorkflow } from "@/workflows/recall-meeting";
 import { reconcileStaleSchedulingRows } from "./bots";
+import { syncCalendarStatus } from "./calendars";
 import { importMeetingChatComments } from "./chat-comments";
 import { RecallApiError, type RecallClient } from "./client";
 import {
@@ -204,12 +205,42 @@ export async function backfillCalendarAttendeeEmails(
 	return filled;
 }
 
+const CALENDAR_STATUS_SYNC_LIMIT = 25;
+
+export async function syncCalendarStatuses(
+	client: RecallClient = getDefaultRecallClient(),
+): Promise<number> {
+	const rows = await db()
+		.select({
+			recallCalendarId: meetingCalendars.recallCalendarId,
+		})
+		.from(meetingCalendars)
+		.where(eq(meetingCalendars.status, "connected"))
+		.orderBy(asc(meetingCalendars.updatedAt))
+		.limit(CALENDAR_STATUS_SYNC_LIMIT);
+
+	let calendarStatuses = 0;
+	for (const row of rows) {
+		try {
+			await syncCalendarStatus(row.recallCalendarId, client);
+			calendarStatuses += 1;
+		} catch (error) {
+			console.warn("[recall-reconcile] calendar status", {
+				recallCalendarId: row.recallCalendarId,
+				error: error instanceof Error ? error.message : "unknown",
+			});
+		}
+	}
+	return calendarStatuses;
+}
+
 export async function reconcileRecallMeetingBots(): Promise<{
 	staleScheduling: number;
 	missedRecordings: number;
 	chatBackfill: number;
 	recapEmails: number;
 	attendeeBackfill: number;
+	calendarStatuses: number;
 	spacesMigrated: number;
 	videosPrivatized: number;
 } | null> {
@@ -220,6 +251,7 @@ export async function reconcileRecallMeetingBots(): Promise<{
 		chatBackfill,
 		recapEmails,
 		attendeeBackfill,
+		calendarStatuses,
 		shareMigration,
 	] = await Promise.all([
 		reconcileStaleSchedulingRows(getDefaultRecallClient()),
@@ -227,6 +259,7 @@ export async function reconcileRecallMeetingBots(): Promise<{
 		backfillChatComments(),
 		sendPendingRecapEmails(),
 		backfillCalendarAttendeeEmails(),
+		syncCalendarStatuses(),
 		migrateMeetingSpacesToVideoShares(),
 	]);
 	return {
@@ -235,6 +268,7 @@ export async function reconcileRecallMeetingBots(): Promise<{
 		chatBackfill,
 		recapEmails,
 		attendeeBackfill,
+		calendarStatuses,
 		spacesMigrated: shareMigration.spacesMigrated,
 		videosPrivatized: shareMigration.videosPrivatized,
 	};

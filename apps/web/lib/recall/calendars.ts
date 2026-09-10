@@ -14,6 +14,7 @@ import { loadBotVideoOutput } from "./bot-image";
 import {
 	RecallApiError,
 	type RecallAutomaticVideoOutput,
+	type RecallCalendar,
 	type RecallCalendarEvent,
 	type RecallClient,
 } from "./client";
@@ -338,16 +339,67 @@ function normalizeCalendarStatus(
 	return "connecting";
 }
 
+function latestStatusChangeReason(
+	changes: RecallCalendar["status_changes"],
+): string | null {
+	if (!changes || changes.length === 0) return null;
+	const latest = changes.reduce((current, change) =>
+		change.created_at >= current.created_at ? change : current,
+	);
+	const reason = latest.reason?.trim();
+	return reason ? reason : null;
+}
+
+export const CALENDAR_STATUS_REFRESH_MS = 5 * 60 * 1000;
+
+export function shouldRefreshConnectedCalendarStatus(
+	calendar: Pick<MeetingCalendarRow, "status" | "updatedAt">,
+	now: Date = new Date(),
+): boolean {
+	return (
+		calendar.status === "connected" &&
+		now.getTime() - calendar.updatedAt.getTime() >= CALENDAR_STATUS_REFRESH_MS
+	);
+}
+
+export async function refreshConnectedCalendarStatus(
+	calendar: Pick<
+		MeetingCalendarRow,
+		"status" | "updatedAt" | "recallCalendarId"
+	>,
+	client: RecallClient = getDefaultRecallClient(),
+	now: Date = new Date(),
+): Promise<void> {
+	if (!shouldRefreshConnectedCalendarStatus(calendar, now)) return;
+	try {
+		await syncCalendarStatus(calendar.recallCalendarId, client);
+	} catch (error) {
+		console.warn("[recall] calendar status refresh failed", {
+			recallCalendarId: calendar.recallCalendarId,
+			error: error instanceof Error ? error.message : "unknown",
+		});
+	}
+}
+
 export async function syncCalendarStatus(
 	recallCalendarId: string,
 	client: RecallClient = getDefaultRecallClient(),
 ): Promise<void> {
 	const remote = await client.getCalendar(recallCalendarId);
 	const status = normalizeCalendarStatus(remote.status);
+	const disconnectReason =
+		status === "disconnected"
+			? latestStatusChangeReason(remote.status_changes)
+			: null;
 
 	await db()
 		.update(meetingCalendars)
-		.set({ status, platformEmail: remote.platform_email })
+		.set({
+			status,
+			platformEmail: remote.platform_email,
+			disconnectReason,
+			updatedAt: new Date(),
+		})
 		.where(eq(meetingCalendars.recallCalendarId, recallCalendarId));
 
 	if (status !== "disconnected") return;

@@ -1895,6 +1895,7 @@ export const meetingCalendars = mysqlTable(
 		status: varchar("status", { length: 32 })
 			.notNull()
 			.$type<"connecting" | "connected" | "disconnected">(),
+		disconnectReason: text("disconnectReason"),
 		autoRecord: boolean("autoRecord").notNull().default(false),
 		lastSyncedAt: timestamp("lastSyncedAt"),
 		createdAt: timestamp("createdAt").notNull().defaultNow(),

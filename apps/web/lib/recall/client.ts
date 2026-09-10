@@ -92,11 +92,18 @@ export type RecallTranscript = {
 	data?: { download_url?: string };
 };
 
+export type RecallCalendarStatusChange = {
+	status: string;
+	created_at: string;
+	reason?: string | null;
+};
+
 export type RecallCalendar = {
 	id: string;
 	status: string;
 	platform_email: string | null;
 	platform: string;
+	status_changes?: RecallCalendarStatusChange[];
 };
 
 export type RecallCalendarEvent = {

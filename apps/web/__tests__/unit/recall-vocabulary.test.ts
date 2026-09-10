@@ -63,6 +63,7 @@ vi.mock("@/lib/recall/bots", () => ({
 vi.mock("@/lib/recall/calendars", () => ({
 	getUserCalendar: vi.fn(),
 	listUpcomingCalendarEvents: vi.fn(),
+	refreshConnectedCalendarStatus: vi.fn(),
 	setCalendarAutoRecord: vi.fn(),
 	toggleCalendarEventRecording: vi.fn(),
 	disconnectCalendar: vi.fn(),

@@ -28,6 +28,20 @@ vi.mock("@cap/database/schema", () => {
 			"statusSubCode",
 			"updatedAt",
 		]),
+		meetingCalendars: table("meeting_calendars", [
+			"id",
+			"recallCalendarId",
+			"status",
+			"platformEmail",
+			"disconnectReason",
+			"updatedAt",
+		]),
+		meetingCalendarSeriesRules: table("meeting_calendar_series_rules", [
+			"id",
+			"calendarId",
+			"seriesKey",
+			"record",
+		]),
 	};
 });
 vi.mock("drizzle-orm", () => ({
@@ -37,12 +51,18 @@ vi.mock("drizzle-orm", () => ({
 	isNull: (column: string) => ({ op: "isNull", column }),
 	isNotNull: (column: string) => ({ op: "isNotNull", column }),
 	asc: (column: string) => column,
+	desc: (column: string) => column,
 	inArray: (column: string, values: unknown[]) => ({
 		op: "inArray",
 		column,
 		values,
 	}),
 	lt: (column: string, value: unknown) => ({ op: "lt", column, value }),
+	notInArray: (column: string, values: unknown[]) => ({
+		op: "notInArray",
+		column,
+		values,
+	}),
 }));
 vi.mock("@/lib/recall/config", () => ({
 	DEFAULT_BOT_NAME: "Meeting Notetaker",
@@ -117,6 +137,11 @@ function matches(row: Row, condition?: Condition): boolean {
 			Array.isArray(condition.values) && condition.values.includes(row[key])
 		);
 	}
+	if (condition.op === "notInArray") {
+		return (
+			Array.isArray(condition.values) && !condition.values.includes(row[key])
+		);
+	}
 	return true;
 }
 
@@ -160,11 +185,14 @@ function createClient() {
 	};
 }
 
-const { backfillCalendarAttendeeEmails, reconcileMissedDoneRows } =
-	await import("@/lib/recall/reconcile");
+const {
+	backfillCalendarAttendeeEmails,
+	reconcileMissedDoneRows,
+	syncCalendarStatuses,
+} = await import("@/lib/recall/reconcile");
 
 beforeEach(() => {
-	rows = { meeting_bots: [] };
+	rows = { meeting_bots: [], meeting_calendars: [] };
 	mocks.db.mockReturnValue(createClient());
 	mocks.start.mockReset();
 });
@@ -277,5 +305,73 @@ describe("reconcileMissedDoneRows", () => {
 		expect(mocks.start).toHaveBeenCalledWith({}, [
 			{ meetingBotId: "mb_shared", recordingId: "rec_1" },
 		]);
+	});
+});
+
+describe("syncCalendarStatuses", () => {
+	it("updates a disconnected calendar and stores Recall's reason", async () => {
+		rows.meeting_calendars = [
+			{
+				id: "cal_connected",
+				recallCalendarId: "rc_connected",
+				status: "connected",
+				platformEmail: "ada@example.com",
+				disconnectReason: null,
+				updatedAt: new Date("2026-09-02T00:00:00.000Z"),
+			},
+			{
+				id: "cal_disconnected",
+				recallCalendarId: "rc_disconnected",
+				status: "connected",
+				platformEmail: "bea@example.com",
+				disconnectReason: null,
+				updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+			},
+		];
+		const client = {
+			getCalendar: vi.fn(async (id: string) => {
+				if (id === "rc_connected") {
+					return {
+						id,
+						status: "connected",
+						platform_email: "ada@example.com",
+						status_changes: [],
+					};
+				}
+				return {
+					id,
+					status: "disconnected",
+					platform_email: "bea@example.com",
+					status_changes: [
+						{
+							status: "connected",
+							created_at: "2026-09-08T12:00:00.000Z",
+							reason: "",
+						},
+						{
+							status: "disconnected",
+							created_at: "2026-09-08T12:00:00.300Z",
+							reason: "Google Calendar API has not been used in project",
+						},
+					],
+				};
+			}),
+		} as unknown as RecallClient;
+
+		await expect(syncCalendarStatuses(client)).resolves.toBe(2);
+		expect(client.getCalendar).toHaveBeenCalledTimes(2);
+
+		const connected = rows.meeting_calendars.find(
+			(row) => row.id === "cal_connected",
+		);
+		const disconnected = rows.meeting_calendars.find(
+			(row) => row.id === "cal_disconnected",
+		);
+		expect(connected?.status).toBe("connected");
+		expect(connected?.disconnectReason).toBeNull();
+		expect(disconnected?.status).toBe("disconnected");
+		expect(disconnected?.disconnectReason).toBe(
+			"Google Calendar API has not been used in project",
+		);
 	});
 });

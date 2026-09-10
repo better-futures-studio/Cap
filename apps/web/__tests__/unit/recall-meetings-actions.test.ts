@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 	cancelMeetingBot: vi.fn(),
 	getUserCalendar: vi.fn(),
 	listUpcomingCalendarEvents: vi.fn(),
+	refreshConnectedCalendarStatus: vi.fn(),
 	setCalendarAutoRecord: vi.fn(),
 	start: vi.fn(),
 	toggleCalendarEventRecording: vi.fn(),
@@ -92,6 +93,7 @@ vi.mock("@/lib/recall/bots", () => ({
 vi.mock("@/lib/recall/calendars", () => ({
 	getUserCalendar: mocks.getUserCalendar,
 	listUpcomingCalendarEvents: mocks.listUpcomingCalendarEvents,
+	refreshConnectedCalendarStatus: mocks.refreshConnectedCalendarStatus,
 	setCalendarAutoRecord: mocks.setCalendarAutoRecord,
 	toggleCalendarEventRecording: mocks.toggleCalendarEventRecording,
 	disconnectCalendar: mocks.disconnectCalendar,
@@ -148,8 +150,12 @@ vi.mock("effect", () => ({
 	Effect: { gen: vi.fn(), provide: vi.fn() },
 }));
 
-const { listMeetingBots, scheduleMeetingBot, setCalendarAutoRecordAction } =
-	await import("@/actions/meetings");
+const {
+	getMeetingCalendarSettings,
+	listMeetingBots,
+	scheduleMeetingBot,
+	setCalendarAutoRecordAction,
+} = await import("@/actions/meetings");
 
 const orgId = "org" as Organisation.OrganisationId;
 const userId = "user" as User.UserId;
@@ -364,5 +370,41 @@ describe("setCalendarAutoRecordAction", () => {
 		});
 
 		expect(mocks.start).not.toHaveBeenCalled();
+	});
+});
+
+describe("getMeetingCalendarSettings", () => {
+	it("refreshes a connected calendar before returning the rendered row", async () => {
+		const connected = {
+			id: "cal_1",
+			platformEmail: "ada@example.com",
+			status: "connected" as const,
+			autoRecord: false,
+			disconnectReason: null,
+			updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+			recallCalendarId: "rc_1",
+		};
+		mocks.getUserCalendar
+			.mockResolvedValueOnce(connected)
+			.mockResolvedValueOnce({
+				...connected,
+				status: "disconnected",
+				disconnectReason: "Google Calendar API not enabled",
+			});
+		mocks.refreshConnectedCalendarStatus.mockResolvedValue(undefined);
+		mocks.listUpcomingCalendarEvents.mockResolvedValue([]);
+
+		const result = await getMeetingCalendarSettings({ orgId });
+
+		expect(mocks.refreshConnectedCalendarStatus).toHaveBeenCalledWith(
+			connected,
+		);
+		expect(result.calendar).toEqual({
+			id: "cal_1",
+			platformEmail: "ada@example.com",
+			status: "disconnected",
+			autoRecord: false,
+			disconnectReason: "Google Calendar API not enabled",
+		});
 	});
 });

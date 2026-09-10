@@ -28,6 +28,7 @@ import {
 	disconnectCalendar,
 	getUserCalendar,
 	listUpcomingCalendarEvents,
+	refreshConnectedCalendarStatus,
 	setCalendarAutoRecord,
 	setCalendarSeriesRule,
 	toggleCalendarEventRecording,
@@ -252,13 +253,18 @@ export async function getMeetingCalendarSettings({
 }) {
 	const user = await requireUser(orgId);
 
-	const calendarRow = await getUserCalendar({ orgId, userId: user.id });
+	let calendarRow = await getUserCalendar({ orgId, userId: user.id });
+	if (calendarRow) {
+		await refreshConnectedCalendarStatus(calendarRow);
+		calendarRow = await getUserCalendar({ orgId, userId: user.id });
+	}
 	const calendar = calendarRow
 		? {
 				id: calendarRow.id,
 				platformEmail: calendarRow.platformEmail,
 				status: calendarRow.status,
 				autoRecord: calendarRow.autoRecord,
+				disconnectReason: calendarRow.disconnectReason,
 			}
 		: null;
 	const upcoming = calendarRow
