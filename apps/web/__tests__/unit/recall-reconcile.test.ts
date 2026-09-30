@@ -4,6 +4,8 @@ import type { RecallClient } from "@/lib/recall/client";
 const mocks = vi.hoisted(() => ({
 	db: vi.fn(),
 	start: vi.fn(),
+	defaultClient: vi.fn(),
+	sendMeetingRecap: vi.fn(),
 }));
 
 vi.mock("@cap/database", () => ({ db: mocks.db }));
@@ -21,6 +23,9 @@ vi.mock("@cap/database/schema", () => {
 			"attendeeEmails",
 			"attendeeNames",
 			"joinAt",
+			"createdAt",
+			"recapSentAt",
+			"chatSyncedAt",
 			"recallBotId",
 			"recallRecordingId",
 			"videoId",
@@ -70,9 +75,7 @@ vi.mock("@/lib/recall/config", () => ({
 	isRecallConfigured: () => true,
 }));
 vi.mock("@/lib/recall/default-client", () => ({
-	getDefaultRecallClient: () => {
-		throw new Error("default Recall client should not be used in tests");
-	},
+	getDefaultRecallClient: mocks.defaultClient,
 }));
 vi.mock("workflow/api", () => ({ start: mocks.start }));
 vi.mock("@/workflows/recall-meeting", () => ({
@@ -85,7 +88,7 @@ vi.mock("@/lib/recall/chat-comments", () => ({
 	importMeetingChatComments: vi.fn(),
 }));
 vi.mock("@/lib/recall/recap", () => ({
-	sendMeetingRecap: vi.fn(),
+	sendMeetingRecap: mocks.sendMeetingRecap,
 }));
 vi.mock("@/lib/recall/visibility", async (importOriginal) => {
 	const actual =
@@ -188,6 +191,7 @@ function createClient() {
 const {
 	backfillCalendarAttendeeEmails,
 	reconcileMissedDoneRows,
+	reconcileRecallMeetingBots,
 	syncCalendarStatuses,
 } = await import("@/lib/recall/reconcile");
 
@@ -195,6 +199,11 @@ beforeEach(() => {
 	rows = { meeting_bots: [], meeting_calendars: [] };
 	mocks.db.mockReturnValue(createClient());
 	mocks.start.mockReset();
+	mocks.defaultClient.mockImplementation(() => {
+		throw new Error("default Recall client should not be used in tests");
+	});
+	mocks.sendMeetingRecap.mockReset();
+	mocks.sendMeetingRecap.mockResolvedValue({ sent: true, recipients: 1 });
 });
 
 describe("backfillCalendarAttendeeEmails", () => {
@@ -373,5 +382,39 @@ describe("syncCalendarStatuses", () => {
 		expect(disconnected?.disconnectReason).toBe(
 			"Google Calendar API has not been used in project",
 		);
+	});
+});
+
+describe("reconcileRecallMeetingBots", () => {
+	it("retries a recent shared call scheduled weeks ago without resending sent or old recaps", async () => {
+		const now = new Date("2026-09-30T12:00:00Z");
+		vi.spyOn(Date, "now").mockReturnValue(now.getTime());
+		mocks.defaultClient.mockReturnValue({});
+		const shared = {
+			id: "mb_shared",
+			status: "complete",
+			statusSubCode: "shared:mb_primary",
+			videoId: "vid_1",
+			recapSentAt: null,
+			createdAt: new Date("2026-09-04T14:27:24Z"),
+			joinAt: new Date("2026-09-28T17:00:00Z"),
+		};
+		rows.meeting_bots = [
+			shared,
+			{ ...shared, id: "mb_primary", recapSentAt: now },
+			{
+				...shared,
+				id: "mb_old_call",
+				joinAt: new Date("2026-09-14T17:00:00Z"),
+				createdAt: now,
+			},
+			{ ...shared, id: "mb_no_video", videoId: null },
+			{ ...shared, id: "mb_incomplete", status: "importing" },
+		];
+
+		const result = await reconcileRecallMeetingBots();
+
+		expect(mocks.sendMeetingRecap).toHaveBeenCalledExactlyOnceWith("mb_shared");
+		expect(result?.recapEmails).toBe(1);
 	});
 });

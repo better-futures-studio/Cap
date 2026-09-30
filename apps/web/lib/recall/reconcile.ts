@@ -137,7 +137,7 @@ async function sendPendingRecapEmails(): Promise<number> {
 				eq(meetingBots.status, "complete"),
 				isNull(meetingBots.recapSentAt),
 				isNotNull(meetingBots.videoId),
-				gte(meetingBots.createdAt, cutoff),
+				gte(meetingBots.joinAt, cutoff),
 			),
 		)
 		.orderBy(asc(meetingBots.createdAt))

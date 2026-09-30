@@ -54,7 +54,7 @@ SELECT
        AND videoId IS NOT NULL AND recallRecordingId IS NOT NULL)
 + (SELECT COUNT(*) FROM meeting_bots
      WHERE status = 'complete' AND recapSentAt IS NULL AND videoId IS NOT NULL
-       AND createdAt > UTC_TIMESTAMP() - INTERVAL 3 DAY)
+       AND joinAt >= UTC_TIMESTAMP() - INTERVAL 7 DAY)
 + (SELECT COUNT(*) FROM meeting_bots
      WHERE source = 'calendar' AND attendeeEmails IS NULL AND calendarEventId IS NOT NULL
        AND joinAt > UTC_TIMESTAMP() - INTERVAL 30 DAY)
