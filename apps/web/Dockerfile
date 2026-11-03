@@ -45,6 +45,10 @@ RUN mkdir -p /app/workflow-world && cd /app/workflow-world \
 ENV NODE_PATH=/app/workflow-world/node_modules
 
 
+# RDS's CA for TLS to MySQL and PostgreSQL on AWS; Node trusts it through
+# NODE_EXTRA_CA_CERTS. ADD from a URL leaves the file 0600, so open it up.
+ADD --checksum=sha256:d46e1bdfda05c8e7644e50930806a19b139a222542bf0348082fb59ece2b5fa5 https://truststore.pki.rds.amazonaws.com/us-east-2/us-east-2-bundle.pem /etc/ssl/rds/us-east-2-bundle.pem
+RUN chmod 0755 /etc/ssl/rds && chmod 0444 /etc/ssl/rds/us-east-2-bundle.pem
 USER nextjs
 
 EXPOSE 3000
