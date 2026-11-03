@@ -7,8 +7,12 @@ set -eu
 : "${WEB_URL:?}" "${CRON_SECRET:?}" "${MYSQLHOST:?}" "${MYSQLUSER:?}" "${MYSQLPASSWORD:?}" "${MYSQLDATABASE:?}"
 MYSQLPORT="${MYSQLPORT:-3306}"
 
+# With MYSQL_SSL_CA set (AWS RDS), TLS is required and the server verified.
+if [ -n "${MYSQL_SSL_CA:-}" ]; then tls="--ssl-ca=$MYSQL_SSL_CA --ssl-verify-server-cert"; else tls="--skip-ssl-verify-server-cert"; fi
+
 query() {
-	MYSQL_PWD="$MYSQLPASSWORD" mysql --skip-ssl-verify-server-cert -h "$MYSQLHOST" -P "$MYSQLPORT" -u "$MYSQLUSER" -D "$MYSQLDATABASE" -N -B -e "$1" 2>&1 | tr -d '[:space:]' | cut -c1-200
+	# shellcheck disable=SC2086
+	MYSQL_PWD="$MYSQLPASSWORD" mysql $tls -h "$MYSQLHOST" -P "$MYSQLPORT" -u "$MYSQLUSER" -D "$MYSQLDATABASE" -N -B -e "$1" 2>&1 | tr -d '[:space:]' | cut -c1-200
 }
 
 call() {
