@@ -276,6 +276,7 @@ async function enqueueSilentVideoDescription(
 	const result = await startDescribeSilentVideo(
 		videoId as Video.VideoId,
 		userId,
+		{ handoff: true },
 	);
 	return (
 		result.success &&

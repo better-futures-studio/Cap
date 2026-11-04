@@ -30,6 +30,9 @@ const getAffectedRows = (result: unknown) => {
 export async function startDescribeSilentVideo(
 	videoId: Video.VideoId,
 	userId: string,
+	// handoff: the caller is the AI generation workflow, which marked the video PROCESSING
+	// itself and is passing the work on. That mark is not another run in progress.
+	{ handoff = false }: { handoff?: boolean } = {},
 ): Promise<DescribeVideoResult> {
 	if (!isVideoUnderstandingEnabled()) {
 		return {
@@ -68,8 +71,9 @@ export async function startDescribeSilentVideo(
 	const metadata = (video.metadata as VideoMetadata) || {};
 
 	if (
-		metadata.aiGenerationStatus === "PROCESSING" ||
-		metadata.aiGenerationStatus === "QUEUED"
+		!handoff &&
+		(metadata.aiGenerationStatus === "PROCESSING" ||
+			metadata.aiGenerationStatus === "QUEUED")
 	) {
 		return {
 			success: true,
