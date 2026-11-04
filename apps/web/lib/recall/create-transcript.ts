@@ -20,13 +20,16 @@ export async function applyCapTranscriptionFallback(
 	meetingBotId: string,
 	videoId: Video.VideoId | null,
 ): Promise<void> {
-	if (videoId) {
-		await db()
-			.update(videos)
-			.set({ transcriptionStatus: null })
-			.where(eq(videos.id, videoId));
-		await queueVideoTranscription(videoId);
-	}
+	// A live transcript can fail while the bot is still in the call. There is
+	// nothing to transcribe yet, and marking the row "transcribing" would make
+	// reconcile import a recording Recall hasn't finished. The import creates
+	// its own transcript later.
+	if (!videoId) return;
+	await db()
+		.update(videos)
+		.set({ transcriptionStatus: null })
+		.where(eq(videos.id, videoId));
+	await queueVideoTranscription(videoId);
 	await db()
 		.update(meetingBots)
 		.set({
@@ -34,7 +37,7 @@ export async function applyCapTranscriptionFallback(
 			statusSubCode: "cap_fallback",
 		})
 		.where(eq(meetingBots.id, meetingBotId));
-	if (videoId) await maybeDeleteImportedRecallMedia(meetingBotId);
+	await maybeDeleteImportedRecallMedia(meetingBotId);
 }
 
 export async function createMeetingTranscript(

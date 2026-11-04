@@ -76,6 +76,13 @@ async function completeSharedRows(
 	}
 }
 
+async function recordingReady(recordingId: string): Promise<boolean> {
+	"use step";
+
+	const recording = await getDefaultRecallClient().getRecording(recordingId);
+	return Boolean(recording.media_shortcuts.video_mixed?.data?.download_url);
+}
+
 async function claimImport({
 	meetingBotId,
 	recordingId,
@@ -398,6 +405,16 @@ export async function importRecallRecordingWorkflow({
 	recordingId: string;
 }): Promise<void> {
 	"use workflow";
+
+	// Leave the row unclaimed until Recall has the file, so the recording.done
+	// webhook or reconcile can start the import again once it is ready.
+	if (!(await recordingReady(recordingId))) {
+		console.info("[recall] recording not ready, skipping import", {
+			meetingBotId,
+			recordingId,
+		});
+		return;
+	}
 
 	try {
 		const claimed = await claimImport({ meetingBotId, recordingId });
