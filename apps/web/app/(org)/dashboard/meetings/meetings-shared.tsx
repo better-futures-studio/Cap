@@ -69,6 +69,7 @@ export function formatTime(date: Date): string {
 
 export function formatPastDate(date: Date): string {
 	return date.toLocaleString(undefined, {
+		year: "numeric",
 		month: "short",
 		day: "numeric",
 		hour: "numeric",

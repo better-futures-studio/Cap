@@ -47,6 +47,12 @@ import {
 	listMeetingVocabularyTerms,
 	removeMeetingVocabularyTerm,
 } from "@/lib/recall/vocabulary";
+import {
+	type RecordingFilters,
+	readRecordingFilters,
+	readRecordingPage,
+} from "@/lib/recordings/filters";
+import { meetingRecordingConditions } from "@/lib/recordings/search-conditions";
 import { runPromise } from "@/lib/server";
 import { syncCalendarEventsWorkflow } from "@/workflows/recall-calendar-sync";
 
@@ -194,12 +200,19 @@ export async function cancelMeetingBotAction({
 
 export async function listMeetingBots({
 	orgId,
+	filters: inputFilters = { q: "", sort: "newest" },
+	pastPage: inputPage = "1",
 }: {
 	orgId: Organisation.OrganisationId;
+	filters?: RecordingFilters;
+	pastPage?: string;
 }) {
 	const user = await requireUser(orgId);
 
 	const cutoff = new Date(Date.now() - UPCOMING_JOIN_AT_GRACE_MS);
+	const filters = readRecordingFilters(inputFilters);
+	const pastPage = readRecordingPage(inputPage);
+	const pageSize = 50;
 
 	const upcomingRows = await db()
 		.select(MEETING_BOT_COLUMNS)
@@ -215,34 +228,55 @@ export async function listMeetingBots({
 		.orderBy(asc(meetingBots.joinAt))
 		.limit(100);
 
-	const pastRows = await db()
-		.select(MEETING_BOT_COLUMNS)
-		.from(meetingBots)
-		.leftJoin(videoUploads, eq(videoUploads.videoId, meetingBots.videoId))
-		.where(
-			and(
-				eq(meetingBots.orgId, orgId),
-				or(
-					inArray(meetingBots.status, TERMINAL_STATUSES),
-					lt(meetingBots.joinAt, cutoff),
-				),
-			),
-		)
-		.orderBy(desc(meetingBots.joinAt))
-		.limit(50);
-
-	const allowed = await meetingBotIdsAccessibleToUser({
-		bots: [...upcomingRows, ...pastRows],
+	const upcomingAllowed = await meetingBotIdsAccessibleToUser({
+		bots: upcomingRows,
 		userId: user.id,
 	});
+	const pastRows: typeof upcomingRows = [];
+	let offset = 0;
+	while (pastRows.length <= pastPage * pageSize) {
+		const batch = await db()
+			.select(MEETING_BOT_COLUMNS)
+			.from(meetingBots)
+			.leftJoin(videoUploads, eq(videoUploads.videoId, meetingBots.videoId))
+			.where(
+				and(
+					eq(meetingBots.orgId, orgId),
+					or(
+						inArray(meetingBots.status, TERMINAL_STATUSES),
+						lt(meetingBots.joinAt, cutoff),
+					),
+					meetingRecordingConditions(filters),
+				),
+			)
+			.orderBy(
+				filters.sort === "oldest"
+					? asc(meetingBots.joinAt)
+					: desc(meetingBots.joinAt),
+				filters.sort === "oldest" ? asc(meetingBots.id) : desc(meetingBots.id),
+			)
+			.limit(pageSize)
+			.offset(offset);
+		const allowed = await meetingBotIdsAccessibleToUser({
+			bots: batch,
+			userId: user.id,
+		});
+		pastRows.push(...batch.filter((row) => allowed.has(row.id)));
+		if (batch.length < pageSize) break;
+		offset += batch.length;
+	}
 	return {
 		upcoming: withVideoReady(
 			dedupeUpcomingMeetings(
-				upcomingRows.filter((row) => allowed.has(row.id)),
+				upcomingRows.filter((row) => upcomingAllowed.has(row.id)),
 				user.id,
 			),
 		),
-		past: withVideoReady(pastRows.filter((row) => allowed.has(row.id))),
+		past: withVideoReady(
+			pastRows.slice((pastPage - 1) * pageSize, pastPage * pageSize),
+		),
+		pastHasMore: pastRows.length > pastPage * pageSize,
+		pastPage,
 	};
 }
 
