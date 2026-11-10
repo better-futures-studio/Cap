@@ -14,7 +14,6 @@ import {
 	screenshotShareStatusText,
 } from "~/routes/screenshot-editor/screenshotExport";
 import { openRecordingFolder } from "~/utils/recording";
-import { recordingCalendarDate } from "~/utils/recording-filters";
 import {
 	type CaptureDisplayWithThumbnail,
 	type CaptureWindowWithThumbnail,
@@ -422,13 +421,6 @@ export default function TargetCard(props: TargetCardProps) {
 						<p class="truncate text-[11px] font-medium text-gray-12">
 							{highlight(label())}
 						</p>
-						<Show when={recordingTarget()}>
-							{(recording) => (
-								<p class="truncate text-[11px] text-gray-10">
-									{recordingCalendarDate(recording().sort_time_millis)}
-								</p>
-							)}
-						</Show>
 						<Show when={subtitle()}>
 							<p class="truncate text-[11px] text-gray-11">
 								{highlight(subtitle())}

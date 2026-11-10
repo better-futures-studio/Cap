@@ -10,7 +10,6 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
-import { recordingCalendarDate } from "~/utils/recording-filters";
 import IconLucideClapperboard from "~icons/lucide/clapperboard";
 import IconLucideHistory from "~icons/lucide/history";
 import IconLucideImage from "~icons/lucide/image";
@@ -175,9 +174,6 @@ function RecentCard(props: {
 			</div>
 			<div class="absolute inset-x-0 bottom-0 px-2.5 pb-2 pt-5">
 				<p class="truncate text-[11px] font-medium text-white">{title()}</p>
-				<p class="truncate text-[9px] text-white/80">
-					{recordingCalendarDate(props.item.createdAt)}
-				</p>
 				<Show
 					when={
 						props.item.kind === "recording" && props.item.target.clip_count > 1

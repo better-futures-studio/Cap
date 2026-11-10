@@ -4167,10 +4167,7 @@ impl MainWindow {
             row.thumbnail.clone(),
             "icons/square-play.svg",
             item.pretty_name.clone(),
-            Some(format!(
-                "{} · {subtitle}",
-                crate::recording_filters::calendar_date(item.sort_time_millis)
-            )),
+            Some(subtitle),
             item.clip_count,
             cx.listener(move |_, _, _window, cx| {
                 if studio && opens_editor {
@@ -6367,15 +6364,6 @@ impl MainWindow {
                             .text_color(gpui::white())
                             .truncate()
                             .child(item.pretty_name.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(9.))
-                            .text_color(white_alpha(0.80))
-                            .truncate()
-                            .child(crate::recording_filters::calendar_date(
-                                item.sort_time_millis,
-                            )),
                     )
                     .when(
                         // `props.item.kind === "recording" && clip_count > 1`.

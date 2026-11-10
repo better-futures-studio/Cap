@@ -28,10 +28,6 @@ import { createTauriEventListener } from "~/utils/createEventListener";
 import { importVideoFromPicker, showImportError } from "~/utils/importMedia";
 import { openRecordingFolder } from "~/utils/recording";
 import {
-	filterLibraryRecordings,
-	recordingCalendarDate,
-} from "~/utils/recording-filters";
-import {
 	commands,
 	events,
 	type RecordingMetaWithMetadata,
@@ -109,9 +105,6 @@ export default function Recordings() {
 		Tabs[0].id,
 	);
 	const [search, setSearch] = createSignal("");
-	const [fromDate, setFromDate] = createSignal("");
-	const [toDate, setToDate] = createSignal("");
-	const [sort, setSort] = createSignal<"newest" | "oldest">("newest");
 	const trimmedSearch = createMemo(() => search().trim());
 	const normalizedSearch = createMemo(() => trimmedSearch().toLowerCase());
 	const [visibleCount, setVisibleCount] = createSignal(PAGE_SIZE);
@@ -139,21 +132,21 @@ export default function Recordings() {
 	createEffect(() => {
 		activeTab();
 		trimmedSearch();
-		fromDate();
-		toDate();
-		sort();
 		setVisibleCount(PAGE_SIZE);
 	});
 
-	const filteredRecordings = createMemo(() =>
-		filterLibraryRecordings(recordings.data ?? [], {
-			search: search(),
-			mode: activeTab(),
-			from: fromDate(),
-			to: toDate(),
-			sort: sort(),
-		}),
-	);
+	const filteredRecordings = createMemo(() => {
+		const data = recordings.data ?? [];
+		const scopedRecordings =
+			activeTab() === "all"
+				? data
+				: data.filter((recording) => recording.meta.mode === activeTab());
+		const query = normalizedSearch();
+		if (!query) return scopedRecordings;
+		return scopedRecordings.filter((recording) =>
+			recording.prettyName.toLowerCase().includes(query),
+		);
+	});
 
 	const visibleRecordings = createMemo(() => {
 		const items = filteredRecordings();
@@ -168,8 +161,7 @@ export default function Recordings() {
 	const emptyMessage = createMemo(() => {
 		const tabLabel =
 			activeTab() === "all" ? "recordings" : `${activeTab()} recordings`;
-		const prefix =
-			trimmedSearch() || fromDate() || toDate() ? "No matching" : "No";
+		const prefix = trimmedSearch() ? "No matching" : "No";
 		return `${prefix} ${tabLabel}`;
 	});
 
@@ -264,67 +256,13 @@ export default function Recordings() {
 											setSearch("");
 										}
 									}}
-									placeholder="Search recording title"
+									placeholder="Search"
 									autoCapitalize="off"
 									autocorrect="off"
 									autocomplete="off"
 									spellcheck={false}
 									aria-label="Search recordings"
 								/>
-							</div>
-							<div class="flex flex-wrap items-end gap-3">
-								<label class="flex flex-col gap-1 text-xs text-gray-11">
-									From
-									<Input
-										type="date"
-										class="h-9 w-40"
-										value={fromDate()}
-										max={toDate() || undefined}
-										onInput={(event) => setFromDate(event.currentTarget.value)}
-										aria-label="From date"
-									/>
-								</label>
-								<label class="flex flex-col gap-1 text-xs text-gray-11">
-									To (inclusive)
-									<Input
-										type="date"
-										class="h-9 w-40"
-										value={toDate()}
-										min={fromDate() || undefined}
-										onInput={(event) => setToDate(event.currentTarget.value)}
-										aria-label="To date"
-									/>
-								</label>
-								<label class="flex flex-col gap-1 text-xs text-gray-11">
-									Sort by date
-									<select
-										class="h-9 rounded-lg border border-gray-4 bg-gray-2 px-2 text-xs text-gray-12"
-										value={sort()}
-										onChange={(event) =>
-											setSort(
-												event.currentTarget.value === "oldest"
-													? "oldest"
-													: "newest",
-											)
-										}
-									>
-										<option value="newest">Newest first</option>
-										<option value="oldest">Oldest first</option>
-									</select>
-								</label>
-								<Button
-									variant="gray"
-									size="sm"
-									class="h-9"
-									onClick={() => {
-										setSearch("");
-										setFromDate("");
-										setToDate("");
-										setSort("newest");
-									}}
-								>
-									Clear filters
-								</Button>
 							</div>
 						</div>
 
@@ -427,9 +365,6 @@ function RecordingItem(props: {
 				</Show>
 				<div class="flex flex-col gap-2">
 					<span>{props.recording.prettyName}</span>
-					<span class="text-xs text-gray-10">
-						{recordingCalendarDate(props.recording.meta.sort_time_millis)}
-					</span>
 					<div class="flex space-x-1">
 						<div
 							class={cx(

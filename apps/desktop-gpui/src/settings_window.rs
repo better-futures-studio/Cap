@@ -294,8 +294,6 @@ enum Field {
     ServerUrl,
     /// The Recordings page's filter.
     RecordingsSearch,
-    RecordingsFrom,
-    RecordingsTo,
     ScreenshotsSearch,
 }
 
@@ -375,11 +373,6 @@ struct Recordings {
     /// plain `String`.
     search_input: Entity<ui::TextInputState>,
     search: String,
-    from_input: Entity<ui::TextInputState>,
-    to_input: Entity<ui::TextInputState>,
-    from_date: String,
-    to_date: String,
-    newest_first: bool,
     /// `visibleCount`, reset to `PAGE_SIZE` by a tab or search change.
     visible_count: usize,
     /// The scan + thumbnail decode task. Dropping it cancels, so a refresh that
@@ -391,21 +384,12 @@ struct Recordings {
 }
 
 impl Recordings {
-    fn new(
-        search_input: Entity<ui::TextInputState>,
-        from_input: Entity<ui::TextInputState>,
-        to_input: Entity<ui::TextInputState>,
-    ) -> Self {
+    fn new(search_input: Entity<ui::TextInputState>) -> Self {
         Self {
             items: None,
             tab: RecordingsTab::All,
             search_input,
             search: String::new(),
-            from_input,
-            to_input,
-            from_date: String::new(),
-            to_date: String::new(),
-            newest_first: true,
             visible_count: RECORDINGS_PAGE_SIZE,
             scan: None,
             tick: None,
@@ -420,29 +404,11 @@ impl Recordings {
     /// `filteredRecordings()`: the tab, then the case-insensitive substring.
     fn filtered(&self) -> Vec<&RecordingRow> {
         let query = self.trimmed_search().to_lowercase();
-        let mut rows: Vec<_> = self
-            .items
+        self.items
             .iter()
             .flatten()
             .filter(|row| matches_recording_filters(&row.item, self.tab, &query))
-            .filter(|row| {
-                crate::recording_filters::matches_dates(
-                    row.item.sort_time_millis,
-                    &self.from_date,
-                    &self.to_date,
-                )
-            })
-            .collect();
-        rows.sort_by(|a, b| {
-            let order = a.item.sort_time_millis.total_cmp(&b.item.sort_time_millis);
-            let order = if self.newest_first {
-                order.reverse()
-            } else {
-                order
-            };
-            order.then_with(|| a.item.path.cmp(&b.item.path))
-        });
-        rows
+            .collect()
     }
 }
 
@@ -662,7 +628,7 @@ pub struct SettingsWindow {
     /// Save/Update are the commit, not Return.
     project_name_input: Entity<ui::TextInputState>,
     server_url_input: Entity<ui::TextInputState>,
-    _field_events: [gpui::Subscription; 6],
+    _field_events: [gpui::Subscription; 4],
     /// The Recordings page.
     recordings: Recordings,
     screenshots: Screenshots,
@@ -727,17 +693,8 @@ impl SettingsWindow {
         });
         let recordings_search = cx.new(|cx| {
             let mut input = ui::TextInputState::single_line(window, cx);
-            input.set_placeholder("Search recording title");
-            input
-        });
-        let recordings_from = cx.new(|cx| {
-            let mut input = ui::TextInputState::single_line(window, cx);
-            input.set_placeholder("YYYY-MM-DD");
-            input
-        });
-        let recordings_to = cx.new(|cx| {
-            let mut input = ui::TextInputState::single_line(window, cx);
-            input.set_placeholder("YYYY-MM-DD");
+            // `placeholder="Search"`.
+            input.set_placeholder("Search");
             input
         });
         let screenshots_search = cx.new(|cx| {
@@ -746,12 +703,6 @@ impl SettingsWindow {
             input
         });
         let field_events = [
-            cx.subscribe(&recordings_from, |this, input, event, cx| {
-                this.on_field_event(Field::RecordingsFrom, input, event, cx)
-            }),
-            cx.subscribe(&recordings_to, |this, input, event, cx| {
-                this.on_field_event(Field::RecordingsTo, input, event, cx)
-            }),
             cx.subscribe(&project_name_input, |this, input, event, cx| {
                 this.on_field_event(Field::ProjectName, input, event, cx)
             }),
@@ -789,7 +740,7 @@ impl SettingsWindow {
             project_name_input,
             server_url_input,
             _field_events: field_events,
-            recordings: Recordings::new(recordings_search, recordings_from, recordings_to),
+            recordings: Recordings::new(recordings_search),
             screenshots: Screenshots::new(screenshots_search),
             placeholders: ui::CollapsibleState::new(false),
             placeholders_task: None,
@@ -2508,76 +2459,6 @@ impl SettingsWindow {
                 .placeholder_color(theme.settings_muted()),
         );
 
-        let date_fields = div()
-            .flex()
-            .flex_row()
-            .flex_wrap()
-            .items_end()
-            .gap(px(12.))
-            .children(
-                [
-                    ("From", "recordings-from", &self.recordings.from_input),
-                    ("To (inclusive)", "recordings-to", &self.recordings.to_input),
-                ]
-                .into_iter()
-                .map(|(label, id, input)| {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.))
-                        .w(px(140.))
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(theme.settings_muted())
-                                .child(label),
-                        )
-                        .child(ui::TextInput::settings(&theme, id, input).height(px(36.)))
-                }),
-            )
-            .child(self.button(
-                "recordings-sort",
-                (ui::ButtonVariant::Gray, None),
-                if self.recordings.newest_first {
-                    "Newest first ↓"
-                } else {
-                    "Oldest first ↑"
-                },
-                false,
-                cx,
-                |this, _, cx| {
-                    this.recordings.newest_first = !this.recordings.newest_first;
-                    this.recordings.visible_count = RECORDINGS_PAGE_SIZE;
-                    cx.notify();
-                },
-            ))
-            .child(self.button(
-                "recordings-clear",
-                (ui::ButtonVariant::Gray, None),
-                "Clear filters",
-                false,
-                cx,
-                |this, _, cx| {
-                    this.recordings.search.clear();
-                    this.recordings.from_date.clear();
-                    this.recordings.to_date.clear();
-                    this.recordings.newest_first = true;
-                    this.recordings.visible_count = RECORDINGS_PAGE_SIZE;
-                    for input in [
-                        &this.recordings.search_input,
-                        &this.recordings.from_input,
-                        &this.recordings.to_input,
-                    ] {
-                        input.update(cx, |input, cx| input.set_text("", cx));
-                    }
-                    cx.notify();
-                },
-            ));
-        let date_error = crate::recording_filters::date_range_error(
-            &self.recordings.from_date,
-            &self.recordings.to_date,
-        );
-
         div()
             .flex()
             .flex_col()
@@ -2588,13 +2469,6 @@ impl SettingsWindow {
             .border_color(theme.settings_border())
             .child(tabs)
             .child(search)
-            .child(date_fields)
-            .children(date_error.map(|message| {
-                div()
-                    .text_size(px(12.))
-                    .text_color(rgb(0xb91c1c))
-                    .child(message)
-            }))
     }
 
     /// The list: `flex relative flex-col flex-1 rounded-xl border bg-gray-2
@@ -2632,11 +2506,7 @@ impl SettingsWindow {
             .when(total == 0, |this| {
                 this.child(self.recordings_message(recordings_empty_message(
                     self.recordings.tab,
-                    if self.recordings.from_date.is_empty() && self.recordings.to_date.is_empty() {
-                        self.recordings.trimmed_search()
-                    } else {
-                        "date range"
-                    },
+                    self.recordings.trimmed_search(),
                 )))
             })
             .child(div().flex().flex_col().w_full().children(items))
@@ -2726,14 +2596,6 @@ impl SettingsWindow {
                             .truncate()
                             .text_size(px(14.))
                             .child(item.pretty_name.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(theme.settings_muted())
-                            .child(crate::recording_filters::calendar_date(
-                                item.sort_time_millis,
-                            )),
                     )
                     .child(self.render_recording_badges(item)),
             );
@@ -4417,8 +4279,6 @@ impl SettingsWindow {
             Field::ServerUrl => ("server-url-input", &self.server_url_input),
             // Drawn by the Recordings page itself, as a search field.
             Field::RecordingsSearch => ("recordings-search", &self.recordings.search_input),
-            Field::RecordingsFrom => ("recordings-from", &self.recordings.from_input),
-            Field::RecordingsTo => ("recordings-to", &self.recordings.to_input),
             Field::ScreenshotsSearch => ("screenshots-search", &self.screenshots.search_input),
         };
         let _ = cx;
@@ -4444,14 +4304,6 @@ impl SettingsWindow {
                         self.recordings.search = value;
                         // `createEffect(() => { activeTab(); trimmedSearch();
                         //  setVisibleCount(PAGE_SIZE) })`.
-                        self.recordings.visible_count = RECORDINGS_PAGE_SIZE;
-                    }
-                    Field::RecordingsFrom => {
-                        self.recordings.from_date = value;
-                        self.recordings.visible_count = RECORDINGS_PAGE_SIZE;
-                    }
-                    Field::RecordingsTo => {
-                        self.recordings.to_date = value;
                         self.recordings.visible_count = RECORDINGS_PAGE_SIZE;
                     }
                     Field::ScreenshotsSearch => {
@@ -4492,18 +4344,12 @@ impl SettingsWindow {
                     Field::ServerUrl => self.settings.server_url.clone(),
                     // Taken by the guarded arm above; nothing is "stored" for
                     // the search field.
-                    Field::RecordingsSearch
-                    | Field::ScreenshotsSearch
-                    | Field::RecordingsFrom
-                    | Field::RecordingsTo => return,
+                    Field::RecordingsSearch | Field::ScreenshotsSearch => return,
                 };
                 match field {
                     Field::ProjectName => self.project_name = stored.clone(),
                     Field::ServerUrl => self.server_url = stored.clone(),
-                    Field::RecordingsSearch
-                    | Field::ScreenshotsSearch
-                    | Field::RecordingsFrom
-                    | Field::RecordingsTo => return,
+                    Field::RecordingsSearch | Field::ScreenshotsSearch => return,
                 }
                 input.update(cx, |input, cx| input.set_text(stored, cx));
                 cx.notify();
