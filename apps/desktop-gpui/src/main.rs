@@ -46,6 +46,7 @@ mod permissions_ui;
 mod platform;
 mod presets;
 mod recording;
+mod recording_filters;
 mod screenshot;
 mod screenshot_annotations;
 mod screenshot_crop;
