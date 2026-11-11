@@ -17,6 +17,10 @@ const mocks = vi.hoisted(() => ({
 	toggleCalendarEventRecording: vi.fn(),
 	disconnectCalendar: vi.fn(),
 	setCalendarSeriesRule: vi.fn(),
+	meetingRecordingConditions: vi.fn(),
+	pastWhere: vi.fn(),
+	pastOrderBy: vi.fn(),
+	pastOffset: vi.fn(),
 }));
 
 vi.mock("@cap/database", () => ({ db: mocks.db }));
@@ -75,6 +79,9 @@ vi.mock("drizzle-orm", () => ({
 	lt: (column: string, value: unknown) => ({ op: "lt", column, value }),
 	asc: (column: string) => column,
 	desc: (column: string) => column,
+}));
+vi.mock("@/lib/recordings/search-conditions", () => ({
+	meetingRecordingConditions: mocks.meetingRecordingConditions,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/actions/organization/authorization", () => ({
@@ -214,11 +221,23 @@ describe("listMeetingBots", () => {
 	const buildQuery = (rows: unknown[]) => ({
 		from: () => ({
 			leftJoin: () => ({
-				where: () => ({
-					orderBy: () => ({
-						limit: () => Promise.resolve(rows),
-					}),
-				}),
+				where: (condition: unknown) => {
+					mocks.pastWhere(condition);
+					return {
+						orderBy: (...order: unknown[]) => {
+							mocks.pastOrderBy(...order);
+							return {
+								limit: () =>
+									Object.assign(Promise.resolve(rows), {
+										offset: (offset: number) => {
+											mocks.pastOffset(offset);
+											return Promise.resolve(rows);
+										},
+									}),
+							};
+						},
+					};
+				},
 			}),
 		}),
 	});
@@ -279,6 +298,74 @@ describe("listMeetingBots", () => {
 		expect(past.find((row) => row.id === "bot_1")?.videoReady).toBe(true);
 		expect(past.find((row) => row.id === "bot_2")?.videoReady).toBe(false);
 		expect(past[0]).not.toHaveProperty("pendingUploadVideoId");
+	});
+
+	it("filters before pagination and keeps older accessible meetings reachable", async () => {
+		const filters = {
+			q: "Planning",
+			from: "2026-01-01T00:00:00.000Z",
+			sort: "oldest" as const,
+		};
+		const condition = { search: "Planning" };
+		mocks.meetingRecordingConditions.mockReturnValue(condition);
+		const rows = Array.from({ length: 101 }, (_, i) => ({
+			id: `bot_${i}`,
+			ownerId: userId,
+			videoId: `video_${i}`,
+			pendingUploadVideoId: null,
+		}));
+		const select = vi
+			.fn()
+			.mockReturnValueOnce(buildQuery([]))
+			.mockReturnValueOnce(buildQuery(rows.slice(0, 50)))
+			.mockReturnValueOnce(buildQuery(rows.slice(50, 100)))
+			.mockReturnValueOnce(buildQuery(rows.slice(100)));
+		mocks.db.mockReturnValue({ select });
+		const result = await listMeetingBots({ orgId, filters, pastPage: "2" });
+		expect(mocks.meetingRecordingConditions).toHaveBeenCalledWith({
+			...filters,
+			to: undefined,
+		});
+		expect(mocks.pastWhere.mock.calls[1]?.[0].conditions).toContain(condition);
+		expect(mocks.pastOffset.mock.calls.map(([offset]) => offset)).toEqual([
+			0, 50, 100,
+		]);
+		expect(result.past.map((row) => row.id)).toEqual(
+			rows.slice(50, 100).map((row) => row.id),
+		);
+		expect(result.pastHasMore).toBe(true);
+		expect(result.pastPage).toBe(2);
+	});
+
+	it("fills pages after checking permissions, without returning inaccessible meetings", async () => {
+		const { meetingBotIdsAccessibleToUser } = await import(
+			"@/lib/recall/visibility"
+		);
+		vi.mocked(meetingBotIdsAccessibleToUser)
+			.mockImplementationOnce(async () => new Set())
+			.mockImplementationOnce(async () => new Set())
+			.mockImplementationOnce(
+				async ({ bots }) => new Set(bots.map((row) => row.id)),
+			);
+		const hidden = Array.from({ length: 50 }, (_, i) => ({
+			id: `hidden_${i}`,
+			videoId: null,
+			pendingUploadVideoId: null,
+		}));
+		const visible = {
+			id: "visible",
+			videoId: "video",
+			pendingUploadVideoId: null,
+		};
+		const select = vi
+			.fn()
+			.mockReturnValueOnce(buildQuery([]))
+			.mockReturnValueOnce(buildQuery(hidden))
+			.mockReturnValueOnce(buildQuery([visible]));
+		mocks.db.mockReturnValue({ select });
+		const result = await listMeetingBots({ orgId });
+		expect(result.past.map((row) => row.id)).toEqual(["visible"]);
+		expect(result.pastHasMore).toBe(false);
 	});
 
 	it("collapses upcoming rows that share meetingUrl and joinAt", async () => {

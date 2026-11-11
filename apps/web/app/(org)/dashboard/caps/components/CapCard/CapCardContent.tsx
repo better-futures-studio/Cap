@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import clsx from "clsx";
 import moment from "moment";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { editDate } from "@/actions/videos/edit-date";
 import { editTitle } from "@/actions/videos/edit-title";
@@ -36,7 +36,12 @@ export const CapCardContent: React.FC<CapContentProps> = ({
 		moment(effectiveDate).format("YYYY-MM-DD HH:mm:ss"),
 	);
 	const [isDateEditing, setIsDateEditing] = useState(false);
-	const [showFullDate, setShowFullDate] = useState(false);
+	const [showFullDate, setShowFullDate] = useState(true);
+	const [mounted, setMounted] = useState(false);
+	useEffect(() => setMounted(true), []);
+	const fullDate = mounted
+		? moment(effectiveDate).format("MMM D, YYYY · h:mm A")
+		: moment.utc(effectiveDate).format("MMM D, YYYY · h:mm A [UTC]");
 	const [title, setTitle] = useState(cap.name);
 	const [isEditing, setIsEditing] = useState(false);
 
@@ -143,23 +148,25 @@ export const CapCardContent: React.FC<CapContentProps> = ({
 
 			if (!hasSpaceSharing && !isPublic) {
 				return (
-					<p
+					<button
+						type="button"
 						className={baseClassName}
 						onClick={() => setIsSharingDialogOpen(true)}
 					>
 						Not shared{" "}
 						<FontAwesomeIcon className="ml-2 size-2.5" icon={faChevronDown} />
-					</p>
+					</button>
 				);
 			} else {
 				return (
-					<p
+					<button
+						type="button"
 						className={baseClassName}
 						onClick={() => setIsSharingDialogOpen(true)}
 					>
 						Shared{" "}
 						<FontAwesomeIcon className="ml-1 size-2.5" icon={faChevronDown} />
-					</p>
+					</button>
 				);
 			}
 		} else {
@@ -182,8 +189,10 @@ export const CapCardContent: React.FC<CapContentProps> = ({
 						className="text-md resize-none bg-transparent truncate w-full border-0 outline-0 text-gray-12 font-medium p-0 m-0 h-[1.25rem] overflow-hidden leading-[1.25rem] tracking-normal font-[inherit]"
 					/>
 				) : (
-					<p
-						className="text-md truncate leading-[1.25rem] text-gray-12 font-medium p-0 m-0 h-[1.25rem] tracking-normal"
+					<button
+						type="button"
+						disabled={sharedCapCard || userId !== cap.ownerId}
+						className="w-full text-left text-md truncate leading-[1.25rem] text-gray-12 font-medium p-0 m-0 h-[1.25rem] tracking-normal"
 						onClick={() => {
 							if (!sharedCapCard) {
 								if (userId === cap.ownerId) {
@@ -193,7 +202,7 @@ export const CapCardContent: React.FC<CapContentProps> = ({
 						}}
 					>
 						{title}
-					</p>
+					</button>
 				)}
 			</div>
 
@@ -214,14 +223,13 @@ export const CapCardContent: React.FC<CapContentProps> = ({
 					</div>
 				) : (
 					<Tooltip content={`Cap created at ${effectiveDate}`}>
-						<p
+						<button
+							type="button"
 							className="text-sm truncate text-gray-10 cursor-pointer flex items-center h-full leading-[1.5rem]"
 							onClick={handleDateClick}
 						>
-							{showFullDate
-								? moment(effectiveDate).format("YYYY-MM-DD HH:mm:ss")
-								: moment(effectiveDate).fromNow()}
-						</p>
+							{showFullDate ? fullDate : moment(effectiveDate).fromNow()}
+						</button>
 					</Tooltip>
 				)}
 			</div>

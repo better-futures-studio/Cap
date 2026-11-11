@@ -9,6 +9,7 @@ import {
 	listMeetingVocabulary,
 } from "@/actions/meetings";
 import { DEFAULT_BOT_NAME, getRecallConfig } from "@/lib/recall/config";
+import { readRecordingFilters } from "@/lib/recordings/filters";
 import { MeetingsPage } from "./MeetingsPage";
 
 export const metadata: Metadata = {
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
 export default async function Page({
 	searchParams,
 }: {
-	searchParams: Promise<{ calendar?: string }>;
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
 	const user = await getCurrentUser();
 
@@ -30,6 +31,8 @@ export default async function Page({
 		redirect("/dashboard/caps");
 	}
 
+	const params = await searchParams;
+	const filters = readRecordingFilters(params);
 	const [
 		bots,
 		calendarSettings,
@@ -37,13 +40,18 @@ export default async function Page({
 		meetingPreferences,
 		vocabulary,
 	] = await Promise.all([
-		listMeetingBots({ orgId: user.activeOrganizationId }),
+		listMeetingBots({
+			orgId: user.activeOrganizationId,
+			filters,
+			pastPage: typeof params.page === "string" ? params.page : "1",
+		}),
 		getMeetingCalendarSettings({ orgId: user.activeOrganizationId }),
 		getSlackHuddleStatus({ orgId: user.activeOrganizationId }),
 		getMeetingPreferences({ orgId: user.activeOrganizationId }),
 		listMeetingVocabulary({ orgId: user.activeOrganizationId }),
 	]);
-	const { calendar } = await searchParams;
+	const calendar =
+		typeof params.calendar === "string" ? params.calendar : undefined;
 
 	return (
 		<MeetingsPage
@@ -52,6 +60,8 @@ export default async function Page({
 			botName={getRecallConfig()?.botName ?? DEFAULT_BOT_NAME}
 			initialUpcomingBots={bots.upcoming}
 			initialPastBots={bots.past}
+			pastHasMore={bots.pastHasMore}
+			pastPage={bots.pastPage}
 			calendarSettings={calendarSettings}
 			slackHuddleStatus={slackHuddleStatus}
 			initialRecapMode={meetingPreferences.recapMode}

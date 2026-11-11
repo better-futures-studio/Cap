@@ -12,9 +12,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChromeRecorderButton } from "@/components/ChromeRecorderButton";
+import { RecordingFilters } from "@/components/RecordingFilters";
 import { CHROME_EXTENSION_BUTTON_CLASS } from "@/lib/chrome-extension";
 import { useEffectMutation, useRpcClient } from "@/lib/EffectRuntime";
 import { useVideosAnalyticsQuery } from "@/lib/Queries/Analytics";
+import {
+	hasRecordingFilters,
+	readRecordingFilters,
+	recordingPageHref,
+} from "@/lib/recordings/filters";
 import { useDashboardContext } from "../Contexts";
 import {
 	NewFolderDialog,
@@ -70,15 +76,18 @@ export const Caps = ({
 	count,
 	analyticsEnabled,
 	folders,
+	page,
 }: {
 	data: VideoData;
 	count: number;
+	page: number;
 	folders: FolderDataType[];
 	analyticsEnabled: boolean;
 }) => {
 	const router = useRouter();
 	const params = useSearchParams();
-	const page = Number(params.get("page")) || 1;
+	const filters = readRecordingFilters(Object.fromEntries(params));
+	const isFiltered = hasRecordingFilters(filters);
 	const { user } = useDashboardContext();
 	const limit = 15;
 	const [openNewFolderDialog, setOpenNewFolderDialog] = useState(false);
@@ -193,15 +202,12 @@ export const Caps = ({
 				(e.key === "Delete" || e.key === "Backspace") &&
 				selectedCaps.length > 0
 			) {
-				if (e.key === "Backspace") {
-					e.preventDefault();
-				}
-
 				if (
 					!["INPUT", "TEXTAREA", "SELECT"].includes(
 						document.activeElement?.tagName || "",
 					)
 				) {
+					if (e.key === "Backspace") e.preventDefault();
 					deleteCaps(selectedCaps);
 				}
 			}
@@ -247,7 +253,8 @@ export const Caps = ({
 		[data, isUploading, uploadingCapId],
 	);
 
-	if (count === 0 && folders.length === 0) return <EmptyCapState />;
+	if (count === 0 && folders.length === 0 && !isFiltered)
+		return <EmptyCapState />;
 
 	return (
 		<div className="flex relative flex-col w-full h-full">
@@ -271,13 +278,23 @@ export const Caps = ({
 					className={`${CHROME_EXTENSION_BUTTON_CLASS} font-medium`}
 				/>
 			</div>
-			<FoldersSection
-				title="Folders"
-				scope="personal"
-				folders={folders}
-				canMove
-				moveRootLabel="My Caps"
-			/>
+			<RecordingFilters />
+			{!isFiltered && (
+				<FoldersSection
+					title="Folders"
+					scope="personal"
+					folders={folders}
+					canMove
+					moveRootLabel="My Caps"
+				/>
+			)}
+			{isFiltered && (
+				<output className="mb-4 block text-sm text-gray-10">
+					{count === 0
+						? "No recordings match your search or dates. Try another title or date range."
+						: `${count} matching recording${count === 1 ? "" : "s"}, including folders`}
+				</output>
+			)}
 			{visibleVideos.length > 0 && (
 				<>
 					<div className="flex justify-between items-center mb-6 w-full">
@@ -318,9 +335,15 @@ export const Caps = ({
 					</div>
 				</>
 			)}
-			{(data.length > limit || data.length === limit || page !== 1) && (
+			{totalPages > 1 && (
 				<div className="mt-7">
-					<CapPagination currentPage={page} totalPages={totalPages} />
+					<CapPagination
+						currentPage={page}
+						totalPages={totalPages}
+						hrefForPage={(nextPage) =>
+							recordingPageHref("/dashboard/caps", params.toString(), nextPage)
+						}
+					/>
 				</div>
 			)}
 			<SelectedCapsBar

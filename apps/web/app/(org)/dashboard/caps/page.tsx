@@ -18,10 +18,16 @@ import {
 	resolveEffectiveVideoRules,
 } from "@cap/web-backend";
 import { type ImageUpload, Video } from "@cap/web-domain";
-import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type Array, Effect } from "effect";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import {
+	hasRecordingFilters,
+	readRecordingFilters,
+	readRecordingPage,
+} from "@/lib/recordings/filters";
+import { capRecordingConditions } from "@/lib/recordings/search-conditions";
 import { runPromise } from "@/lib/server";
 import { Caps } from "./Caps";
 
@@ -122,7 +128,9 @@ const getSharedSpacesForVideos = Effect.fn(function* (
 	return sharedSpacesMap;
 });
 
-export default async function CapsPage(props: PageProps<"/dashboard/caps">) {
+export default async function CapsPage(props: {
+	searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
 	const searchParams = await props.searchParams;
 	const user = await getCurrentUser();
 
@@ -130,25 +138,28 @@ export default async function CapsPage(props: PageProps<"/dashboard/caps">) {
 		redirect("/login");
 	}
 
-	const page = Number(searchParams.page) || 1;
-	const limit = Number(searchParams.limit) || 15;
-
+	const filters = readRecordingFilters(searchParams);
+	const limit = 15;
 	const userId = user.id;
-	const offset = (page - 1) * limit;
-
+	const conditions = and(
+		eq(videos.ownerId, userId),
+		eq(videos.orgId, user.activeOrganizationId),
+		isNull(organizations.tombstoneAt),
+		hasRecordingFilters(filters) ? undefined : isNull(videos.folderId),
+		capRecordingConditions(filters),
+	);
 	const totalCountResult = await db()
 		.select({ count: count() })
 		.from(videos)
 		.leftJoin(organizations, eq(videos.orgId, organizations.id))
-		.where(
-			and(
-				eq(videos.ownerId, userId),
-				eq(organizations.id, user.activeOrganizationId),
-				isNull(organizations.tombstoneAt),
-			),
-		);
+		.where(conditions);
 
 	const totalCount = totalCountResult[0]?.count || 0;
+	const page = Math.min(
+		readRecordingPage(searchParams.page),
+		Math.max(1, Math.ceil(totalCount / limit)),
+	);
+	const offset = (page - 1) * limit;
 
 	const videoData = await db()
 		.select({
@@ -195,14 +206,7 @@ export default async function CapsPage(props: PageProps<"/dashboard/caps">) {
 		.leftJoin(organizations, eq(videos.orgId, organizations.id))
 		.leftJoin(users, eq(videos.ownerId, users.id))
 		.leftJoin(videoUploads, eq(videos.id, videoUploads.videoId))
-		.where(
-			and(
-				eq(videos.ownerId, userId),
-				eq(videos.orgId, user.activeOrganizationId),
-				isNull(videos.folderId),
-				isNull(organizations.tombstoneAt),
-			),
-		)
+		.where(conditions)
 		.groupBy(
 			videos.id,
 			videos.ownerId,
@@ -218,7 +222,12 @@ export default async function CapsPage(props: PageProps<"/dashboard/caps">) {
 			videos.orgId,
 			users.name,
 		)
-		.orderBy(desc(videos.effectiveCreatedAt))
+		.orderBy(
+			filters.sort === "oldest"
+				? asc(videos.effectiveCreatedAt)
+				: desc(videos.effectiveCreatedAt),
+			filters.sort === "oldest" ? asc(videos.id) : desc(videos.id),
+		)
 		.limit(limit)
 		.offset(offset);
 
@@ -319,7 +328,9 @@ export default async function CapsPage(props: PageProps<"/dashboard/caps">) {
 
 	return (
 		<Caps
+			key={`${filters.q}:${filters.from}:${filters.to}:${filters.sort}:${page}`}
 			data={processedVideoData}
+			page={page}
 			folders={foldersData}
 			count={totalCount}
 			analyticsEnabled={Boolean(

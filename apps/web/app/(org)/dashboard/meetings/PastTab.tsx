@@ -1,13 +1,20 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { deleteMeeting } from "@/actions/meetings";
+import { RecordingFilters } from "@/components/RecordingFilters";
 import {
 	meetingPlatformLabel,
 	meetingUrlLabel,
 } from "@/lib/recall/meetings-view";
+import {
+	hasRecordingFilters,
+	readRecordingFilters,
+	recordingPageHref,
+} from "@/lib/recordings/filters";
 import { ConfirmationDialog } from "../_components/ConfirmationDialog";
 import { formatPastDate, type MeetingBotRow } from "./meetings-shared";
 
@@ -70,7 +77,7 @@ function PastRow({ bot, userId }: { bot: MeetingBotRow; userId: string }) {
 
 	return (
 		<div className="flex items-center gap-3 py-2">
-			<span className="w-32 shrink-0 text-xs text-gray-10">
+			<span className="w-40 shrink-0 text-xs text-gray-10">
 				{formatPastDate(new Date(bot.joinAt))}
 			</span>
 			<div className="min-w-0 flex-1">
@@ -110,19 +117,68 @@ function PastRow({ bot, userId }: { bot: MeetingBotRow; userId: string }) {
 export function PastTab({
 	bots,
 	userId,
+	hasMore,
+	page,
 }: {
 	bots: MeetingBotRow[];
 	userId: string;
+	hasMore: boolean;
+	page: number;
 }) {
-	if (bots.length === 0) {
-		return <p className="text-sm text-gray-10">No recordings yet.</p>;
-	}
-
+	const params = useSearchParams();
+	const isFiltered = hasRecordingFilters(
+		readRecordingFilters(Object.fromEntries(params)),
+	);
 	return (
-		<div className="divide-y divide-gray-3">
-			{bots.map((bot) => (
-				<PastRow key={bot.id} bot={bot} userId={userId} />
-			))}
+		<div>
+			<RecordingFilters placeholder="Search by meeting name or link" />
+			{bots.length === 0 ? (
+				<output className="block text-sm text-gray-10">
+					{isFiltered
+						? "No meetings match your search or dates. Try another name or date range."
+						: "No recordings yet."}
+				</output>
+			) : (
+				<div className="divide-y divide-gray-3">
+					{bots.map((bot) => (
+						<PastRow key={bot.id} bot={bot} userId={userId} />
+					))}
+				</div>
+			)}
+			{(page > 1 || hasMore) && (
+				<nav
+					aria-label="Past meetings pages"
+					className="mt-6 flex items-center justify-between gap-3 text-sm text-gray-11"
+				>
+					{page > 1 ? (
+						<Link
+							href={recordingPageHref(
+								"/dashboard/meetings",
+								params.toString(),
+								page - 1,
+							)}
+						>
+							Previous
+						</Link>
+					) : (
+						<span />
+					)}
+					<span>Page {page}</span>
+					{hasMore ? (
+						<Link
+							href={recordingPageHref(
+								"/dashboard/meetings",
+								params.toString(),
+								page + 1,
+							)}
+						>
+							Next
+						</Link>
+					) : (
+						<span />
+					)}
+				</nav>
+			)}
 		</div>
 	);
 }

@@ -97,6 +97,8 @@ export function MeetingsPage({
 	botName,
 	initialUpcomingBots,
 	initialPastBots,
+	pastHasMore,
+	pastPage,
 	calendarSettings,
 	slackHuddleStatus,
 	initialRecapMode,
@@ -108,6 +110,8 @@ export function MeetingsPage({
 	botName: string;
 	initialUpcomingBots: MeetingBotRow[];
 	initialPastBots: MeetingBotRow[];
+	pastHasMore: boolean;
+	pastPage: number;
 	calendarSettings: CalendarSettings;
 	slackHuddleStatus: SlackHuddleStatus;
 	initialRecapMode: MeetingRecapMode;
@@ -154,6 +158,7 @@ export function MeetingsPage({
 
 	const setActiveTab = (tab: string) => {
 		const params = new URLSearchParams(searchParams);
+		params.delete("page");
 		if (tab === "upcoming") params.delete("tab");
 		else params.set("tab", tab);
 		const query = params.toString();
@@ -193,7 +198,14 @@ export function MeetingsPage({
 						settings={calendarSettings}
 					/>
 				)}
-				{activeTab === "past" && <PastTab userId={userId} bots={pastBots} />}
+				{activeTab === "past" && (
+					<PastTab
+						userId={userId}
+						bots={pastBots}
+						hasMore={pastHasMore}
+						page={pastPage}
+					/>
+				)}
 				{activeTab === "settings" && (
 					<SettingsTab
 						orgId={orgId}
