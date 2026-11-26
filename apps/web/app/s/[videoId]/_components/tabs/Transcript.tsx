@@ -641,7 +641,7 @@ export const Transcript: React.FC<TranscriptProps> = ({ data, onSeek }) => {
 								variant="primary"
 								size="sm"
 								spinner={retryTranscriptionMutation.isPending}
-								className="mt-4"
+								className="mx-auto mt-4"
 							>
 								{retryTranscriptionMutation.isPending
 									? "Retrying..."
@@ -707,6 +707,7 @@ export const Transcript: React.FC<TranscriptProps> = ({ data, onSeek }) => {
 								variant="primary"
 								size="sm"
 								spinner={retryTranscriptionMutation.isPending}
+								className="mx-auto"
 							>
 								{retryTranscriptionMutation.isPending
 									? "Retrying..."
